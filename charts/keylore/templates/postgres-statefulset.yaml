@@ -1,0 +1,69 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "keylore.fullname" . }}-postgres
+  labels:
+    {{- include "keylore.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 5432
+      targetPort: postgres
+      name: postgres
+  selector:
+    app.kubernetes.io/name: {{ include "keylore.name" . }}-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "keylore.fullname" . }}-postgres
+  labels:
+    {{- include "keylore.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "keylore.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "keylore.name" . }}-postgres
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "keylore.name" . }}-postgres
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "keylore.postgresSecretName" . }}
+                  key: {{ .Values.postgresql.passwordKey }}
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if .Values.postgresql.storageClassName }}
+        storageClassName: {{ .Values.postgresql.storageClassName }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.storageSize }}
+{{- end }}

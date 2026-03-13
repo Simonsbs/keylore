@@ -35,10 +35,13 @@ This repository is incubating privately today, but it is structured to be publis
 - local admin CLI for catalogue, reporting, access evaluation, runtime injection, approvals, auth-client, maintenance, and backup operations
 - request-size limits, database-backed rate limiting, background maintenance cleanup, outbound timeouts, and response-size caps
 - Prometheus-style `/metrics` telemetry and request correlation headers for operational visibility
+- Helm chart with dev, staging, and production values profiles
+- tagged release workflow with SBOM generation, vulnerability scanning, and keyless image signing
+- shipped Grafana dashboard and Prometheus alert rule examples
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.5 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.6 delivery. This repo does not yet implement:
 
 - multi-tenant isolation, delegated approvals, and break-glass workflows
 - admin UI and rotation orchestration
@@ -107,6 +110,12 @@ curl http://127.0.0.1:8787/healthz
 ```bash
 curl http://127.0.0.1:8787/metrics
 npm run dev:cli -- system maintenance
+```
+
+10. Render the Helm chart:
+
+```bash
+helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml
 ```
 
 ## Example API usage
@@ -213,12 +222,23 @@ Create a logical backup locally:
 npm run dev:cli -- system backup create --file ./keylore-backup.json
 ```
 
+Run the restore drill locally:
+
+```bash
+KEYLORE_DATABASE_URL=postgresql://... \
+KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=... \
+KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=... \
+npm run ops:restore-drill
+```
+
 ## Documentation
 
 - [docs/architecture.md](/home/simon/keylore/docs/architecture.md)
 - [docs/api.md](/home/simon/keylore/docs/api.md)
+- [docs/deployment.md](/home/simon/keylore/docs/deployment.md)
 - [docs/configuration.md](/home/simon/keylore/docs/configuration.md)
 - [docs/cli.md](/home/simon/keylore/docs/cli.md)
+- [docs/observability.md](/home/simon/keylore/docs/observability.md)
 - [docs/operations.md](/home/simon/keylore/docs/operations.md)
 - [docs/threat-model.md](/home/simon/keylore/docs/threat-model.md)
 - [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md)

@@ -137,6 +137,12 @@ Operational visibility is exposed through:
 - `GET /readyz`
 - `GET /v1/system/maintenance`
 
+Deployment profiles are shipped through Helm values files:
+
+- `charts/keylore/values-dev.yaml`
+- `charts/keylore/values-staging.yaml`
+- `charts/keylore/values-prod.yaml`
+
 The maintenance loop expires stale approvals, revokes expired tokens, and removes old rate-limit buckets.
 
 ## Persistence model

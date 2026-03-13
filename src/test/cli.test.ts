@@ -101,3 +101,32 @@ test("cli auth clients create returns a generated secret", async () => {
 
   await close();
 });
+
+test("cli backup restore recreates deleted catalogue data", async () => {
+  const { app, close, tempDir } = await makeTestApp();
+  const backupPath = path.join(tempDir, "backup.json");
+
+  const backupResult = JSON.parse(
+    await runCli(app, ["system", "backup", "create", "--file", backupPath]),
+  ) as { file: string; credentials: number };
+  assert.equal(backupResult.file, backupPath);
+  assert.equal(backupResult.credentials, 1);
+
+  const deleted = JSON.parse(
+    await runCli(app, ["catalog", "delete", "demo"]),
+  ) as { deleted: boolean };
+  assert.equal(deleted.deleted, true);
+
+  const restoreResult = JSON.parse(
+    await runCli(app, ["system", "backup", "restore", "--file", backupPath, "--yes"]),
+  ) as { restored: boolean; credentials: number };
+  assert.equal(restoreResult.restored, true);
+  assert.equal(restoreResult.credentials, 1);
+
+  const listed = JSON.parse(await runCli(app, ["catalog", "list"])) as {
+    credentials: Array<{ id: string }>;
+  };
+  assert.equal(listed.credentials.some((credential) => credential.id === "demo"), true);
+
+  await close();
+});

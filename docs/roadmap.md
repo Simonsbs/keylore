@@ -32,9 +32,16 @@
 - add logical backup and restore tooling for self-hosted recovery
 - harden adapter behavior with retries and circuit breaking
 
+## v0.6
+
+- completed:
+- add Helm chart and environment-specific deployment values
+- add tagged-release workflow with image build, SBOM generation, scanning, and signing
+- add shipped Grafana dashboard and Prometheus alert rules
+- add deployment and restore-drill documentation plus CLI restore coverage
+
 ## v1.0
 
 - add multi-tenant RBAC and audit partitioning
 - add admin UI
-- add deployment manifests for Kubernetes
 - add formal conformance and security hardening suites

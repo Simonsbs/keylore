@@ -1,0 +1,131 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/simonsbs/keylore
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 8787
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: keylore.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClassName: ""
+
+postgresql:
+  enabled: true
+  image: postgres:17-alpine
+  database: keylore
+  username: keylore
+  existingSecret: ""
+  passwordKey: password
+  password: keylore
+  storageSize: 8Gi
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+app:
+  environment: production
+  logLevel: info
+  bootstrapFromFiles: true
+  databaseUrl: ""
+  publicBaseUrl: ""
+  oauthIssuerUrl: ""
+  httpHost: "0.0.0.0"
+  httpPort: 8787
+  maxRequestBytes: 131072
+  outboundTimeoutMs: 10000
+  maxResponseBytes: 32768
+  rateLimitWindowMs: 60000
+  rateLimitMaxRequests: 120
+  maintenanceEnabled: true
+  maintenanceIntervalMs: 60000
+  accessTokenTtlSeconds: 3600
+  approvalTtlSeconds: 1800
+  sandboxInjectionEnabled: false
+  sandboxCommandAllowlist: ""
+  sandboxDefaultTimeoutMs: 5000
+  sandboxMaxOutputBytes: 16384
+  adapterMaxAttempts: 2
+  adapterRetryDelayMs: 250
+  adapterCircuitBreakerThreshold: 3
+  adapterCircuitBreakerCooldownMs: 60000
+
+bootstrapSecrets:
+  existingSecret: ""
+  adminClientSecret: ""
+  consumerClientSecret: ""
+  githubReadonly: ""
+  npmReadonly: ""
+
+extraEnv: []
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+networkPolicy:
+  enabled: false
+  allowedIngressNamespaces: []

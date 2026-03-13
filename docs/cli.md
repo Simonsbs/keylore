@@ -180,6 +180,15 @@ npm run dev:cli -- system backup inspect --file ./keylore-backup.json
 npm run dev:cli -- system backup restore --file ./keylore-backup.json --yes
 ```
 
+### `ops:restore-drill`
+
+```bash
+KEYLORE_DATABASE_URL=postgresql://... \
+KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=... \
+KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=... \
+npm run ops:restore-drill
+```
+
 ### `approvals list`
 
 ```bash

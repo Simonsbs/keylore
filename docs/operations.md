@@ -51,6 +51,8 @@ On process startup KeyLore now:
 - sandboxed injection mode behind an explicit command allowlist
 - background cleanup of stale approvals, expired tokens, and old rate-limit buckets
 - logical backup and restore support through the CLI
+- Helm-based Kubernetes deployment path with environment-specific values
+- release workflow for tagged artifacts, SBOMs, scanning, and signing
 
 ## Local verification flow
 
@@ -69,6 +71,7 @@ With `.env` populated, a minimal smoke test is:
 11. call `POST /v1/runtime/sandbox` with an allowlisted command to verify injected execution and output scrubbing
 12. call `GET /metrics` and `GET /v1/system/maintenance`
 13. create and inspect a logical backup with `npm run dev:cli -- system backup create --file ./backup.json`
+14. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
 
 ## Migration policy
 
@@ -94,4 +97,13 @@ Restore a logical backup:
 
 ```bash
 npm run dev:cli -- system backup restore --file ./keylore-backup.json --yes
+```
+
+Automate the drill end to end:
+
+```bash
+KEYLORE_DATABASE_URL=postgresql://... \
+KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=... \
+KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=... \
+npm run ops:restore-drill
 ```

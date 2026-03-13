@@ -27,3 +27,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Render Helm chart
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 template keylore ./charts/keylore -f ./charts/keylore/values.yaml > /dev/null

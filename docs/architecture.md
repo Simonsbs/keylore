@@ -2,12 +2,12 @@
 
 ## Current shape
 
-KeyLore v0.5 is a single TypeScript service with two entry modes:
+KeyLore v0.6 is a single TypeScript service with two entry modes:
 
 - `stdio` MCP transport for local tool execution
 - Streamable HTTP MCP transport plus REST endpoints for remote or service deployment
 
-The runtime is organized into eight layers:
+The runtime is organized into nine layers:
 
 1. Catalogue repository
 2. Policy repository and evaluation
@@ -16,7 +16,8 @@ The runtime is organized into eight layers:
 5. Sandboxed runtime injection executor
 6. Database-backed rate limiting and maintenance
 7. Backup/export tooling
-8. MCP and HTTP presentation layers
+8. Release and deployment packaging
+9. MCP and HTTP presentation layers
 
 ## Core flow
 
@@ -61,7 +62,8 @@ Secret values are not stored in either the seed files or the database.
 - shared rate limiting is enforced through PostgreSQL state instead of per-process memory
 - background maintenance expires stale approvals, revokes expired access tokens, and reaps old rate-limit buckets
 - logical backups operate at the application data model, not through opaque database dumps
+- Kubernetes deployment is shipped as a Helm chart with environment profiles
 
 ## Why this is not split into microservices yet
 
-`KeyLore.md` describes a larger system, but v0.5 still keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.
+`KeyLore.md` describes a larger system, but v0.6 still keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.

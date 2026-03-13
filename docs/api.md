@@ -261,3 +261,5 @@ Requires `audit:read` and `admin` or `auditor`.
 ## Local CLI
 
 KeyLore also exposes a local operator CLI documented in [docs/cli.md](/home/simon/keylore/docs/cli.md). This is the preferred local administration surface until a dedicated admin UI exists.
+
+For deployment and release packaging, see [docs/deployment.md](/home/simon/keylore/docs/deployment.md).

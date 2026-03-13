@@ -24,6 +24,9 @@ This file maps the current repository state to the local `KeyLore.md` production
 - database-backed shared rate limiting
 - background maintenance for approval/token expiry and rate-limit cleanup
 - logical backup and restore tooling for self-hosted recovery
+- Helm chart with deployment profiles for dev, staging, and production
+- tagged release workflow with SBOM generation, scanning, and signing
+- shipped observability artifacts for dashboards and alert rules
 - container packaging and CI basics
 - startup migrations, config validation, and bootstrap import
 - ingress and egress hardening controls
@@ -32,8 +35,8 @@ This file maps the current repository state to the local `KeyLore.md` production
 
 - Catalogue CRUD: REST and CLI implemented, no UI yet
 - Remote MCP auth: client credentials and protected-resource metadata exist, but no broader OAuth authorization flows
-- Deployment readiness: Docker is present, Helm/Kubernetes artifacts are not
-- Observability: metrics are present, but no external dashboards, traces backend, or alert rules are shipped yet
+- Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
+- Observability: metrics, dashboards, and alert rules are present, but no traces backend is shipped yet
 - Approval operations: CLI and API exist, but no delegated multi-party workflow or notification layer yet
 
 ## Deferred

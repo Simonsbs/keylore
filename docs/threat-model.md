@@ -32,12 +32,14 @@
 - provider adapters expose metadata for rotation/expiry reporting without returning secret material
 - adapter retries and circuit breaking reduce repeated backend failure thrash
 - logical backups provide an auditable recovery path for self-hosted operators
+- release workflow produces SBOMs and vulnerability scan artifacts before tagged distribution
 
 ## Known gaps
 
 - no tenant isolation layer yet
 - no external identity provider integration or end-user delegated OAuth flows yet
-- no anomaly detection, alert rules, or shipped dashboards yet
+- no distributed trace backend or anomaly detection pipeline is shipped yet
+- release signing depends on GitHub OIDC and tagged release flow; it is not enforced for ad hoc local images
 
 ## Review rule
 

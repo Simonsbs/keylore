@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: keylore-alerts
+  labels:
+    app.kubernetes.io/name: keylore
+spec:
+  groups:
+    - name: keylore.rules
+      rules:
+        - alert: KeyLoreDown
+          expr: absent(up{job="keylore"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: KeyLore is not scraping successfully
+            description: No active scrape target is reporting for the keylore job.
+        - alert: KeyLoreHighRateLimitBlocks
+          expr: increase(keylore_rate_limit_blocks_total[15m]) > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: KeyLore is blocking many requests
+            description: More than 50 requests have been rate limited in the last 15 minutes.
+        - alert: KeyLoreMaintenanceFailures
+          expr: increase(keylore_maintenance_runs_total{outcome="error"}[15m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: KeyLore maintenance loop is failing
+            description: Background maintenance has reported one or more errors in the last 15 minutes.
+        - alert: KeyLoreSlowHttpRequests
+          expr: (sum by (route) (rate(keylore_http_request_duration_ms_sum[5m])) / sum by (route) (rate(keylore_http_request_duration_ms_count[5m]))) > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: KeyLore requests are slow
+            description: Average request latency is above 1s for at least one route.

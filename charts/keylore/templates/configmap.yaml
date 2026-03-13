@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "keylore.fullname" . }}
+  labels:
+    {{- include "keylore.labels" . | nindent 4 }}
+data:
+  KEYLORE_HTTP_HOST: {{ .Values.app.httpHost | quote }}
+  KEYLORE_HTTP_PORT: {{ .Values.app.httpPort | quote }}
+  KEYLORE_ENVIRONMENT: {{ .Values.app.environment | quote }}
+  KEYLORE_LOG_LEVEL: {{ .Values.app.logLevel | quote }}
+  KEYLORE_BOOTSTRAP_FROM_FILES: {{ ternary "true" "false" .Values.app.bootstrapFromFiles | quote }}
+  KEYLORE_MAX_REQUEST_BYTES: {{ .Values.app.maxRequestBytes | quote }}
+  KEYLORE_OUTBOUND_TIMEOUT_MS: {{ .Values.app.outboundTimeoutMs | quote }}
+  KEYLORE_MAX_RESPONSE_BYTES: {{ .Values.app.maxResponseBytes | quote }}
+  KEYLORE_RATE_LIMIT_WINDOW_MS: {{ .Values.app.rateLimitWindowMs | quote }}
+  KEYLORE_RATE_LIMIT_MAX_REQUESTS: {{ .Values.app.rateLimitMaxRequests | quote }}
+  KEYLORE_MAINTENANCE_ENABLED: {{ ternary "true" "false" .Values.app.maintenanceEnabled | quote }}
+  KEYLORE_MAINTENANCE_INTERVAL_MS: {{ .Values.app.maintenanceIntervalMs | quote }}
+  KEYLORE_ACCESS_TOKEN_TTL_SECONDS: {{ .Values.app.accessTokenTtlSeconds | quote }}
+  KEYLORE_APPROVAL_TTL_SECONDS: {{ .Values.app.approvalTtlSeconds | quote }}
+  KEYLORE_SANDBOX_INJECTION_ENABLED: {{ ternary "true" "false" .Values.app.sandboxInjectionEnabled | quote }}
+  KEYLORE_SANDBOX_COMMAND_ALLOWLIST: {{ .Values.app.sandboxCommandAllowlist | quote }}
+  KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS: {{ .Values.app.sandboxDefaultTimeoutMs | quote }}
+  KEYLORE_SANDBOX_MAX_OUTPUT_BYTES: {{ .Values.app.sandboxMaxOutputBytes | quote }}
+  KEYLORE_ADAPTER_MAX_ATTEMPTS: {{ .Values.app.adapterMaxAttempts | quote }}
+  KEYLORE_ADAPTER_RETRY_DELAY_MS: {{ .Values.app.adapterRetryDelayMs | quote }}
+  KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD: {{ .Values.app.adapterCircuitBreakerThreshold | quote }}
+  KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS: {{ .Values.app.adapterCircuitBreakerCooldownMs | quote }}
+  KEYLORE_PUBLIC_BASE_URL: {{ default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl | quote }}
+  KEYLORE_OAUTH_ISSUER_URL: {{ default (printf "%s/oauth" (default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl)) .Values.app.oauthIssuerUrl | quote }}
