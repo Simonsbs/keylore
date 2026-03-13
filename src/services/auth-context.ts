@@ -5,15 +5,33 @@ const allScopes: AccessScope[] = [
   "catalog:write",
   "admin:read",
   "admin:write",
+  "auth:read",
+  "auth:write",
   "broker:use",
   "sandbox:run",
   "audit:read",
   "approval:read",
   "approval:review",
+  "system:read",
+  "system:write",
+  "backup:read",
+  "backup:write",
+  "breakglass:request",
+  "breakglass:read",
+  "breakglass:review",
   "mcp:use",
 ];
 
-const localRoles: PrincipalRole[] = ["admin", "operator", "auditor", "approver"];
+const localRoles: PrincipalRole[] = [
+  "admin",
+  "auth_admin",
+  "operator",
+  "maintenance_operator",
+  "backup_operator",
+  "breakglass_operator",
+  "auditor",
+  "approver",
+];
 
 export function localOperatorContext(principal: string): AuthContext {
   return authContextSchema.parse({

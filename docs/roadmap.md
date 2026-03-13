@@ -40,6 +40,16 @@
 - add shipped Grafana dashboard and Prometheus alert rules
 - add deployment and restore-drill documentation plus CLI restore coverage
 
+## v0.7
+
+- completed:
+- add specialized RBAC for auth administration, maintenance, backup, and break-glass operations
+- add audited break-glass request, approval, denial, revoke, and emergency-use flow
+- harden egress policy with blocked private/link-local targets and HTTPS port allowlisting
+- harden sandbox env injection with reserved-name protection and explicit env allowlisting
+- add backup export, inspect, and restore API endpoints for delegated self-hosted operations
+- expand abuse-case coverage for egress, sandbox, break-glass, and delegated operator roles
+
 ## v1.0
 
 - add multi-tenant RBAC and audit partitioning

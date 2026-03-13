@@ -12,12 +12,15 @@ import { PgAccessTokenRepository } from "./repositories/pg-access-token-reposito
 import { PgApprovalRepository } from "./repositories/pg-approval-repository.js";
 import { PgAuditLogService } from "./repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "./repositories/pg-auth-client-repository.js";
+import { PgBreakGlassRepository } from "./repositories/pg-break-glass-repository.js";
 import { PgCredentialRepository } from "./repositories/pg-credential-repository.js";
 import { PgPolicyRepository } from "./repositories/pg-policy-repository.js";
 import { ApprovalService } from "./services/approval-service.js";
 import { AuthService } from "./services/auth-service.js";
 import { BackupService } from "./services/backup-service.js";
+import { BreakGlassService } from "./services/break-glass-service.js";
 import { BrokerService } from "./services/broker-service.js";
+import { validateEgressTarget } from "./services/egress-policy.js";
 import { MaintenanceService } from "./services/maintenance-service.js";
 import { PolicyEngine } from "./services/policy-engine.js";
 import { PgRateLimitService } from "./services/rate-limit-service.js";
@@ -42,6 +45,7 @@ export interface KeyLoreApp {
   broker: BrokerService;
   auth: AuthService;
   approvals: ApprovalService;
+  breakGlass: BreakGlassService;
   database: SqlDatabase;
   telemetry: TelemetryService;
   rateLimits: PgRateLimitService;
@@ -66,6 +70,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
   const approvals = new PgApprovalRepository(database);
+  const breakGlassRepository = new PgBreakGlassRepository(database);
   const rateLimits = new PgRateLimitService(
     database,
     config.rateLimitWindowMs,
@@ -98,6 +103,11 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     telemetry,
   );
   const approvalService = new ApprovalService(approvals, audit, config.approvalTtlSeconds);
+  const breakGlassService = new BreakGlassService(
+    breakGlassRepository,
+    audit,
+    config.breakGlassMaxDurationSeconds,
+  );
 
   if (config.bootstrapFromFiles) {
     await bootstrapFromFiles(
@@ -117,19 +127,22 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     adapterRegistry,
     new PolicyEngine(),
     approvalService,
+    breakGlassService,
     new SandboxRunner(config),
+    validateEgressTarget,
     config,
   );
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,
     approvals,
+    breakGlassRepository,
     accessTokens,
     rateLimits,
     telemetry,
   );
   maintenance.start();
-  const backup = new BackupService(database, config.version);
+  const backup = new BackupService(database, config.version, audit);
 
   return {
     config,
@@ -137,6 +150,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     broker,
     auth: authService,
     approvals: approvalService,
+    breakGlass: breakGlassService,
     database,
     telemetry,
     rateLimits,

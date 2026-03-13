@@ -10,6 +10,8 @@ import {
   AdapterHealth,
   approvalRequestSchema,
   AuthContext,
+  breakGlassRequestInputSchema,
+  BreakGlassRequest,
   CatalogSearchInput,
   CredentialStatusReport,
   CredentialRecord,
@@ -23,6 +25,7 @@ import { CredentialRepository, PolicyRepository } from "../repositories/interfac
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { ApprovalService } from "./approval-service.js";
+import { BreakGlassService } from "./break-glass-service.js";
 import { PolicyDecision, PolicyEngine } from "./policy-engine.js";
 
 function summarizeCredential(credential: CredentialRecord): CredentialSummary {
@@ -61,18 +64,6 @@ function redactText(text: string, secret: string): string {
     .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]")
     .replace(/github_pat_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]")
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED_TOKEN]");
-}
-
-function validateTargetUrl(rawUrl: string): URL {
-  const targetUrl = new URL(rawUrl);
-  const isLocalHttp = targetUrl.protocol === "http:" && targetUrl.hostname === "localhost";
-  const isLoopbackHttp = targetUrl.protocol === "http:" && targetUrl.hostname === "127.0.0.1";
-
-  if (targetUrl.protocol !== "https:" && !isLocalHttp && !isLoopbackHttp) {
-    throw new Error("Only HTTPS targets are allowed, except localhost for local development.");
-  }
-
-  return targetUrl;
 }
 
 function methodForOperation(operation: AccessRequestInput["operation"]): "GET" | "POST" {
@@ -128,7 +119,9 @@ export class BrokerService {
     private readonly adapters: SecretAdapterRegistry,
     private readonly policyEngine: PolicyEngine,
     private readonly approvals: ApprovalService,
+    private readonly breakGlass: BreakGlassService,
     private readonly sandbox: SandboxRunner,
+    private readonly validateTarget: (rawUrl: string, config: KeyLoreConfig) => Promise<URL>,
     private readonly config: KeyLoreConfig,
   ) {}
 
@@ -252,15 +245,48 @@ export class BrokerService {
       return evaluation.decision;
     }
 
-    const { credential, policyDecision, correlationId } = evaluation;
+    const { credential, policyDecision, correlationId, targetUrl } = evaluation;
+    if (!targetUrl) {
+      return evaluation.decision;
+    }
+    const breakGlassGrant = await this.breakGlass.verifyActive(context, input);
+    if (breakGlassGrant) {
+      await this.breakGlass.recordUse(context, breakGlassGrant);
+      return this.executeAllowedRequest(
+        "live",
+        context,
+        input,
+        credential,
+        { decision: "allow", reason: "Emergency break-glass grant is active.", ruleId: undefined },
+        correlationId,
+        targetUrl,
+        breakGlassGrant,
+      );
+    }
+
     if (policyDecision.decision === "deny") {
+      if (input.breakGlassId) {
+        return this.toBreakGlassDeniedDecision("live", correlationId, credential);
+      }
       return this.toDeniedDecision("live", correlationId, credential, policyDecision);
     }
 
     if (policyDecision.decision === "approval") {
       const approved = await this.approvals.verifyApproval(context, input);
       if (approved) {
-        return this.executeAllowedRequest("live", context, input, credential, policyDecision, correlationId);
+        return this.executeAllowedRequest(
+          "live",
+          context,
+          input,
+          credential,
+          policyDecision,
+          correlationId,
+          targetUrl,
+        );
+      }
+
+      if (input.breakGlassId) {
+        return this.toBreakGlassDeniedDecision("live", correlationId, credential);
       }
 
       const approval = await this.approvals.createPending(context, input, {
@@ -271,7 +297,15 @@ export class BrokerService {
       return this.toApprovalRequiredDecision("live", correlationId, credential, policyDecision, approval);
     }
 
-    return this.executeAllowedRequest("live", context, input, credential, policyDecision, correlationId);
+    return this.executeAllowedRequest(
+      "live",
+      context,
+      input,
+      credential,
+      policyDecision,
+      correlationId,
+      targetUrl,
+    );
   }
 
   public async simulateAccess(
@@ -285,7 +319,19 @@ export class BrokerService {
     }
 
     const { credential, policyDecision, correlationId } = evaluation;
+    const breakGlassGrant = await this.breakGlass.verifyActive(context, input);
+    if (breakGlassGrant) {
+      return this.toAllowedDecision(mode, correlationId, credential, {
+        decision: "allow",
+        reason: "Emergency break-glass grant is active.",
+        ruleId: undefined,
+      });
+    }
+
     if (policyDecision.decision === "deny") {
+      if (input.breakGlassId) {
+        return this.toBreakGlassDeniedDecision(mode, correlationId, credential);
+      }
       return this.toDeniedDecision(mode, correlationId, credential, policyDecision);
     }
 
@@ -293,6 +339,10 @@ export class BrokerService {
       const approved = await this.approvals.verifyApproval(context, input);
       if (approved) {
         return this.toAllowedDecision(mode, correlationId, credential, policyDecision);
+      }
+
+      if (input.breakGlassId) {
+        return this.toBreakGlassDeniedDecision(mode, correlationId, credential);
       }
 
       return this.toApprovalRequiredDecision(mode, correlationId, credential, policyDecision);
@@ -310,6 +360,7 @@ export class BrokerService {
     credential?: CredentialRecord;
     decision: AccessDecision;
     policyDecision?: PolicyDecision;
+    targetUrl?: URL;
   }> {
     const correlationId = randomUUID();
     const credential = await this.credentials.getById(input.credentialId);
@@ -345,7 +396,40 @@ export class BrokerService {
       };
     }
 
-    const targetUrl = validateTargetUrl(input.targetUrl);
+    let targetUrl: URL;
+    try {
+      targetUrl = await this.validateTarget(input.targetUrl, this.config);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Target is blocked by egress policy.";
+      await this.audit.record({
+        type: "authz.decision",
+        action,
+        outcome: "denied",
+        principal: context.principal,
+        correlationId,
+        metadata: {
+          credentialId: credential.id,
+          operation: input.operation,
+          targetUrl: input.targetUrl,
+          reason,
+          mode,
+          dryRun: mode !== "live",
+        },
+      });
+
+      return {
+        correlationId,
+        credential,
+        decision: {
+          decision: "denied",
+          mode,
+          reason,
+          correlationId,
+          credential: summarizeCredential(credential),
+        },
+      };
+    }
+
     const policies = await this.policies.read();
     const decision = this.policyEngine.evaluate(
       policies,
@@ -378,6 +462,7 @@ export class BrokerService {
       correlationId,
       credential,
       policyDecision: decision,
+      targetUrl,
       decision: this.toAllowedDecision(mode, correlationId, credential, decision),
     };
   }
@@ -423,6 +508,44 @@ export class BrokerService {
     return this.approvals.review(id, context, status, note);
   }
 
+  public async createBreakGlassRequest(
+    context: AuthContext,
+    input: Parameters<typeof breakGlassRequestInputSchema.parse>[0],
+  ) {
+    const parsed = breakGlassRequestInputSchema.parse(input);
+    const credential = await this.credentials.getById(parsed.credentialId);
+    if (!credential) {
+      throw new Error("Credential not found.");
+    }
+
+    await this.validateTarget(parsed.targetUrl, this.config);
+    return this.breakGlass.createRequest(context, parsed);
+  }
+
+  public async listBreakGlassRequests(filter?: {
+    status?: BreakGlassRequest["status"];
+    requestedBy?: string;
+  }) {
+    return this.breakGlass.list(filter);
+  }
+
+  public async reviewBreakGlassRequest(
+    context: AuthContext,
+    id: string,
+    status: "active" | "denied",
+    note?: string,
+  ) {
+    return this.breakGlass.review(id, context, status, note);
+  }
+
+  public async revokeBreakGlassRequest(
+    context: AuthContext,
+    id: string,
+    note?: string,
+  ) {
+    return this.breakGlass.revoke(id, context, note);
+  }
+
   public async runSandboxed(
     context: AuthContext,
     input: RuntimeExecutionInput,
@@ -463,8 +586,9 @@ export class BrokerService {
     credential: CredentialRecord,
     decision: PolicyDecision,
     correlationId: string,
+    targetUrl: URL,
+    breakGlassGrant?: BreakGlassRequest,
   ): Promise<AccessDecision> {
-    const targetUrl = validateTargetUrl(input.targetUrl);
     const resolved = await this.adapters.resolve(credential);
     const httpResult = await this.executeProxyRequest(input, targetUrl, resolved.secret, {
       [resolved.headerName]: resolved.headerValue,
@@ -482,6 +606,7 @@ export class BrokerService {
         targetHost: targetUrl.hostname,
         ruleId: decision.ruleId ?? null,
         status: httpResult.status,
+        breakGlassId: breakGlassGrant?.id ?? null,
       },
     });
 
@@ -493,6 +618,20 @@ export class BrokerService {
       credential: summarizeCredential(credential),
       ruleId: decision.ruleId,
       httpResult,
+    };
+  }
+
+  private toBreakGlassDeniedDecision(
+    mode: AccessMode,
+    correlationId: string,
+    credential: CredentialRecord,
+  ): AccessDecision {
+    return {
+      decision: "denied",
+      mode,
+      reason: "Break-glass grant is invalid, expired, or does not match this request.",
+      correlationId,
+      credential: summarizeCredential(credential),
     };
   }
 

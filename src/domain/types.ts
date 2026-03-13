@@ -15,7 +15,11 @@ export const operationSchema = z.enum(["http.get", "http.post"]);
 export const runtimeModeSchema = z.enum(["proxy", "sandbox_injection"]);
 export const principalRoleSchema = z.enum([
   "admin",
+  "auth_admin",
   "operator",
+  "maintenance_operator",
+  "backup_operator",
+  "breakglass_operator",
   "auditor",
   "approver",
   "consumer",
@@ -25,17 +29,27 @@ export const accessScopeSchema = z.enum([
   "catalog:write",
   "admin:read",
   "admin:write",
+  "auth:read",
+  "auth:write",
   "broker:use",
   "sandbox:run",
   "audit:read",
   "approval:read",
   "approval:review",
+  "system:read",
+  "system:write",
+  "backup:read",
+  "backup:write",
+  "breakglass:request",
+  "breakglass:read",
+  "breakglass:review",
   "mcp:use",
 ]);
 export const authClientStatusSchema = z.enum(["active", "disabled"]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "expired"]);
 export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
 export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
+export const breakGlassStatusSchema = z.enum(["pending", "active", "denied", "expired", "revoked"]);
 
 export const credentialBindingSchema = z.object({
   adapter: bindingAdapterSchema,
@@ -102,10 +116,14 @@ export const auditEventSchema = z.object({
     "credential.use",
     "approval.request",
     "approval.review",
+    "breakglass.request",
+    "breakglass.review",
+    "breakglass.use",
     "auth.client",
     "auth.token",
     "runtime.exec",
     "adapter.health",
+    "system.backup",
   ]),
   action: z.string().min(1),
   outcome: z.enum(["allowed", "denied", "success", "error"]),
@@ -172,6 +190,7 @@ export const accessRequestInputSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   payload: z.string().max(20_000).optional(),
   approvalId: z.string().uuid().optional(),
+  breakGlassId: z.string().uuid().optional(),
   dryRun: z.boolean().optional(),
 });
 
@@ -298,6 +317,45 @@ export const approvalListOutputSchema = z.object({
   approvals: z.array(approvalRequestSchema),
 });
 
+export const breakGlassRequestSchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  status: breakGlassStatusSchema,
+  requestedBy: z.string().min(1),
+  requestedRoles: z.array(principalRoleSchema).min(1),
+  credentialId: z.string().min(1),
+  operation: operationSchema,
+  targetUrl: z.string().url(),
+  targetHost: z.string().min(1),
+  justification: z.string().min(12).max(2000),
+  requestedDurationSeconds: z.number().int().min(60),
+  correlationId: z.string().uuid(),
+  fingerprint: z.string().min(1),
+  reviewedBy: z.string().optional(),
+  reviewedAt: z.string().datetime().optional(),
+  reviewNote: z.string().max(1000).optional(),
+  revokedBy: z.string().optional(),
+  revokedAt: z.string().datetime().optional(),
+  revokeNote: z.string().max(1000).optional(),
+});
+
+export const breakGlassRequestInputSchema = z.object({
+  credentialId: z.string().min(1),
+  operation: operationSchema,
+  targetUrl: z.string().url(),
+  justification: z.string().min(12).max(2000),
+  requestedDurationSeconds: z.number().int().min(60).max(86400).optional(),
+});
+
+export const breakGlassReviewInputSchema = z.object({
+  note: z.string().max(1000).optional(),
+});
+
+export const breakGlassListOutputSchema = z.object({
+  requests: z.array(breakGlassRequestSchema),
+});
+
 export const authClientListOutputSchema = z.object({
   clients: z.array(authClientRecordSchema),
 });
@@ -369,6 +427,7 @@ export const adapterHealthListOutputSchema = z.object({
 
 export const maintenanceTaskResultSchema = z.object({
   approvalsExpired: z.number().int().min(0),
+  breakGlassExpired: z.number().int().min(0),
   accessTokensExpired: z.number().int().min(0),
   rateLimitBucketsDeleted: z.number().int().min(0),
 });
@@ -387,6 +446,23 @@ export const maintenanceStatusSchema = z.object({
 
 export const maintenanceStatusOutputSchema = z.object({
   maintenance: maintenanceStatusSchema,
+});
+
+export const backupSummarySchema = z.object({
+  format: z.literal("keylore-logical-backup"),
+  version: z.number().int().positive(),
+  sourceVersion: z.string().min(1),
+  createdAt: z.string().datetime(),
+  credentials: z.number().int().min(0),
+  authClients: z.number().int().min(0),
+  accessTokens: z.number().int().min(0),
+  approvals: z.number().int().min(0),
+  breakGlassRequests: z.number().int().min(0),
+  auditEvents: z.number().int().min(0),
+});
+
+export const backupInspectOutputSchema = z.object({
+  backup: backupSummarySchema,
 });
 
 export type CredentialRecord = z.infer<typeof credentialRecordSchema>;
@@ -409,6 +485,7 @@ export type AuthContext = z.infer<typeof authContextSchema>;
 export type TokenIssueInput = z.infer<typeof tokenIssueInputSchema>;
 export type TokenIssueOutput = z.infer<typeof tokenIssueOutputSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
+export type BreakGlassRequest = z.infer<typeof breakGlassRequestSchema>;
 export type AccessMode = z.infer<typeof accessModeSchema>;
 export type AccessTokenRecord = z.infer<typeof accessTokenRecordSchema>;
 export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
@@ -419,3 +496,4 @@ export type CredentialStatusReport = z.infer<typeof credentialStatusReportSchema
 export type AdapterHealth = z.infer<typeof adapterHealthSchema>;
 export type MaintenanceTaskResult = z.infer<typeof maintenanceTaskResultSchema>;
 export type MaintenanceStatus = z.infer<typeof maintenanceStatusSchema>;
+export type BackupSummary = z.infer<typeof backupSummarySchema>;

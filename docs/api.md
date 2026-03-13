@@ -93,6 +93,7 @@ Body fields:
 - `headers`
 - `payload`
 - `approvalId`
+- `breakGlassId`
 
 Response fields:
 
@@ -144,50 +145,50 @@ Required role: `admin` or `approver`
 ### `GET /v1/auth/clients`
 
 Lists configured OAuth clients without secret material.
-Required scope: `admin:read`
-Required role: `admin`
+Required scope: `auth:read`
+Required role: `admin` or `auth_admin`
 
 ### `POST /v1/auth/clients`
 
 Creates an OAuth client and returns the generated or supplied secret exactly once.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `PATCH /v1/auth/clients/:id`
 
 Updates auth-client display name, roles, scopes, or status. Security-relevant changes revoke the client's active tokens.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `POST /v1/auth/clients/:id/rotate-secret`
 
 Rotates the client secret and revokes the client's active tokens.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `POST /v1/auth/clients/:id/enable`
 
 Re-enables a disabled auth client.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `POST /v1/auth/clients/:id/disable`
 
 Disables an auth client and revokes its active tokens.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `GET /v1/auth/tokens`
 
 Lists issued access tokens without exposing token material.
-Required scope: `admin:read`
-Required role: `admin`
+Required scope: `auth:read`
+Required role: `admin` or `auth_admin`
 
 ### `POST /v1/auth/tokens/:id/revoke`
 
 Revokes one issued access token.
-Required scope: `admin:write`
-Required role: `admin`
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
 
 ### `GET /v1/catalog/reports`
 
@@ -204,20 +205,68 @@ Required role: `admin`, `operator`, or `auditor`
 ### `GET /v1/system/adapters`
 
 Returns adapter availability and health.
-Required scope: `admin:read`
-Required role: `admin`, `operator`, or `auditor`
+Required scope: `system:read`
+Required role: `admin`, `maintenance_operator`, or `auditor`
 
 ### `GET /v1/system/maintenance`
 
 Returns maintenance-loop status and the last cleanup result.
-Required scope: `admin:read`
-Required role: `admin`, `operator`, or `auditor`
+Required scope: `system:read`
+Required role: `admin`, `maintenance_operator`, or `auditor`
 
 ### `POST /v1/system/maintenance/run`
 
 Runs maintenance immediately.
-Required scope: `admin:write`
-Required role: `admin` or `operator`
+Required scope: `system:write`
+Required role: `admin` or `maintenance_operator`
+
+### `POST /v1/system/backups/export`
+
+Exports a logical backup payload directly over the API.
+Required scope: `backup:read`
+Required role: `admin` or `backup_operator`
+
+### `POST /v1/system/backups/inspect`
+
+Validates and summarizes a supplied logical backup payload.
+Required scope: `backup:read`
+Required role: `admin` or `backup_operator`
+
+### `POST /v1/system/backups/restore`
+
+Restores a supplied logical backup payload when `confirm=true`.
+Required scope: `backup:write`
+Required role: `admin` or `backup_operator`
+
+### `GET /v1/break-glass`
+
+Lists break-glass requests with optional `status` and `requestedBy` filters.
+Required scope: `breakglass:read`
+Required role: `admin`, `approver`, `auditor`, or `breakglass_operator`
+
+### `POST /v1/break-glass`
+
+Creates a new break-glass request.
+Required scope: `breakglass:request`
+Required role: `admin` or `breakglass_operator`
+
+### `POST /v1/break-glass/:id/approve`
+
+Activates a pending break-glass request.
+Required scope: `breakglass:review`
+Required role: `admin` or `approver`
+
+### `POST /v1/break-glass/:id/deny`
+
+Denies a pending break-glass request.
+Required scope: `breakglass:review`
+Required role: `admin` or `approver`
+
+### `POST /v1/break-glass/:id/revoke`
+
+Revokes an active break-glass request.
+Required scope: `breakglass:review`
+Required role: `admin`, `approver`, or `breakglass_operator`
 
 ## MCP tools
 
@@ -248,6 +297,18 @@ Read adapter health and availability.
 ### `system_maintenance_status`
 
 Read background maintenance status.
+
+### `break_glass_request`
+
+Create an emergency-access request.
+
+### `break_glass_list`
+
+List emergency-access requests.
+
+### `break_glass_review`
+
+Approve, deny, or revoke an emergency-access request.
 
 ### `runtime_run_sandboxed`
 

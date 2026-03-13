@@ -14,13 +14,16 @@ import { PgAccessTokenRepository } from "../repositories/pg-access-token-reposit
 import { PgApprovalRepository } from "../repositories/pg-approval-repository.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "../repositories/pg-auth-client-repository.js";
+import { PgBreakGlassRepository } from "../repositories/pg-break-glass-repository.js";
 import { PgCredentialRepository } from "../repositories/pg-credential-repository.js";
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
 import { ApprovalService } from "../services/approval-service.js";
 import { AuthService } from "../services/auth-service.js";
 import { BackupService } from "../services/backup-service.js";
+import { BreakGlassService } from "../services/break-glass-service.js";
 import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
+import { validateEgressTarget } from "../services/egress-policy.js";
 import { MaintenanceService } from "../services/maintenance-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
 import { PgRateLimitService } from "../services/rate-limit-service.js";
@@ -96,7 +99,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.6.0",
+    version: "0.7.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -121,14 +124,19 @@ export async function makeTestApp(options?: {
     maintenanceIntervalMs: 60000,
     accessTokenTtlSeconds: 3600,
     approvalTtlSeconds: 1800,
+    breakGlassMaxDurationSeconds: 900,
     vaultAddr: undefined,
     vaultToken: undefined,
     vaultNamespace: undefined,
     opBinary: "op",
     awsBinary: "aws",
     gcloudBinary: "gcloud",
+    egressAllowPrivateIps: false,
+    egressAllowedHosts: [],
+    egressAllowedHttpsPorts: [443],
     sandboxInjectionEnabled: true,
     sandboxCommandAllowlist: [process.execPath],
+    sandboxEnvAllowlist: [],
     sandboxDefaultTimeoutMs: 1000,
     sandboxMaxOutputBytes: 2048,
     adapterMaxAttempts: 2,
@@ -144,6 +152,7 @@ export async function makeTestApp(options?: {
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
   const approvalRepository = new PgApprovalRepository(database);
+  const breakGlassRepository = new PgBreakGlassRepository(database);
   const telemetry = new TelemetryService();
   const rateLimits = new PgRateLimitService(
     database,
@@ -168,17 +177,35 @@ export async function makeTestApp(options?: {
       {
         clientId: "admin-client",
         displayName: "Admin Client",
-        roles: ["admin", "operator", "auditor", "approver"],
+        roles: [
+          "admin",
+          "auth_admin",
+          "operator",
+          "maintenance_operator",
+          "backup_operator",
+          "breakglass_operator",
+          "auditor",
+          "approver",
+        ],
         allowedScopes: [
           "catalog:read",
           "catalog:write",
           "admin:read",
           "admin:write",
+          "auth:read",
+          "auth:write",
           "broker:use",
           "sandbox:run",
           "audit:read",
           "approval:read",
           "approval:review",
+          "system:read",
+          "system:write",
+          "backup:read",
+          "backup:write",
+          "breakglass:request",
+          "breakglass:read",
+          "breakglass:review",
           "mcp:use",
         ],
         status: "active" as const,
@@ -217,10 +244,16 @@ export async function makeTestApp(options?: {
     telemetry,
   );
   const approvals = new ApprovalService(approvalRepository, audit, config.approvalTtlSeconds);
+  const breakGlass = new BreakGlassService(
+    breakGlassRepository,
+    audit,
+    config.breakGlassMaxDurationSeconds,
+  );
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,
     approvalRepository,
+    breakGlassRepository,
     accessTokens,
     rateLimits,
     telemetry,
@@ -233,7 +266,9 @@ export async function makeTestApp(options?: {
     new SecretAdapterRegistry([new EnvSecretAdapter()], config, telemetry),
     new PolicyEngine(),
     approvals,
+    breakGlass,
     new SandboxRunner(config),
+    validateEgressTarget,
     config,
   );
 
@@ -243,11 +278,12 @@ export async function makeTestApp(options?: {
     broker,
     auth,
     approvals,
+    breakGlass,
     database,
     telemetry,
     rateLimits,
     maintenance,
-    backup: new BackupService(database, config.version),
+    backup: new BackupService(database, config.version, audit),
     health: {
       readiness: async () => {
         await database.healthcheck();

@@ -28,6 +28,29 @@ function truncate(text: string, maxLength: number): { value: string; truncated: 
 export class SandboxRunner {
   public constructor(private readonly config: KeyLoreConfig) {}
 
+  private sanitizeEnv(inputEnv: Record<string, string> | undefined, secretEnvName: string): Record<string, string> {
+    if (!inputEnv) {
+      return {};
+    }
+
+    const reservedNames = new Set(["PATH", "HOME", secretEnvName]);
+    const sanitized: Record<string, string> = {};
+
+    for (const [name, value] of Object.entries(inputEnv)) {
+      if (reservedNames.has(name)) {
+        throw new Error(`Sandbox env variable is reserved and cannot be overridden: ${name}`);
+      }
+
+      if (!this.config.sandboxEnvAllowlist.includes(name)) {
+        throw new Error(`Sandbox env variable is not allowlisted: ${name}`);
+      }
+
+      sanitized[name] = value;
+    }
+
+    return sanitized;
+  }
+
   public async run(
     input: RuntimeExecutionInput,
     secret: string,
@@ -43,6 +66,7 @@ export class SandboxRunner {
 
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "keylore-sandbox-"));
     const startedAt = Date.now();
+    const sanitizedEnv = this.sanitizeEnv(input.env, secretEnvName);
 
     try {
       const result = await new Promise<{
@@ -58,8 +82,8 @@ export class SandboxRunner {
           env: {
             PATH: process.env.PATH,
             HOME: process.env.HOME,
+            ...sanitizedEnv,
             [secretEnvName]: secret,
-            ...(input.env ?? {}),
           },
         });
 

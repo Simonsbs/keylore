@@ -162,6 +162,12 @@ export class AuthService {
     }
   }
 
+  public requireAnyScope(context: AuthContext, allowedScopes: AccessScope[]): void {
+    if (!allowedScopes.some((scope) => context.scopes.includes(scope))) {
+      throw new Error(`Missing one of the required scopes: ${allowedScopes.join(", ")}`);
+    }
+  }
+
   public requireRoles(context: AuthContext, requiredRoles: PrincipalRole[]): void {
     if (!requiredRoles.some((role) => context.roles.includes(role))) {
       throw new Error(`Missing required role. Need one of: ${requiredRoles.join(", ")}`);

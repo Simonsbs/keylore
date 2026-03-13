@@ -7,9 +7,14 @@ import {
   approvalRequestSchema,
   auditEventSchema,
   authClientRecordSchema,
+  AuthContext,
+  backupSummarySchema,
+  BreakGlassRequest,
+  breakGlassRequestSchema,
   credentialRecordSchema,
   policyFileSchema,
 } from "../domain/types.js";
+import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { StoredAuthClient } from "../repositories/interfaces.js";
 import { SqlDatabase } from "../storage/database.js";
 
@@ -28,6 +33,7 @@ const backupEnvelopeSchema = z.object({
   authClients: z.array(storedAuthClientSchema),
   accessTokens: z.array(accessTokenRecordSchema.extend({ tokenHash: z.string().min(1) })),
   approvals: z.array(approvalRequestSchema),
+  breakGlassRequests: z.array(breakGlassRequestSchema),
   auditEvents: z.array(auditEventSchema),
 });
 
@@ -117,6 +123,29 @@ interface BackupAuditRow {
   metadata: Record<string, unknown>;
 }
 
+interface BackupBreakGlassRow {
+  id: string;
+  created_at: string | Date;
+  expires_at: string | Date;
+  status: BreakGlassRequest["status"];
+  requested_by: string;
+  requested_roles: string[];
+  credential_id: string;
+  operation: "http.get" | "http.post";
+  target_url: string;
+  target_host: string;
+  justification: string;
+  requested_duration_seconds: number;
+  correlation_id: string;
+  fingerprint: string;
+  reviewed_by: string | null;
+  reviewed_at: string | Date | null;
+  review_note: string | null;
+  revoked_by: string | null;
+  revoked_at: string | Date | null;
+  revoke_note: string | null;
+}
+
 function toIso(value: string | Date | null): string | null {
   if (value === null) {
     return null;
@@ -130,19 +159,40 @@ export class BackupService {
   public constructor(
     private readonly database: SqlDatabase,
     private readonly sourceVersion: string,
+    private readonly audit: PgAuditLogService,
   ) {}
 
-  public async exportBackup(): Promise<KeyLoreBackup> {
-    const [credentials, policies, authClients, accessTokens, approvals, auditEvents] = await Promise.all([
+  public summarizeBackup(backup: KeyLoreBackup) {
+    return backupSummarySchema.parse({
+      format: backup.format,
+      version: backup.version,
+      sourceVersion: backup.sourceVersion,
+      createdAt: backup.createdAt,
+      credentials: backup.credentials.length,
+      authClients: backup.authClients.length,
+      accessTokens: backup.accessTokens.length,
+      approvals: backup.approvals.length,
+      breakGlassRequests: backup.breakGlassRequests.length,
+      auditEvents: backup.auditEvents.length,
+    });
+  }
+
+  public parseBackupPayload(payload: unknown): KeyLoreBackup {
+    return backupEnvelopeSchema.parse(payload);
+  }
+
+  public async exportBackup(actor?: AuthContext): Promise<KeyLoreBackup> {
+    const [credentials, policies, authClients, accessTokens, approvals, breakGlassRequests, auditEvents] = await Promise.all([
       this.database.query<BackupCredentialRow>("SELECT * FROM credentials ORDER BY id"),
       this.database.query<BackupPolicyRow>("SELECT * FROM policy_rules ORDER BY id"),
       this.database.query<BackupAuthClientRow>("SELECT * FROM oauth_clients ORDER BY client_id"),
       this.database.query<BackupAccessTokenRow>("SELECT * FROM access_tokens ORDER BY created_at"),
       this.database.query<BackupApprovalRow>("SELECT * FROM approval_requests ORDER BY created_at"),
+      this.database.query<BackupBreakGlassRow>("SELECT * FROM break_glass_requests ORDER BY created_at"),
       this.database.query<BackupAuditRow>("SELECT * FROM audit_events ORDER BY occurred_at"),
     ]);
 
-    return backupEnvelopeSchema.parse({
+    const backup = backupEnvelopeSchema.parse({
       format: "keylore-logical-backup",
       version: 1,
       createdAt: new Date().toISOString(),
@@ -220,6 +270,28 @@ export class BackupService {
         reviewedAt: toIso(row.reviewed_at) ?? undefined,
         reviewNote: row.review_note ?? undefined,
       })),
+      breakGlassRequests: breakGlassRequests.rows.map((row) => ({
+        id: row.id,
+        createdAt: toIso(row.created_at),
+        expiresAt: toIso(row.expires_at),
+        status: row.status,
+        requestedBy: row.requested_by,
+        requestedRoles: row.requested_roles,
+        credentialId: row.credential_id,
+        operation: row.operation,
+        targetUrl: row.target_url,
+        targetHost: row.target_host,
+        justification: row.justification,
+        requestedDurationSeconds: row.requested_duration_seconds,
+        correlationId: row.correlation_id,
+        fingerprint: row.fingerprint,
+        reviewedBy: row.reviewed_by ?? undefined,
+        reviewedAt: toIso(row.reviewed_at) ?? undefined,
+        reviewNote: row.review_note ?? undefined,
+        revokedBy: row.revoked_by ?? undefined,
+        revokedAt: toIso(row.revoked_at) ?? undefined,
+        revokeNote: row.revoke_note ?? undefined,
+      })),
       auditEvents: auditEvents.rows.map((row) => ({
         eventId: row.event_id,
         occurredAt: toIso(row.occurred_at),
@@ -231,25 +303,36 @@ export class BackupService {
         metadata: row.metadata,
       })),
     });
+
+    if (actor) {
+      await this.audit.record({
+        type: "system.backup",
+        action: "system.backup.export",
+        outcome: "success",
+        principal: actor.principal,
+        metadata: this.summarizeBackup(backup),
+      });
+    }
+
+    return backup;
   }
 
-  public async writeBackup(filePath: string): Promise<KeyLoreBackup> {
-    const backup = await this.exportBackup();
+  public async writeBackup(filePath: string, actor?: AuthContext): Promise<KeyLoreBackup> {
+    const backup = await this.exportBackup(actor);
     await fs.writeFile(filePath, `${JSON.stringify(backup, null, 2)}\n`, "utf8");
     return backup;
   }
 
   public async readBackup(filePath: string): Promise<KeyLoreBackup> {
     const raw = await fs.readFile(filePath, "utf8");
-    return backupEnvelopeSchema.parse(JSON.parse(raw));
+    return this.parseBackupPayload(JSON.parse(raw));
   }
 
-  public async restoreBackup(filePath: string): Promise<KeyLoreBackup> {
-    const backup = await this.readBackup(filePath);
-
+  public async restoreBackupPayload(backup: KeyLoreBackup, actor?: AuthContext): Promise<KeyLoreBackup> {
     await this.database.withTransaction(async (client) => {
       await client.query("DELETE FROM access_tokens");
       await client.query("DELETE FROM approval_requests");
+      await client.query("DELETE FROM break_glass_requests");
       await client.query("DELETE FROM audit_events");
       await client.query("DELETE FROM oauth_clients");
       await client.query("DELETE FROM policy_rules");
@@ -386,6 +469,44 @@ export class BackupService {
         );
       }
 
+      for (const request of backup.breakGlassRequests) {
+        await client.query(
+          `INSERT INTO break_glass_requests (
+             id, created_at, expires_at, status, requested_by, requested_roles,
+             credential_id, operation, target_url, target_host, justification, requested_duration_seconds,
+             correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
+             revoked_by, revoked_at, revoke_note
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6,
+             $7, $8, $9, $10, $11, $12,
+             $13, $14, $15, $16, $17,
+             $18, $19, $20
+           )`,
+          [
+            request.id,
+            request.createdAt,
+            request.expiresAt,
+            request.status,
+            request.requestedBy,
+            request.requestedRoles,
+            request.credentialId,
+            request.operation,
+            request.targetUrl,
+            request.targetHost,
+            request.justification,
+            request.requestedDurationSeconds,
+            request.correlationId,
+            request.fingerprint,
+            request.reviewedBy ?? null,
+            request.reviewedAt ?? null,
+            request.reviewNote ?? null,
+            request.revokedBy ?? null,
+            request.revokedAt ?? null,
+            request.revokeNote ?? null,
+          ],
+        );
+      }
+
       for (const event of backup.auditEvents) {
         await client.query(
           `INSERT INTO audit_events (
@@ -405,6 +526,21 @@ export class BackupService {
       }
     });
 
+    if (actor) {
+      await this.audit.record({
+        type: "system.backup",
+        action: "system.backup.restore",
+        outcome: "success",
+        principal: actor.principal,
+        metadata: this.summarizeBackup(backup),
+      });
+    }
+
     return backup;
+  }
+
+  public async restoreBackup(filePath: string, actor?: AuthContext): Promise<KeyLoreBackup> {
+    const backup = await this.readBackup(filePath);
+    return this.restoreBackupPayload(backup, actor);
   }
 }

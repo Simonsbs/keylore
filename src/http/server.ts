@@ -4,12 +4,15 @@ import { URL } from "node:url";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import * as z from "zod/v4";
 
 import { KeyLoreApp } from "../app.js";
 import {
   AccessScope,
   accessRequestInputSchema,
-  runtimeExecutionInputSchema,
+  backupInspectOutputSchema,
+  breakGlassRequestInputSchema,
+  breakGlassReviewInputSchema,
   authClientCreateInputSchema,
   authClientRotateSecretInputSchema,
   authClientUpdateInputSchema,
@@ -18,6 +21,7 @@ import {
   AuthContext,
   catalogSearchInputSchema,
   createCredentialInputSchema,
+  runtimeExecutionInputSchema,
   tokenIssueInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
@@ -115,6 +119,15 @@ function normalizeRoute(pathname: string): string {
   if (pathname.startsWith("/v1/approvals/") && pathname.endsWith("/deny")) {
     return "/v1/approvals/:id/deny";
   }
+  if (pathname.startsWith("/v1/break-glass/") && pathname.endsWith("/approve")) {
+    return "/v1/break-glass/:id/approve";
+  }
+  if (pathname.startsWith("/v1/break-glass/") && pathname.endsWith("/deny")) {
+    return "/v1/break-glass/:id/deny";
+  }
+  if (pathname.startsWith("/v1/break-glass/") && pathname.endsWith("/revoke")) {
+    return "/v1/break-glass/:id/revoke";
+  }
   if (pathname.startsWith("/v1/auth/clients/") && pathname.endsWith("/rotate-secret")) {
     return "/v1/auth/clients/:id/rotate-secret";
   }
@@ -129,6 +142,9 @@ function normalizeRoute(pathname: string): string {
   }
   if (pathname.startsWith("/v1/auth/tokens/") && pathname.endsWith("/revoke")) {
     return "/v1/auth/tokens/:id/revoke";
+  }
+  if (pathname.startsWith("/v1/system/backups/")) {
+    return "/v1/system/backups/:action";
   }
   if (pathname.startsWith("/mcp")) {
     return "/mcp";
@@ -173,7 +189,10 @@ async function authenticateRequest(
     return context;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unauthorized";
-    const statusCode = message.startsWith("Missing required scopes") ? 403 : 401;
+    const statusCode =
+      message.startsWith("Missing required scopes") || message.startsWith("Missing one of the required scopes")
+        ? 403
+        : 401;
     if (statusCode === 401) {
       res.setHeader("www-authenticate", bearerChallenge(app, target));
     }
@@ -339,8 +358,13 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                       ? 409
             : message.startsWith("Missing required role")
               ? 403
-              : message.startsWith("Missing required scopes")
+              : message.startsWith("Missing required scopes") ||
+                  message.startsWith("Missing one of the required scopes")
                 ? 403
+              : message === "Credential not found."
+                ? 404
+              : message.startsWith("Sandbox env variable")
+                ? 400
               : 500;
       app.logger.error({ err: error, requestId, route: routeLabel }, "http_request_failed");
       respondJson(res, statusCode, { error: message });
@@ -534,14 +558,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:read"],
+      ["auth:read"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const clients = await app.auth.listClients();
     respondJson(res, 200, { clients });
     return;
@@ -552,14 +577,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["auth:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const body = authClientCreateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
     const client = await app.auth.createClient(context, body);
     respondJson(res, 201, client);
@@ -571,14 +597,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:read"],
+      ["auth:read"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const query = authTokenListQuerySchema.parse({
       clientId: url.searchParams.get("clientId") ?? undefined,
       status: url.searchParams.get("status") ?? undefined,
@@ -593,14 +620,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:read"],
+      ["system:read"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
     const adapters = await app.broker.adapterHealth();
     respondJson(res, 200, { adapters });
     return;
@@ -611,14 +639,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:read"],
+      ["system:read"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
     respondJson(res, 200, { maintenance: app.maintenance.status() });
     return;
   }
@@ -628,16 +657,82 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["system:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin", "operator"]);
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator"]);
     const result = await app.maintenance.runOnce();
     respondJson(res, 200, { maintenance: app.maintenance.status(), result });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/backups/export" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["backup:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "backup_operator"]);
+    const backup = await app.backup.exportBackup(context);
+    respondJson(res, 200, { backup, summary: app.backup.summarizeBackup(backup) });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/backups/inspect" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["backup:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "backup_operator"]);
+    const body = z.object({ backup: z.unknown() }).parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const backup = app.backup.parseBackupPayload(body.backup);
+    respondJson(res, 200, backupInspectOutputSchema.parse({ backup: app.backup.summarizeBackup(backup) }));
+    return;
+  }
+
+  if (url.pathname === "/v1/system/backups/restore" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["backup:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "backup_operator"]);
+    const body = z
+      .object({
+        confirm: z.literal(true),
+        backup: z.unknown(),
+      })
+      .parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const backup = app.backup.parseBackupPayload(body.backup);
+    const restored = await app.backup.restoreBackupPayload(backup, context);
+    respondJson(res, 200, {
+      restored: true,
+      backup: app.backup.summarizeBackup(restored),
+    });
     return;
   }
 
@@ -701,20 +796,128 @@ async function handleApiRequest(
     return;
   }
 
-  const authClientId = routeParam(url.pathname, "/v1/auth/clients/");
-  if (authClientId && req.method === "PATCH") {
+  if (url.pathname === "/v1/break-glass" && req.method === "GET") {
     const context = await authenticateRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["breakglass:read"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireRoles(context, ["admin", "approver", "auditor", "breakglass_operator"]);
+    const requests = await app.broker.listBreakGlassRequests({
+      status: (url.searchParams.get("status") ?? undefined) as
+        | "pending"
+        | "active"
+        | "denied"
+        | "expired"
+        | "revoked"
+        | undefined,
+      requestedBy: url.searchParams.get("requestedBy") ?? undefined,
+    });
+    respondJson(res, 200, { requests });
+    return;
+  }
+
+  if (url.pathname === "/v1/break-glass" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["breakglass:request"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "breakglass_operator"]);
+    const body = breakGlassRequestInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const request = await app.broker.createBreakGlassRequest(context, body);
+    respondJson(res, 201, { request });
+    return;
+  }
+
+  const breakGlassId = routeParam(url.pathname, "/v1/break-glass/");
+  if (breakGlassId && req.method === "POST" && url.pathname.endsWith("/approve")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["breakglass:review"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "approver"]);
+    const body = breakGlassReviewInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = breakGlassId.replace(/\/approve$/, "");
+    const request = await app.broker.reviewBreakGlassRequest(context, id, "active", body.note);
+    respondJson(res, request ? 200 : 404, { request: request ?? null });
+    return;
+  }
+
+  if (breakGlassId && req.method === "POST" && url.pathname.endsWith("/deny")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["breakglass:review"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "approver"]);
+    const body = breakGlassReviewInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = breakGlassId.replace(/\/deny$/, "");
+    const request = await app.broker.reviewBreakGlassRequest(context, id, "denied", body.note);
+    respondJson(res, request ? 200 : 404, { request: request ?? null });
+    return;
+  }
+
+  if (breakGlassId && req.method === "POST" && url.pathname.endsWith("/revoke")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["breakglass:review"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "approver", "breakglass_operator"]);
+    const body = breakGlassReviewInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = breakGlassId.replace(/\/revoke$/, "");
+    const request = await app.broker.revokeBreakGlassRequest(context, id, body.note);
+    respondJson(res, request ? 200 : 404, { request: request ?? null });
+    return;
+  }
+
+  const authClientId = routeParam(url.pathname, "/v1/auth/clients/");
+  if (authClientId && req.method === "PATCH") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["auth:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const patch = authClientUpdateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
     const client = await app.auth.updateClient(context, authClientId, patch);
     respondJson(res, client ? 200 : 404, { client: client ?? null });
@@ -726,14 +929,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["auth:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const body = authClientRotateSecretInputSchema.parse(
       await readJsonBody(req, app.config.maxRequestBytes),
     );
@@ -748,14 +952,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["auth:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const clientId = authClientId.replace(/\/enable$/, "");
     const client = await app.auth.updateClient(context, clientId, { status: "active" });
     respondJson(res, client ? 200 : 404, { client: client ?? null });
@@ -767,14 +972,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["auth:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const clientId = authClientId.replace(/\/disable$/, "");
     const client = await app.auth.updateClient(context, clientId, { status: "disabled" });
     respondJson(res, client ? 200 : 404, { client: client ?? null });
@@ -787,14 +993,15 @@ async function handleApiRequest(
       app,
       req,
       res,
-      ["admin:write"],
+      ["auth:write"],
       "api",
       `${app.config.publicBaseUrl}/v1`,
     );
     if (!context) {
       return;
     }
-    app.auth.requireRoles(context, ["admin"]);
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
     const id = tokenId.replace(/\/revoke$/, "");
     const token = await app.auth.revokeToken(context, id);
     respondJson(res, token ? 200 : 404, { token: token ?? null });

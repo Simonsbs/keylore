@@ -6,6 +6,10 @@ import {
   accessDecisionSchema,
   adapterHealthListOutputSchema,
   auditRecentOutputSchema,
+  breakGlassListOutputSchema,
+  breakGlassRequestInputSchema,
+  breakGlassRequestSchema,
+  breakGlassReviewInputSchema,
   catalogGetOutputSchema,
   credentialStatusReportListOutputSchema,
   catalogSearchInputSchema,
@@ -230,8 +234,8 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
     },
     async (_input, extra) => {
       const context = contextFromExtra(app, extra);
-      app.auth.requireScopes(context, ["admin:read"]);
-      app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+      app.auth.requireScopes(context, ["system:read"]);
+      app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
       const adapters = await app.broker.adapterHealth();
 
       return {
@@ -252,14 +256,99 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
     },
     async (_input, extra) => {
       const context = contextFromExtra(app, extra);
-      app.auth.requireScopes(context, ["admin:read"]);
-      app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+      app.auth.requireScopes(context, ["system:read"]);
+      app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
 
       return {
         content: [{ type: "text", text: makeText(app.maintenance.status()) }],
         structuredContent: {
           maintenance: app.maintenance.status(),
         },
+      };
+    },
+  );
+
+  server.registerTool(
+    "break_glass_request",
+    {
+      description: "Create an audited emergency-access request for a specific credential and target.",
+      inputSchema: {
+        credentialId: z.string().min(1),
+        operation: operationSchema,
+        targetUrl: z.string().url(),
+        justification: z.string().min(12).max(2000),
+        requestedDurationSeconds: z.number().int().min(60).max(86400).optional(),
+      },
+      outputSchema: z.object({ request: breakGlassRequestSchema }),
+    },
+    async (input, extra) => {
+      const parsed = breakGlassRequestInputSchema.parse(input);
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["breakglass:request"]);
+      app.auth.requireRoles(context, ["admin", "breakglass_operator"]);
+      const request = await app.broker.createBreakGlassRequest(context, parsed);
+
+      return {
+        content: [{ type: "text", text: makeText(request) }],
+        structuredContent: { request },
+      };
+    },
+  );
+
+  server.registerTool(
+    "break_glass_list",
+    {
+      description: "List emergency-access requests and their review status.",
+      inputSchema: {
+        status: z.enum(["pending", "active", "denied", "expired", "revoked"]).optional(),
+        requestedBy: z.string().optional(),
+      },
+      outputSchema: breakGlassListOutputSchema,
+    },
+    async ({ status, requestedBy }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["breakglass:read"]);
+      app.auth.requireRoles(context, ["admin", "approver", "auditor", "breakglass_operator"]);
+      const requests = await app.broker.listBreakGlassRequests({ status, requestedBy });
+
+      return {
+        content: [{ type: "text", text: makeText(requests) }],
+        structuredContent: {
+          requests,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "break_glass_review",
+    {
+      description: "Approve, deny, or revoke an emergency-access request.",
+      inputSchema: {
+        requestId: z.string().uuid(),
+        action: z.enum(["approve", "deny", "revoke"]),
+        note: z.string().max(1000).optional(),
+      },
+      outputSchema: z.object({ request: breakGlassRequestSchema.nullable() }),
+    },
+    async ({ requestId, action, note }, extra) => {
+      const parsedNote = breakGlassReviewInputSchema.parse({ note }).note;
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["breakglass:review"]);
+      app.auth.requireRoles(
+        context,
+        action === "revoke" ? ["admin", "approver", "breakglass_operator"] : ["admin", "approver"],
+      );
+      const request =
+        action === "approve"
+          ? await app.broker.reviewBreakGlassRequest(context, requestId, "active", parsedNote)
+          : action === "deny"
+            ? await app.broker.reviewBreakGlassRequest(context, requestId, "denied", parsedNote)
+            : await app.broker.revokeBreakGlassRequest(context, requestId, parsedNote);
+
+      return {
+        content: [{ type: "text", text: makeText(request ?? { error: "Request not found." }) }],
+        structuredContent: { request: request ?? null },
       };
     },
   );

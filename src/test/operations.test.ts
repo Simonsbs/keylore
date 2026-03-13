@@ -28,7 +28,7 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
     clientId: "admin-client",
     clientSecret: "admin-secret",
     grantType: "client_credentials",
-    scope: ["catalog:read", "admin:read", "admin:write"],
+    scope: ["catalog:read", "system:read", "system:write"],
   });
 
   const searchResponse = await fetch("http://127.0.0.1:8885/v1/catalog/search", {
@@ -60,10 +60,16 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
   });
   assert.equal(runResponse.status, 200);
   const runPayload = (await runResponse.json()) as {
-    result: { approvalsExpired: number; accessTokensExpired: number; rateLimitBucketsDeleted: number };
+    result: {
+      approvalsExpired: number;
+      breakGlassExpired: number;
+      accessTokensExpired: number;
+      rateLimitBucketsDeleted: number;
+    };
   };
   assert.deepEqual(runPayload.result, {
     approvalsExpired: 0,
+    breakGlassExpired: 0,
     accessTokensExpired: 0,
     rateLimitBucketsDeleted: 0,
   });

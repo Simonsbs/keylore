@@ -29,14 +29,19 @@ export interface KeyLoreConfig {
   maintenanceIntervalMs: number;
   accessTokenTtlSeconds: number;
   approvalTtlSeconds: number;
+  breakGlassMaxDurationSeconds: number;
   vaultAddr: string | undefined;
   vaultToken: string | undefined;
   vaultNamespace: string | undefined;
   opBinary: string;
   awsBinary: string;
   gcloudBinary: string;
+  egressAllowPrivateIps: boolean;
+  egressAllowedHosts: string[];
+  egressAllowedHttpsPorts: number[];
   sandboxInjectionEnabled: boolean;
   sandboxCommandAllowlist: string[];
+  sandboxEnvAllowlist: string[];
   sandboxDefaultTimeoutMs: number;
   sandboxMaxOutputBytes: number;
   adapterMaxAttempts: number;
@@ -76,17 +81,25 @@ const envSchema = z.object({
   KEYLORE_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
   KEYLORE_APPROVAL_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
+  KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
   KEYLORE_VAULT_ADDR: z.string().url().optional(),
   KEYLORE_VAULT_TOKEN: z.string().optional(),
   KEYLORE_VAULT_NAMESPACE: z.string().optional(),
   KEYLORE_OP_BIN: z.string().default("op"),
   KEYLORE_AWS_BIN: z.string().default("aws"),
   KEYLORE_GCLOUD_BIN: z.string().default("gcloud"),
+  KEYLORE_EGRESS_ALLOW_PRIVATE_IPS: z
+    .string()
+    .transform((value) => value === "true")
+    .prefault("false"),
+  KEYLORE_EGRESS_ALLOWED_HOSTS: z.string().default(""),
+  KEYLORE_EGRESS_ALLOWED_HTTPS_PORTS: z.string().default("443"),
   KEYLORE_SANDBOX_INJECTION_ENABLED: z
     .string()
     .transform((value) => value === "true")
     .prefault("false"),
   KEYLORE_SANDBOX_COMMAND_ALLOWLIST: z.string().default(""),
+  KEYLORE_SANDBOX_ENV_ALLOWLIST: z.string().default(""),
   KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
   KEYLORE_SANDBOX_MAX_OUTPUT_BYTES: z.coerce.number().int().min(256).default(16384),
   KEYLORE_ADAPTER_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(2),
@@ -104,7 +117,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.6.0",
+    version: "0.7.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -132,14 +145,28 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     maintenanceIntervalMs: env.KEYLORE_MAINTENANCE_INTERVAL_MS,
     accessTokenTtlSeconds: env.KEYLORE_ACCESS_TOKEN_TTL_SECONDS,
     approvalTtlSeconds: env.KEYLORE_APPROVAL_TTL_SECONDS,
+    breakGlassMaxDurationSeconds: env.KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS,
     vaultAddr: env.KEYLORE_VAULT_ADDR || undefined,
     vaultToken: env.KEYLORE_VAULT_TOKEN || undefined,
     vaultNamespace: env.KEYLORE_VAULT_NAMESPACE || undefined,
     opBinary: env.KEYLORE_OP_BIN,
     awsBinary: env.KEYLORE_AWS_BIN,
     gcloudBinary: env.KEYLORE_GCLOUD_BIN,
+    egressAllowPrivateIps: env.KEYLORE_EGRESS_ALLOW_PRIVATE_IPS,
+    egressAllowedHosts: env.KEYLORE_EGRESS_ALLOWED_HOSTS
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    egressAllowedHttpsPorts: env.KEYLORE_EGRESS_ALLOWED_HTTPS_PORTS
+      .split(",")
+      .map((value) => Number.parseInt(value.trim(), 10))
+      .filter((value) => Number.isInteger(value) && value >= 1 && value <= 65535),
     sandboxInjectionEnabled: env.KEYLORE_SANDBOX_INJECTION_ENABLED,
     sandboxCommandAllowlist: env.KEYLORE_SANDBOX_COMMAND_ALLOWLIST
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    sandboxEnvAllowlist: env.KEYLORE_SANDBOX_ENV_ALLOWLIST
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),

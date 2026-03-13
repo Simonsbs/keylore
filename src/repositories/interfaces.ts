@@ -2,6 +2,7 @@ import {
   AccessTokenRecord,
   ApprovalRequest,
   AuthClientRecord,
+  BreakGlassRequest,
   CatalogSearchInput,
   CredentialRecord,
   PolicyFile,
@@ -85,4 +86,29 @@ export interface ApprovalRepository {
       reviewNote?: string;
     },
   ): Promise<ApprovalRequest | undefined>;
+}
+
+export interface BreakGlassRepository {
+  create(input: BreakGlassRequest): Promise<BreakGlassRequest>;
+  expireStale(): Promise<number>;
+  getById(id: string): Promise<BreakGlassRequest | undefined>;
+  list(filter?: {
+    status?: BreakGlassRequest["status"];
+    requestedBy?: string;
+  }): Promise<BreakGlassRequest[]>;
+  review(
+    id: string,
+    update: {
+      status: "active" | "denied";
+      reviewedBy: string;
+      reviewNote?: string;
+    },
+  ): Promise<BreakGlassRequest | undefined>;
+  revoke(
+    id: string,
+    update: {
+      revokedBy: string;
+      revokeNote?: string;
+    },
+  ): Promise<BreakGlassRequest | undefined>;
 }

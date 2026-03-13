@@ -1,6 +1,6 @@
 # CLI
 
-KeyLore includes a local operator CLI for managing the catalogue, inspecting audit events, and reviewing approvals without editing JSON files by hand.
+KeyLore includes a local operator CLI for managing the catalogue, inspecting audit events, reviewing approvals, handling break-glass requests, and working with logical backups without editing JSON files by hand.
 
 ## Usage
 
@@ -178,6 +178,36 @@ npm run dev:cli -- system backup inspect --file ./keylore-backup.json
 
 ```bash
 npm run dev:cli -- system backup restore --file ./keylore-backup.json --yes
+```
+
+### `breakglass list`
+
+```bash
+npm run dev:cli -- breakglass list --status pending
+```
+
+### `breakglass request`
+
+```bash
+npm run dev:cli -- breakglass request --file ./breakglass-request.json
+```
+
+### `breakglass approve`
+
+```bash
+npm run dev:cli -- breakglass approve <request-id> --note "approved for emergency recovery"
+```
+
+### `breakglass deny`
+
+```bash
+npm run dev:cli -- breakglass deny <request-id> --note "insufficient justification"
+```
+
+### `breakglass revoke`
+
+```bash
+npm run dev:cli -- breakglass revoke <request-id> --note "incident closed"
 ```
 
 ### `ops:restore-drill`

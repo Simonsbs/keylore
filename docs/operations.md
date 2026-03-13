@@ -45,12 +45,15 @@ On process startup KeyLore now:
 - metadata-only catalogue responses
 - default-deny policy enforcement
 - approval workflow for policy rules that require human review
+- break-glass workflow for explicitly approved emergency access
 - dry-run and simulation paths that avoid outbound execution
 - token revocation and auth-client lifecycle control for remote access
 - adapter health reporting for configured secret providers
 - sandboxed injection mode behind an explicit command allowlist
-- background cleanup of stale approvals, expired tokens, and old rate-limit buckets
-- logical backup and restore support through the CLI
+- sandbox env allowlisting and reserved-name protection
+- egress policy that blocks private, loopback, and link-local targets unless explicitly allowed
+- background cleanup of stale approvals, break-glass grants, expired tokens, and old rate-limit buckets
+- logical backup and restore support through both the CLI and delegated API endpoints
 - Helm-based Kubernetes deployment path with environment-specific values
 - release workflow for tagged artifacts, SBOMs, scanning, and signing
 
@@ -70,8 +73,9 @@ With `.env` populated, a minimal smoke test is:
 10. call `GET /v1/catalog/reports` to confirm rotation/expiry reporting
 11. call `POST /v1/runtime/sandbox` with an allowlisted command to verify injected execution and output scrubbing
 12. call `GET /metrics` and `GET /v1/system/maintenance`
-13. create and inspect a logical backup with `npm run dev:cli -- system backup create --file ./backup.json`
-14. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
+13. create, approve, and list a `POST /v1/break-glass` request
+14. export a logical backup with `POST /v1/system/backups/export` or `npm run dev:cli -- system backup create --file ./backup.json`
+15. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
 
 ## Migration policy
 

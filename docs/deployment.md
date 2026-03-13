@@ -1,6 +1,6 @@
 # Deployment
 
-`v0.6` introduces a Helm-based deployment path for self-hosted Kubernetes environments.
+`v0.7` keeps the Helm-based deployment path for self-hosted Kubernetes environments and layers the new security guardrails on top.
 
 ## Helm chart
 

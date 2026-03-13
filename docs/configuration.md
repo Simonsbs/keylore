@@ -25,6 +25,7 @@
 - `KEYLORE_MAINTENANCE_INTERVAL_MS`: maintenance interval
 - `KEYLORE_ACCESS_TOKEN_TTL_SECONDS`: issued bearer token lifetime
 - `KEYLORE_APPROVAL_TTL_SECONDS`: pending approval lifetime
+- `KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS`: max lifetime for an approved break-glass request
 - `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET`: seed secret for `keylore-admin-local`
 - `KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET`: seed secret for `keylore-consumer-local`
 - `KEYLORE_VAULT_ADDR`: Vault base URL for the Vault adapter
@@ -33,8 +34,12 @@
 - `KEYLORE_OP_BIN`: 1Password CLI binary path or name
 - `KEYLORE_AWS_BIN`: AWS CLI binary path or name
 - `KEYLORE_GCLOUD_BIN`: gcloud CLI binary path or name
+- `KEYLORE_EGRESS_ALLOW_PRIVATE_IPS`: allow private/link-local/loopback upstream targets
+- `KEYLORE_EGRESS_ALLOWED_HOSTS`: comma-separated explicit host allowlist for egress exceptions
+- `KEYLORE_EGRESS_ALLOWED_HTTPS_PORTS`: comma-separated HTTPS destination port allowlist
 - `KEYLORE_SANDBOX_INJECTION_ENABLED`: enables sandbox injection mode
 - `KEYLORE_SANDBOX_COMMAND_ALLOWLIST`: comma-separated executable allowlist for sandbox mode
+- `KEYLORE_SANDBOX_ENV_ALLOWLIST`: comma-separated env names callers may pass into sandbox execution
 - `KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS`: default sandbox runtime timeout
 - `KEYLORE_SANDBOX_MAX_OUTPUT_BYTES`: max captured sandbox output after redaction
 - `KEYLORE_ADAPTER_MAX_ATTEMPTS`: adapter retry attempts for transient failures
@@ -100,7 +105,11 @@ If a token is resource-bound, KeyLore rejects it on the wrong protected resource
 Built-in roles are:
 
 - `admin`
+- `auth_admin`
 - `operator`
+- `maintenance_operator`
+- `backup_operator`
+- `breakglass_operator`
 - `auditor`
 - `approver`
 - `consumer`
@@ -111,14 +120,23 @@ Built-in scopes are:
 - `catalog:write`
 - `admin:read`
 - `admin:write`
+- `auth:read`
+- `auth:write`
 - `broker:use`
 - `sandbox:run`
 - `audit:read`
 - `approval:read`
 - `approval:review`
+- `system:read`
+- `system:write`
+- `backup:read`
+- `backup:write`
+- `breakglass:request`
+- `breakglass:read`
+- `breakglass:review`
 - `mcp:use`
 
-Scopes gate endpoint families. Roles add separation of duties for sensitive actions such as approval review, audit reads, and auth-client inspection.
+Scopes gate endpoint families. Roles add separation of duties for sensitive actions such as auth administration, maintenance, backup restore, audit reads, approval review, and break-glass review.
 
 ## Rotation and expiry reporting
 
@@ -143,7 +161,7 @@ Deployment profiles are shipped through Helm values files:
 - `charts/keylore/values-staging.yaml`
 - `charts/keylore/values-prod.yaml`
 
-The maintenance loop expires stale approvals, revokes expired tokens, and removes old rate-limit buckets.
+The maintenance loop expires stale approvals and break-glass grants, revokes expired tokens, and removes old rate-limit buckets.
 
 ## Persistence model
 
@@ -157,4 +175,4 @@ Auth client bootstrap is strict: missing `secretRef` environment variables fail 
 
 ## Local operator context
 
-The local CLI uses `KEYLORE_DEFAULT_PRINCIPAL` and a built-in operator context with all current scopes plus `admin`, `operator`, `auditor`, and `approver` roles. Remote HTTP and MCP requests always use issued bearer tokens instead.
+The local CLI uses `KEYLORE_DEFAULT_PRINCIPAL` and a built-in operator context with all current scopes plus the privileged admin/operator roles. Remote HTTP and MCP requests always use issued bearer tokens instead.

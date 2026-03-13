@@ -27,6 +27,10 @@ This file maps the current repository state to the local `KeyLore.md` production
 - Helm chart with deployment profiles for dev, staging, and production
 - tagged release workflow with SBOM generation, scanning, and signing
 - shipped observability artifacts for dashboards and alert rules
+- break-glass workflow with persisted requests and audited activation/revocation
+- delegated auth, maintenance, and backup administration roles
+- egress policy enforcement for blocked private and link-local targets
+- sandbox env allowlisting and reserved-name protection
 - container packaging and CI basics
 - startup migrations, config validation, and bootstrap import
 - ingress and egress hardening controls
@@ -37,12 +41,11 @@ This file maps the current repository state to the local `KeyLore.md` production
 - Remote MCP auth: client credentials and protected-resource metadata exist, but no broader OAuth authorization flows
 - Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
 - Observability: metrics, dashboards, and alert rules are present, but no traces backend is shipped yet
-- Approval operations: CLI and API exist, but no delegated multi-party workflow or notification layer yet
+- Approval and break-glass operations: CLI, API, and MCP surfaces exist, but no notification or delegated multi-party workflow layer yet
 
 ## Deferred
 
 - multi-tenant isolation
-- break-glass flow
 - rotation orchestration
 - admin UI and CLI richness
 - managed gateway profiles beyond static examples

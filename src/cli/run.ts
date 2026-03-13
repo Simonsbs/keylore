@@ -7,6 +7,8 @@ import {
   authClientCreateInputSchema,
   authClientRotateSecretInputSchema,
   authClientUpdateInputSchema,
+  breakGlassRequestInputSchema,
+  breakGlassReviewInputSchema,
   catalogSearchInputSchema,
   createCredentialInputSchema,
   runtimeExecutionInputSchema,
@@ -50,6 +52,11 @@ Usage:
   keylore system backup create --file /path/to/backup.json
   keylore system backup inspect --file /path/to/backup.json
   keylore system backup restore --file /path/to/backup.json --yes
+  keylore breakglass list [--status pending|active|denied|expired|revoked] [--requested-by name]
+  keylore breakglass request --file /path/to/request.json [--principal name]
+  keylore breakglass approve <request-id> [--note text] [--principal name]
+  keylore breakglass deny <request-id> [--note text] [--principal name]
+  keylore breakglass revoke <request-id> [--note text] [--principal name]
   keylore audit recent [--principal name] [--limit 20]
   keylore approvals list [--status pending|approved|denied|expired]
   keylore approvals approve <approval-id> [--note text]
@@ -282,7 +289,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       throw new Error("system backup create requires --file.");
     }
 
-    const backup = await app.backup.writeBackup(filePath);
+    const backup = await app.backup.writeBackup(filePath, context);
     return output({
       file: filePath,
       createdAt: backup.createdAt,
@@ -290,6 +297,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       authClients: backup.authClients.length,
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
+      breakGlassRequests: backup.breakGlassRequests.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -311,6 +319,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       authClients: backup.authClients.length,
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
+      breakGlassRequests: backup.breakGlassRequests.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -324,7 +333,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       throw new Error("system backup restore requires --yes.");
     }
 
-    const backup = await app.backup.restoreBackup(filePath);
+    const backup = await app.backup.restoreBackup(filePath, context);
     return output({
       restored: true,
       file: filePath,
@@ -334,6 +343,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       authClients: backup.authClients.length,
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
+      breakGlassRequests: backup.breakGlassRequests.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -342,6 +352,48 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     const limit = readNumberFlag(parsed.flags, "limit") ?? 20;
     const events = await app.broker.listRecentAuditEvents(limit);
     return output({ events });
+  }
+
+  if (resource === "breakglass" && action === "list") {
+    const requests = await app.broker.listBreakGlassRequests({
+      status: readStringFlag(parsed.flags, "status") as
+        | "pending"
+        | "active"
+        | "denied"
+        | "expired"
+        | "revoked"
+        | undefined,
+      requestedBy: readStringFlag(parsed.flags, "requested-by"),
+    });
+    return output({ requests });
+  }
+
+  if (resource === "breakglass" && action === "request") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("breakglass request requires --file.");
+    }
+
+    const payload = breakGlassRequestInputSchema.parse(await readJsonFile(filePath));
+    const request = await app.broker.createBreakGlassRequest(context, payload);
+    return output({ request });
+  }
+
+  if (resource === "breakglass" && (action === "approve" || action === "deny" || action === "revoke")) {
+    if (!subject) {
+      throw new Error(`breakglass ${action} requires a request id.`);
+    }
+
+    const note = breakGlassReviewInputSchema.parse({
+      note: readStringFlag(parsed.flags, "note"),
+    }).note;
+    const request =
+      action === "approve"
+        ? await app.broker.reviewBreakGlassRequest(context, subject, "active", note)
+        : action === "deny"
+          ? await app.broker.reviewBreakGlassRequest(context, subject, "denied", note)
+          : await app.broker.revokeBreakGlassRequest(context, subject, note);
+    return output({ request: request ?? null });
   }
 
   if (resource === "approvals" && action === "list") {

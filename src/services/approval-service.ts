@@ -1,20 +1,9 @@
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { AccessRequestInput, ApprovalRequest, approvalRequestSchema, AuthContext } from "../domain/types.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { ApprovalRepository } from "../repositories/interfaces.js";
-
-function fingerprint(context: AuthContext, input: AccessRequestInput): string {
-  const serialized = JSON.stringify({
-    principal: context.principal,
-    credentialId: input.credentialId,
-    operation: input.operation,
-    targetUrl: input.targetUrl,
-    headers: input.headers ?? {},
-    payload: input.payload ?? "",
-  });
-  return createHash("sha256").update(serialized).digest("hex");
-}
+import { accessFingerprint } from "./access-fingerprint.js";
 
 export class ApprovalService {
   public constructor(
@@ -42,7 +31,7 @@ export class ApprovalService {
       reason: decision.reason,
       ruleId: decision.ruleId,
       correlationId: decision.correlationId,
-      fingerprint: fingerprint(context, input),
+      fingerprint: accessFingerprint(context, input),
     });
     const created = await this.approvals.create(request);
     await this.audit.record({
@@ -80,7 +69,7 @@ export class ApprovalService {
       return undefined;
     }
 
-    return approval.fingerprint === fingerprint(context, input) ? approval : undefined;
+    return approval.fingerprint === accessFingerprint(context, input) ? approval : undefined;
   }
 
   public async list(status?: ApprovalRequest["status"]) {

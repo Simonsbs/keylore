@@ -1,5 +1,5 @@
 import { MaintenanceStatus, MaintenanceTaskResult } from "../domain/types.js";
-import { AccessTokenRepository, ApprovalRepository } from "../repositories/interfaces.js";
+import { AccessTokenRepository, ApprovalRepository, BreakGlassRepository } from "../repositories/interfaces.js";
 import { PgRateLimitService } from "./rate-limit-service.js";
 import { TelemetryService } from "./telemetry.js";
 
@@ -14,6 +14,7 @@ export class MaintenanceService {
     private readonly enabled: boolean,
     private readonly intervalMs: number,
     private readonly approvals: ApprovalRepository,
+    private readonly breakGlass: BreakGlassRepository,
     private readonly tokens: AccessTokenRepository,
     private readonly rateLimits: PgRateLimitService,
     private readonly telemetry: TelemetryService,
@@ -61,6 +62,7 @@ export class MaintenanceService {
     try {
       const result = {
         approvalsExpired: await this.approvals.expireStale(),
+        breakGlassExpired: await this.breakGlass.expireStale(),
         accessTokensExpired: await this.tokens.expireStale(),
         rateLimitBucketsDeleted: await this.rateLimits.cleanup(),
       };

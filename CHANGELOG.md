@@ -6,6 +6,17 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-14
+
+### Added
+
+- Specialized `auth_admin`, `maintenance_operator`, `backup_operator`, and `breakglass_operator` roles with matching delegated scopes.
+- Audited break-glass workflow across API, CLI, MCP, backup, and maintenance cleanup.
+- Egress hardening for blocked private and link-local targets plus HTTPS port allowlisting.
+- Sandbox env allowlisting and reserved-variable protection.
+- Backup export, inspect, and restore endpoints for self-hosted operators.
+- Additional security and abuse-case coverage for the new guardrails.
+
 ## [0.6.0] - 2026-03-14
 
 ### Added

@@ -23,7 +23,7 @@ This repository is incubating privately today, but it is structured to be publis
 - protected-resource metadata for REST and MCP surfaces
 - identity-aware policy evaluation with role-aware rule matching
 - approval-required policy outcomes with review endpoints and CLI support
-- RBAC separation for admin, operator, auditor, approver, and consumer clients
+- RBAC separation for admin, auth admin, operator, maintenance, backup, break-glass, auditor, approver, and consumer clients
 - policy simulation and non-executing dry-run access evaluation
 - auth-client lifecycle APIs with secret rotation and status control
 - token listing and explicit token revocation APIs
@@ -35,15 +35,19 @@ This repository is incubating privately today, but it is structured to be publis
 - local admin CLI for catalogue, reporting, access evaluation, runtime injection, approvals, auth-client, maintenance, and backup operations
 - request-size limits, database-backed rate limiting, background maintenance cleanup, outbound timeouts, and response-size caps
 - Prometheus-style `/metrics` telemetry and request correlation headers for operational visibility
+- audited break-glass request, approval, revoke, and emergency-use flow
+- delegated backup export, inspect, and restore API endpoints for self-hosted operators
+- egress policy blocks private, loopback, and link-local upstream targets unless explicitly allowed
+- sandbox env allowlisting for injected runtime execution
 - Helm chart with dev, staging, and production values profiles
 - tagged release workflow with SBOM generation, vulnerability scanning, and keyless image signing
 - shipped Grafana dashboard and Prometheus alert rule examples
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.6 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.7 delivery. This repo does not yet implement:
 
-- multi-tenant isolation, delegated approvals, and break-glass workflows
+- multi-tenant isolation and delegated multi-party approvals
 - admin UI and rotation orchestration
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
@@ -96,7 +100,7 @@ npm run dev:cli -- catalog list
 ```bash
 curl -X POST http://127.0.0.1:8787/oauth/token \
   -H 'content-type: application/x-www-form-urlencoded' \
-  -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20admin:read%20admin:write%20sandbox:run&resource=http://127.0.0.1:8787/v1'
+  -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20auth:read%20auth:write%20system:read%20system:write%20backup:read%20backup:write%20breakglass:request%20breakglass:read%20breakglass:review%20sandbox:run&resource=http://127.0.0.1:8787/v1'
 ```
 
 8. Verify the health endpoint:
