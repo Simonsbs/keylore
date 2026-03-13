@@ -3,12 +3,17 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { startHttpServer } from "../http/server.js";
 import { localOperatorContext } from "../services/auth-context.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
 import { runMigrations } from "../storage/migrations.js";
 import { makeTestApp } from "./helpers.js";
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(testDir, "../..");
+const migrationsDir = path.join(repoRoot, "migrations");
 
 test("metrics endpoint exposes request telemetry and maintenance status endpoints operate", async () => {
   const { app, auth, close } = await makeTestApp({
@@ -75,7 +80,7 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
 
 test("database-backed rate limiting survives across app instances sharing the same database", async () => {
   const sharedDatabase = createInMemoryDatabase();
-  await runMigrations(sharedDatabase, "/home/simon/keylore/migrations");
+  await runMigrations(sharedDatabase, migrationsDir);
 
   const first = await makeTestApp({
     database: sharedDatabase,

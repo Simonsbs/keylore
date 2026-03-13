@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import pino from "pino";
 
@@ -28,6 +29,10 @@ import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
 import { SqlDatabase } from "../storage/database.js";
 import { runMigrations } from "../storage/migrations.js";
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(testDir, "../..");
+const migrationsDir = path.join(repoRoot, "migrations");
 
 export async function makeTestApp(options?: {
   catalog?: CatalogFile;
@@ -86,7 +91,7 @@ export async function makeTestApp(options?: {
   const database = options?.database ?? createInMemoryDatabase();
   const ownsDatabase = !options?.database;
   if (!options?.skipMigrations) {
-    await runMigrations(database, "/home/simon/keylore/migrations");
+    await runMigrations(database, migrationsDir);
   }
 
   const config: KeyLoreConfig = {
@@ -96,7 +101,7 @@ export async function makeTestApp(options?: {
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
     bootstrapAuthClientsPath: path.join(tempDir, "auth-clients.json"),
-    migrationsDir: "/home/simon/keylore/migrations",
+    migrationsDir,
     databaseUrl: "postgres://memory/keylore",
     databasePoolMax: 4,
     httpHost: "127.0.0.1",
