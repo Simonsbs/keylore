@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "credentials": [
+    {
+      "id": "github-readonly-demo",
+      "displayName": "GitHub Read-Only Demo Token",
+      "service": "github",
+      "owner": "platform",
+      "scopeTier": "read_only",
+      "sensitivity": "high",
+      "allowedDomains": ["api.github.com"],
+      "permittedOperations": ["http.get"],
+      "expiresAt": null,
+      "rotationPolicy": "Rotate every 90 days",
+      "lastValidatedAt": "2026-03-13T00:00:00.000Z",
+      "selectionNotes": "Use for repository metadata, issue lookup, and release inspection. Never use for write operations.",
+      "binding": {
+        "adapter": "env",
+        "ref": "KEYLORE_SECRET_GITHUB_READONLY",
+        "authType": "bearer",
+        "headerName": "Authorization",
+        "headerPrefix": "Bearer "
+      },
+      "tags": ["github", "readonly", "demo"],
+      "status": "active"
+    },
+    {
+      "id": "npm-readonly-demo",
+      "displayName": "npm Registry Read-Only Demo Token",
+      "service": "npm",
+      "owner": "platform",
+      "scopeTier": "read_only",
+      "sensitivity": "high",
+      "allowedDomains": ["registry.npmjs.org"],
+      "permittedOperations": ["http.get"],
+      "expiresAt": null,
+      "rotationPolicy": "Rotate every 90 days",
+      "lastValidatedAt": "2026-03-13T00:00:00.000Z",
+      "selectionNotes": "Use for package metadata inspection only. Publishing is intentionally excluded from the default demo policy.",
+      "binding": {
+        "adapter": "env",
+        "ref": "KEYLORE_SECRET_NPM_READONLY",
+        "authType": "bearer",
+        "headerName": "Authorization",
+        "headerPrefix": "Bearer "
+      },
+      "tags": ["npm", "readonly", "demo"],
+      "status": "active"
+    }
+  ]
+}

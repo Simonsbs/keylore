@@ -1,0 +1,8 @@
+services:
+  keylore:
+    build:
+      context: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env

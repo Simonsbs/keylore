@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "allow-local-github-read",
+      "effect": "allow",
+      "description": "Allow the local operator to inspect GitHub repository metadata via the proxy.",
+      "principals": ["local-operator"],
+      "credentialIds": ["github-readonly-demo"],
+      "operations": ["http.get"],
+      "domainPatterns": ["api.github.com"],
+      "environments": ["development", "production"]
+    },
+    {
+      "id": "allow-local-npm-read",
+      "effect": "allow",
+      "description": "Allow the local operator to inspect npm package metadata via the proxy.",
+      "principals": ["local-operator"],
+      "credentialIds": ["npm-readonly-demo"],
+      "operations": ["http.get"],
+      "domainPatterns": ["registry.npmjs.org"],
+      "environments": ["development", "production"]
+    }
+  ]
+}
