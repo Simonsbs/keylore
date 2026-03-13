@@ -27,18 +27,18 @@ This repository is incubating privately today, but it is structured to be publis
 - policy simulation and non-executing dry-run access evaluation
 - auth-client lifecycle APIs with secret rotation and status control
 - token listing and explicit token revocation APIs
-- environment-backed secret adapter
+- pluggable secret adapters for environment bindings, Vault, 1Password, AWS Secrets Manager, and GCP Secret Manager
+- catalog reporting for rotation and expiry visibility
+- sandboxed injection mode for tightly allowlisted compatibility commands
 - constrained proxy execution for `http.get` and `http.post`
-- HTTP admin/API surface for catalogue search, access requests, approvals, audit reads, and auth-client inspection
-- local admin CLI for catalogue, access evaluation, approvals, auth-client, and audit operations
+- HTTP admin/API surface for catalogue search, access requests, approvals, audit reads, adapter health, runtime injection, and auth-client inspection
+- local admin CLI for catalogue, reporting, access evaluation, runtime injection, approvals, auth-client, and audit operations
 - request-size limits, in-memory rate limiting, outbound timeouts, and response-size caps
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.3 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.4 delivery. This repo does not yet implement:
 
-- secret-store adapters beyond environment variables
-- sandboxed injection mode
 - multi-tenant isolation, delegated approvals, and break-glass workflows
 - admin UI and rotation orchestration
 
@@ -52,13 +52,15 @@ Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md
 npm install
 ```
 
-2. Copy `.env.example` to `.env` and populate the demo secret refs and bootstrap client secrets:
+2. Copy `.env.example` to `.env` and populate the demo secret refs, bootstrap client secrets, and any provider-specific adapter settings you intend to use:
 
 ```bash
 KEYLORE_SECRET_GITHUB_READONLY=...
 KEYLORE_SECRET_NPM_READONLY=...
 KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=...
 KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=...
+KEYLORE_SANDBOX_INJECTION_ENABLED=true
+KEYLORE_SANDBOX_COMMAND_ALLOWLIST=/usr/bin/env,node
 ```
 
 3. Start PostgreSQL:
@@ -90,7 +92,7 @@ npm run dev:cli -- catalog list
 ```bash
 curl -X POST http://127.0.0.1:8787/oauth/token \
   -H 'content-type: application/x-www-form-urlencoded' \
-  -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20admin:read&resource=http://127.0.0.1:8787/v1'
+  -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20admin:read%20admin:write%20sandbox:run&resource=http://127.0.0.1:8787/v1'
 ```
 
 8. Verify the health endpoint:
@@ -125,6 +127,14 @@ curl -X POST http://127.0.0.1:8787/v1/access/simulate \
   }'
 ```
 
+Read rotation and expiry status:
+
+```bash
+TOKEN=...
+curl http://127.0.0.1:8787/v1/catalog/reports \
+  -H "authorization: Bearer ${TOKEN}"
+```
+
 Request a proxy call:
 
 ```bash
@@ -136,6 +146,20 @@ curl -X POST http://127.0.0.1:8787/v1/access/request \
     "credentialId":"github-readonly-demo",
     "operation":"http.get",
     "targetUrl":"https://api.github.com/repos/modelcontextprotocol/specification"
+  }'
+```
+
+Run a tightly allowlisted injected command:
+
+```bash
+TOKEN=...
+curl -X POST http://127.0.0.1:8787/v1/runtime/sandbox \
+  -H "authorization: Bearer ${TOKEN}" \
+  -H 'content-type: application/json' \
+  -d '{
+    "credentialId":"github-readonly-demo",
+    "command":"node",
+    "args":["-e","console.log(process.env.GITHUB_TOKEN)"]
   }'
 ```
 
@@ -167,6 +191,12 @@ Simulate a request locally:
 
 ```bash
 npm run dev:cli -- access simulate --file ./request.json
+```
+
+Inspect rotation status locally:
+
+```bash
+npm run dev:cli -- catalog report
 ```
 
 ## Documentation

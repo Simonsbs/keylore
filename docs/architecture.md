@@ -2,18 +2,19 @@
 
 ## Current shape
 
-KeyLore v0.2 is a single TypeScript service with two entry modes:
+KeyLore v0.4 is a single TypeScript service with two entry modes:
 
 - `stdio` MCP transport for local tool execution
 - Streamable HTTP MCP transport plus REST endpoints for remote or service deployment
 
-The runtime is organized into five layers:
+The runtime is organized into six layers:
 
 1. Catalogue repository
 2. Policy repository and evaluation
-3. Secret adapter
-4. Broker service and constrained proxy executor
-5. MCP and HTTP presentation layers
+3. Secret adapter registry and provider plugins
+4. Broker service, constrained proxy executor, and status reporting
+5. Sandboxed runtime injection executor
+6. MCP and HTTP presentation layers
 
 ## Core flow
 
@@ -21,9 +22,10 @@ The runtime is organized into five layers:
 2. KeyLore returns metadata-only credential summaries.
 3. The client requests an action through `access_request`.
 4. KeyLore evaluates policy, credential status, domain allowlists, and operation allowlists.
-5. If authorized, KeyLore resolves the secret via the adapter.
+5. If authorized, KeyLore resolves the secret via the adapter registry.
 6. KeyLore performs the external request itself and returns only a sanitized result.
 7. Search, authorization, and use are written to the audit log.
+8. For restricted compatibility cases, KeyLore can instead inject the secret into an allowlisted child process and scrub captured output before return.
 
 ## Storage
 

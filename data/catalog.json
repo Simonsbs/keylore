@@ -19,7 +19,8 @@
         "ref": "KEYLORE_SECRET_GITHUB_READONLY",
         "authType": "bearer",
         "headerName": "Authorization",
-        "headerPrefix": "Bearer "
+        "headerPrefix": "Bearer ",
+        "injectionEnvName": "GITHUB_TOKEN"
       },
       "tags": ["github", "readonly", "demo"],
       "status": "active"
@@ -42,7 +43,8 @@
         "ref": "KEYLORE_SECRET_NPM_READONLY",
         "authType": "bearer",
         "headerName": "Authorization",
-        "headerPrefix": "Bearer "
+        "headerPrefix": "Bearer ",
+        "injectionEnvName": "NPM_TOKEN"
       },
       "tags": ["npm", "readonly", "demo"],
       "status": "active"

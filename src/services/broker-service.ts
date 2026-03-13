@@ -1,21 +1,27 @@
 import { randomUUID } from "node:crypto";
 
-import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
+import { SecretAdapterRegistry } from "../adapters/adapter-registry.js";
+import { daysUntil } from "../adapters/reference-utils.js";
 import {
   AccessDecision,
   AccessMode,
   AccessRequestInput,
   ApprovalRequest,
+  AdapterHealth,
   approvalRequestSchema,
   AuthContext,
   CatalogSearchInput,
+  CredentialStatusReport,
   CredentialRecord,
   CredentialSummary,
   credentialSummarySchema,
+  RuntimeExecutionInput,
+  RuntimeExecutionResult,
 } from "../domain/types.js";
 import { KeyLoreConfig } from "../config.js";
 import { CredentialRepository, PolicyRepository } from "../repositories/interfaces.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
+import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { ApprovalService } from "./approval-service.js";
 import { PolicyDecision, PolicyEngine } from "./policy-engine.js";
 
@@ -119,9 +125,10 @@ export class BrokerService {
     private readonly credentials: CredentialRepository,
     private readonly policies: PolicyRepository,
     private readonly audit: PgAuditLogService,
-    private readonly adapter: EnvSecretAdapter,
+    private readonly adapters: SecretAdapterRegistry,
     private readonly policyEngine: PolicyEngine,
     private readonly approvals: ApprovalService,
+    private readonly sandbox: SandboxRunner,
     private readonly config: KeyLoreConfig,
   ) {}
 
@@ -379,6 +386,30 @@ export class BrokerService {
     return this.audit.listRecent(limit);
   }
 
+  public async listCredentialReports(
+    context: AuthContext,
+    id?: string,
+  ): Promise<CredentialStatusReport[]> {
+    const credentials = id
+      ? ((await this.credentials.getById(id)) ? [await this.credentials.getById(id)] : [])
+      : await this.credentials.list();
+
+    return Promise.all(
+      credentials.filter(Boolean).map(async (credential) => ({
+        credential: summarizeCredential(credential as CredentialRecord),
+        runtimeMode:
+          (credential as CredentialRecord).binding.injectionEnvName ? "sandbox_injection" : "proxy",
+        catalogExpiresAt: (credential as CredentialRecord).expiresAt,
+        daysUntilCatalogExpiry: daysUntil((credential as CredentialRecord).expiresAt),
+        inspection: await this.adapters.inspectCredential(credential as CredentialRecord),
+      })),
+    );
+  }
+
+  public async adapterHealth(): Promise<AdapterHealth[]> {
+    return this.adapters.healthchecks();
+  }
+
   public async listApprovalRequests(status?: ApprovalRequest["status"]) {
     return this.approvals.list(status);
   }
@@ -392,6 +423,39 @@ export class BrokerService {
     return this.approvals.review(id, context, status, note);
   }
 
+  public async runSandboxed(
+    context: AuthContext,
+    input: RuntimeExecutionInput,
+  ): Promise<RuntimeExecutionResult> {
+    const credential = await this.credentials.getById(input.credentialId);
+    if (!credential) {
+      throw new Error("Credential not found.");
+    }
+
+    const resolved = await this.adapters.resolve(credential);
+    const secretEnvName = input.secretEnvName ?? credential.binding.injectionEnvName;
+    if (!secretEnvName) {
+      throw new Error("Sandbox execution requires secretEnvName or credential.binding.injectionEnvName.");
+    }
+
+    const result = await this.sandbox.run(input, resolved.secret, secretEnvName);
+    await this.audit.record({
+      type: "runtime.exec",
+      action: "runtime.exec",
+      outcome: result.exitCode === 0 ? "success" : "error",
+      principal: context.principal,
+      metadata: {
+        credentialId: credential.id,
+        command: input.command,
+        args: input.args,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+      },
+    });
+
+    return result;
+  }
+
   private async executeAllowedRequest(
     mode: AccessMode,
     context: AuthContext,
@@ -401,7 +465,7 @@ export class BrokerService {
     correlationId: string,
   ): Promise<AccessDecision> {
     const targetUrl = validateTargetUrl(input.targetUrl);
-    const resolved = await this.adapter.resolve(credential);
+    const resolved = await this.adapters.resolve(credential);
     const httpResult = await this.executeProxyRequest(input, targetUrl, resolved.secret, {
       [resolved.headerName]: resolved.headerValue,
     });

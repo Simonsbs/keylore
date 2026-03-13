@@ -27,6 +27,16 @@ export interface KeyLoreConfig {
   rateLimitMaxRequests: number;
   accessTokenTtlSeconds: number;
   approvalTtlSeconds: number;
+  vaultAddr: string | undefined;
+  vaultToken: string | undefined;
+  vaultNamespace: string | undefined;
+  opBinary: string;
+  awsBinary: string;
+  gcloudBinary: string;
+  sandboxInjectionEnabled: boolean;
+  sandboxCommandAllowlist: string[];
+  sandboxDefaultTimeoutMs: number;
+  sandboxMaxOutputBytes: number;
 }
 
 const envSchema = z.object({
@@ -55,6 +65,19 @@ const envSchema = z.object({
   KEYLORE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(120),
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
   KEYLORE_APPROVAL_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
+  KEYLORE_VAULT_ADDR: z.string().url().optional(),
+  KEYLORE_VAULT_TOKEN: z.string().optional(),
+  KEYLORE_VAULT_NAMESPACE: z.string().optional(),
+  KEYLORE_OP_BIN: z.string().default("op"),
+  KEYLORE_AWS_BIN: z.string().default("aws"),
+  KEYLORE_GCLOUD_BIN: z.string().default("gcloud"),
+  KEYLORE_SANDBOX_INJECTION_ENABLED: z
+    .string()
+    .transform((value) => value === "true")
+    .prefault("false"),
+  KEYLORE_SANDBOX_COMMAND_ALLOWLIST: z.string().default(""),
+  KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
+  KEYLORE_SANDBOX_MAX_OUTPUT_BYTES: z.coerce.number().int().min(256).default(16384),
 });
 
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
@@ -66,7 +89,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.3.0",
+    version: "0.4.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -92,5 +115,18 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     rateLimitMaxRequests: env.KEYLORE_RATE_LIMIT_MAX_REQUESTS,
     accessTokenTtlSeconds: env.KEYLORE_ACCESS_TOKEN_TTL_SECONDS,
     approvalTtlSeconds: env.KEYLORE_APPROVAL_TTL_SECONDS,
+    vaultAddr: env.KEYLORE_VAULT_ADDR || undefined,
+    vaultToken: env.KEYLORE_VAULT_TOKEN || undefined,
+    vaultNamespace: env.KEYLORE_VAULT_NAMESPACE || undefined,
+    opBinary: env.KEYLORE_OP_BIN,
+    awsBinary: env.KEYLORE_AWS_BIN,
+    gcloudBinary: env.KEYLORE_GCLOUD_BIN,
+    sandboxInjectionEnabled: env.KEYLORE_SANDBOX_INJECTION_ENABLED,
+    sandboxCommandAllowlist: env.KEYLORE_SANDBOX_COMMAND_ALLOWLIST
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    sandboxDefaultTimeoutMs: env.KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS,
+    sandboxMaxOutputBytes: env.KEYLORE_SANDBOX_MAX_OUTPUT_BYTES,
   };
 }

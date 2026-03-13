@@ -9,6 +9,7 @@
 - token replay or token misuse across protected resources
 - unreviewed sensitive access when a policy should require human approval
 - over-broad proxy behavior that becomes a generic exfiltration tunnel
+- sandbox injection being abused for credential exfiltration through process output or arbitrary command execution
 
 ## Current mitigations
 
@@ -27,10 +28,11 @@
 - audit records capture approval creation and approval review actions
 - auth-client mutations revoke stale tokens instead of leaving old privilege snapshots active
 - simulation and dry-run modes let operators validate policy paths without leaking secrets or hitting upstream systems
+- sandbox mode is disabled by default and requires an explicit executable allowlist, a dedicated scope, and output scrubbing
+- provider adapters expose metadata for rotation/expiry reporting without returning secret material
 
 ## Known gaps
 
-- no sandbox injection mode yet
 - rate limiting is local-memory only; no distributed limiter or anomaly detection yet
 - no tenant isolation layer yet
 - no token revocation endpoint or external identity provider integration yet

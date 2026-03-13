@@ -1,6 +1,12 @@
 import pino from "pino";
 
+import { SecretAdapterRegistry } from "./adapters/adapter-registry.js";
+import { AwsSecretsManagerAdapter } from "./adapters/aws-secrets-manager-adapter.js";
+import { ExecFileCommandRunner } from "./adapters/command-runner.js";
 import { EnvSecretAdapter } from "./adapters/env-secret-adapter.js";
+import { GcpSecretManagerAdapter } from "./adapters/gcp-secret-manager-adapter.js";
+import { OnePasswordSecretAdapter } from "./adapters/onepassword-secret-adapter.js";
+import { VaultSecretAdapter } from "./adapters/vault-secret-adapter.js";
 import { loadConfig, KeyLoreConfig } from "./config.js";
 import { PgAccessTokenRepository } from "./repositories/pg-access-token-repository.js";
 import { PgApprovalRepository } from "./repositories/pg-approval-repository.js";
@@ -15,6 +21,7 @@ import { PolicyEngine } from "./services/policy-engine.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
 import { createPostgresDatabase, SqlDatabase } from "./storage/database.js";
 import { runMigrations } from "./storage/migrations.js";
+import { SandboxRunner } from "./runtime/sandbox-runner.js";
 
 export interface KeyLoreHealth {
   readiness(): Promise<{
@@ -46,6 +53,14 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
   const audit = new PgAuditLogService(database);
+  const commandRunner = new ExecFileCommandRunner();
+  const adapterRegistry = new SecretAdapterRegistry([
+    new EnvSecretAdapter(),
+    new VaultSecretAdapter(config.vaultAddr, config.vaultToken, config.vaultNamespace),
+    new OnePasswordSecretAdapter(commandRunner, config.opBinary),
+    new AwsSecretsManagerAdapter(commandRunner, config.awsBinary),
+    new GcpSecretManagerAdapter(commandRunner, config.gcloudBinary),
+  ]);
   await credentialRepository.ensureInitialized();
   await policyRepository.ensureInitialized();
   await authClientRepository.ensureInitialized();
@@ -79,9 +94,10 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     credentialRepository,
     policyRepository,
     audit,
-    new EnvSecretAdapter(),
+    adapterRegistry,
     new PolicyEngine(),
     approvalService,
+    new SandboxRunner(config),
     config,
   );
 

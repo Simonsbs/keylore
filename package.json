@@ -1,6 +1,6 @@
 {
   "name": "keylore",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",
   "main": "dist/index.js",

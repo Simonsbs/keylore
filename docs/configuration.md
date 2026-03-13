@@ -25,10 +25,28 @@
 - `KEYLORE_APPROVAL_TTL_SECONDS`: pending approval lifetime
 - `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET`: seed secret for `keylore-admin-local`
 - `KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET`: seed secret for `keylore-consumer-local`
+- `KEYLORE_VAULT_ADDR`: Vault base URL for the Vault adapter
+- `KEYLORE_VAULT_TOKEN`: Vault token for secret reads and metadata inspection
+- `KEYLORE_VAULT_NAMESPACE`: optional Vault namespace
+- `KEYLORE_OP_BIN`: 1Password CLI binary path or name
+- `KEYLORE_AWS_BIN`: AWS CLI binary path or name
+- `KEYLORE_GCLOUD_BIN`: gcloud CLI binary path or name
+- `KEYLORE_SANDBOX_INJECTION_ENABLED`: enables sandbox injection mode
+- `KEYLORE_SANDBOX_COMMAND_ALLOWLIST`: comma-separated executable allowlist for sandbox mode
+- `KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS`: default sandbox runtime timeout
+- `KEYLORE_SANDBOX_MAX_OUTPUT_BYTES`: max captured sandbox output after redaction
 
 ## Secret bindings
 
-The default adapter is `env`. A credential binding such as:
+Supported adapters are:
+
+- `env`
+- `vault`
+- `1password`
+- `aws_secrets_manager`
+- `gcp_secret_manager`
+
+An `env` binding such as:
 
 ```json
 {
@@ -45,6 +63,15 @@ means:
 - KeyLore reads the secret from the process environment variable `KEYLORE_SECRET_GITHUB_READONLY`
 - the catalogue stores only the reference, not the secret value
 - the broker injects the resulting header into the outbound proxy call
+
+Provider reference formats:
+
+- `vault`: `kv/data/service#token?version=3`
+- `1password`: `op://vault/item/field`
+- `aws_secrets_manager`: `secret-id#jsonField?region=us-east-1&versionStage=AWSCURRENT`
+- `gcp_secret_manager`: `secret-name#jsonField?project=my-project&version=latest`
+
+For sandbox injection mode, bindings may also define `injectionEnvName`, for example `GITHUB_TOKEN`.
 
 ## OAuth and remote access
 
@@ -79,12 +106,22 @@ Built-in scopes are:
 - `admin:read`
 - `admin:write`
 - `broker:use`
+- `sandbox:run`
 - `audit:read`
 - `approval:read`
 - `approval:review`
 - `mcp:use`
 
 Scopes gate endpoint families. Roles add separation of duties for sensitive actions such as approval review, audit reads, and auth-client inspection.
+
+## Rotation and expiry reporting
+
+KeyLore reports both:
+
+- catalogue expiry from `credential.expiresAt`
+- secret-source metadata when an adapter can inspect version, rotation, or expiry state
+
+This is available through `GET /v1/catalog/reports`, `GET /v1/catalog/credentials/:id/report`, `GET /v1/system/adapters`, and the matching CLI/MCP admin surfaces.
 
 ## Persistence model
 

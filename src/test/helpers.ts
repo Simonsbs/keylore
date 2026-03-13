@@ -5,6 +5,7 @@ import path from "node:path";
 import pino from "pino";
 
 import { KeyLoreApp } from "../app.js";
+import { SecretAdapterRegistry } from "../adapters/adapter-registry.js";
 import { KeyLoreConfig } from "../config.js";
 import { AuthClientRecord, CatalogFile, PolicyFile } from "../domain/types.js";
 import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
@@ -19,6 +20,7 @@ import { AuthService } from "../services/auth-service.js";
 import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
+import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
 import { runMigrations } from "../storage/migrations.js";
 
@@ -79,7 +81,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.3.0",
+    version: "0.4.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -102,6 +104,16 @@ export async function makeTestApp(options?: {
     rateLimitMaxRequests: 120,
     accessTokenTtlSeconds: 3600,
     approvalTtlSeconds: 1800,
+    vaultAddr: undefined,
+    vaultToken: undefined,
+    vaultNamespace: undefined,
+    opBinary: "op",
+    awsBinary: "aws",
+    gcloudBinary: "gcloud",
+    sandboxInjectionEnabled: true,
+    sandboxCommandAllowlist: [process.execPath],
+    sandboxDefaultTimeoutMs: 1000,
+    sandboxMaxOutputBytes: 2048,
     ...options?.configOverrides,
   };
 
@@ -132,6 +144,7 @@ export async function makeTestApp(options?: {
           "admin:read",
           "admin:write",
           "broker:use",
+          "sandbox:run",
           "audit:read",
           "approval:read",
           "approval:review",
@@ -177,9 +190,10 @@ export async function makeTestApp(options?: {
     credentialRepository,
     policyRepository,
     audit,
-    new EnvSecretAdapter(),
+    new SecretAdapterRegistry([new EnvSecretAdapter()]),
     new PolicyEngine(),
     approvals,
+    new SandboxRunner(config),
     config,
   );
 

@@ -16,6 +16,9 @@ This file maps the current repository state to the local `KeyLore.md` production
 - approval-required policy rules with persisted approval requests
 - policy simulation and non-executing dry-run evaluation
 - auth-client lifecycle management and token revocation
+- sandbox injection mode with allowlisted commands and output scrubbing
+- adapter plugins for Vault, 1Password, AWS Secrets Manager, and GCP Secret Manager
+- rotation and expiry reporting through adapter inspection and catalog reports
 - RBAC-aware policy matching and endpoint authorization
 - container packaging and CI basics
 - startup migrations, config validation, and bootstrap import
@@ -30,7 +33,6 @@ This file maps the current repository state to the local `KeyLore.md` production
 
 ## Deferred
 
-- injection mode
 - multi-tenant isolation
 - break-glass flow
 - rotation orchestration

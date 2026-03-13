@@ -3,9 +3,16 @@ import * as z from "zod/v4";
 export const scopeTierSchema = z.enum(["read_only", "read_write", "admin"]);
 export const sensitivitySchema = z.enum(["low", "moderate", "high", "critical"]);
 export const credentialStatusSchema = z.enum(["active", "disabled"]);
-export const bindingAdapterSchema = z.enum(["env"]);
+export const bindingAdapterSchema = z.enum([
+  "env",
+  "vault",
+  "1password",
+  "aws_secrets_manager",
+  "gcp_secret_manager",
+]);
 export const authTypeSchema = z.enum(["bearer", "api_key"]);
 export const operationSchema = z.enum(["http.get", "http.post"]);
+export const runtimeModeSchema = z.enum(["proxy", "sandbox_injection"]);
 export const principalRoleSchema = z.enum([
   "admin",
   "operator",
@@ -19,6 +26,7 @@ export const accessScopeSchema = z.enum([
   "admin:read",
   "admin:write",
   "broker:use",
+  "sandbox:run",
   "audit:read",
   "approval:read",
   "approval:review",
@@ -35,6 +43,7 @@ export const credentialBindingSchema = z.object({
   authType: authTypeSchema,
   headerName: z.string().min(1).default("Authorization"),
   headerPrefix: z.string().default("Bearer "),
+  injectionEnvName: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
 });
 
 export const credentialRecordSchema = z.object({
@@ -95,6 +104,8 @@ export const auditEventSchema = z.object({
     "approval.review",
     "auth.client",
     "auth.token",
+    "runtime.exec",
+    "adapter.health",
   ]),
   action: z.string().min(1),
   outcome: z.enum(["allowed", "denied", "success", "error"]),
@@ -162,6 +173,27 @@ export const accessRequestInputSchema = z.object({
   payload: z.string().max(20_000).optional(),
   approvalId: z.string().uuid().optional(),
   dryRun: z.boolean().optional(),
+});
+
+export const runtimeExecutionInputSchema = z.object({
+  credentialId: z.string().min(1),
+  command: z.string().min(1),
+  args: z.array(z.string()).max(32).default([]),
+  secretEnvName: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
+  env: z.record(z.string().regex(/^[A-Z_][A-Z0-9_]*$/), z.string()).optional(),
+  timeoutMs: z.number().int().min(100).max(60000).optional(),
+});
+
+export const runtimeExecutionResultSchema = z.object({
+  mode: z.literal("sandbox_injection"),
+  command: z.string(),
+  args: z.array(z.string()),
+  exitCode: z.number().int(),
+  timedOut: z.boolean(),
+  durationMs: z.number().int().min(0),
+  stdoutPreview: z.string(),
+  stderrPreview: z.string(),
+  outputTruncated: z.boolean(),
 });
 
 export const authClientSeedSchema = z.object({
@@ -296,6 +328,45 @@ export const authTokenListQuerySchema = z.object({
   status: accessTokenStatusSchema.optional(),
 });
 
+export const secretInspectionSchema = z.object({
+  adapter: bindingAdapterSchema,
+  ref: z.string().min(1),
+  status: z.enum(["ok", "warning", "error"]),
+  resolved: z.boolean(),
+  version: z.string().optional(),
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().optional(),
+  nextRotationAt: z.string().datetime().optional(),
+  state: z.string().optional(),
+  rotationEnabled: z.boolean().optional(),
+  notes: z.array(z.string()).default([]),
+  error: z.string().optional(),
+});
+
+export const credentialStatusReportSchema = z.object({
+  credential: credentialSummarySchema,
+  runtimeMode: runtimeModeSchema,
+  catalogExpiresAt: z.string().datetime().nullable(),
+  daysUntilCatalogExpiry: z.number().int().nullable(),
+  inspection: secretInspectionSchema,
+});
+
+export const credentialStatusReportListOutputSchema = z.object({
+  reports: z.array(credentialStatusReportSchema),
+});
+
+export const adapterHealthSchema = z.object({
+  adapter: bindingAdapterSchema,
+  available: z.boolean(),
+  status: z.enum(["ok", "warning", "error"]),
+  details: z.string(),
+});
+
+export const adapterHealthListOutputSchema = z.object({
+  adapters: z.array(adapterHealthSchema),
+});
+
 export type CredentialRecord = z.infer<typeof credentialRecordSchema>;
 export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
 export type CatalogFile = z.infer<typeof catalogFileSchema>;
@@ -318,3 +389,9 @@ export type TokenIssueOutput = z.infer<typeof tokenIssueOutputSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
 export type AccessMode = z.infer<typeof accessModeSchema>;
 export type AccessTokenRecord = z.infer<typeof accessTokenRecordSchema>;
+export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
+export type RuntimeExecutionInput = z.infer<typeof runtimeExecutionInputSchema>;
+export type RuntimeExecutionResult = z.infer<typeof runtimeExecutionResultSchema>;
+export type SecretInspection = z.infer<typeof secretInspectionSchema>;
+export type CredentialStatusReport = z.infer<typeof credentialStatusReportSchema>;
+export type AdapterHealth = z.infer<typeof adapterHealthSchema>;

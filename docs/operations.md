@@ -45,6 +45,8 @@ On process startup KeyLore now:
 - approval workflow for policy rules that require human review
 - dry-run and simulation paths that avoid outbound execution
 - token revocation and auth-client lifecycle control for remote access
+- adapter health reporting for configured secret providers
+- sandboxed injection mode behind an explicit command allowlist
 
 ## Local verification flow
 
@@ -59,6 +61,8 @@ With `.env` populated, a minimal smoke test is:
 7. call `GET /.well-known/oauth-protected-resource/mcp`
 8. request an approval-gated action, approve it, and retry with `approvalId`
 9. create a temporary auth client, mint a token for it, and revoke that token
+10. call `GET /v1/catalog/reports` to confirm rotation/expiry reporting
+11. call `POST /v1/runtime/sandbox` with an allowlisted command to verify injected execution and output scrubbing
 
 ## Migration policy
 

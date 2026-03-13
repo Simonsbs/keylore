@@ -107,6 +107,12 @@ Required scope: `broker:use`
 Evaluates policy for an access request without creating approval side effects or executing the outbound call.
 Required scope: `broker:use`
 
+### `POST /v1/runtime/sandbox`
+
+Runs a tightly allowlisted command in sandbox injection mode with a secret exposed only to that child process environment. Output is scrubbed before return.
+Required scope: `sandbox:run`
+Required role: `admin` or `operator`
+
 ### `GET /v1/audit/events?limit=20`
 
 Returns recent audit events in reverse chronological order.
@@ -179,6 +185,24 @@ Revokes one issued access token.
 Required scope: `admin:write`
 Required role: `admin`
 
+### `GET /v1/catalog/reports`
+
+Lists credential rotation and expiry reports without exposing secret values.
+Required scope: `catalog:read`
+Required role: `admin`, `operator`, or `auditor`
+
+### `GET /v1/catalog/credentials/:id/report`
+
+Returns one credential rotation and expiry report.
+Required scope: `catalog:read`
+Required role: `admin`, `operator`, or `auditor`
+
+### `GET /v1/system/adapters`
+
+Returns adapter availability and health.
+Required scope: `admin:read`
+Required role: `admin`, `operator`, or `auditor`
+
 ## MCP tools
 
 ### `catalog_search`
@@ -196,6 +220,18 @@ Evaluate policy and execute a constrained proxy call if authorized.
 ### `policy_simulate`
 
 Evaluate policy for a proposed access request without executing it.
+
+### `catalog_report`
+
+Inspect credential rotation and expiry status.
+
+### `system_adapters`
+
+Read adapter health and availability.
+
+### `runtime_run_sandboxed`
+
+Run an allowlisted injected command with scrubbed output.
 
 ### `audit_recent`
 

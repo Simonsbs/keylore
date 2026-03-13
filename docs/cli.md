@@ -46,6 +46,13 @@ Supported filters:
 npm run dev:cli -- catalog get github-readonly-demo
 ```
 
+### `catalog report`
+
+```bash
+npm run dev:cli -- catalog report
+npm run dev:cli -- catalog report github-readonly-demo
+```
+
 ### `catalog create`
 
 ```bash
@@ -134,6 +141,18 @@ npm run dev:cli -- auth tokens list --client-id demo-client --status active
 
 ```bash
 npm run dev:cli -- auth tokens revoke <token-id>
+```
+
+### `runtime run`
+
+```bash
+npm run dev:cli -- runtime run --file ./runtime.json
+```
+
+### `system adapters`
+
+```bash
+npm run dev:cli -- system adapters
 ```
 
 ### `approvals list`

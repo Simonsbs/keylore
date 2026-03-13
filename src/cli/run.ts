@@ -9,6 +9,7 @@ import {
   authClientUpdateInputSchema,
   catalogSearchInputSchema,
   createCredentialInputSchema,
+  runtimeExecutionInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
 import { localOperatorContext } from "../services/auth-context.js";
@@ -28,6 +29,7 @@ Usage:
   keylore catalog list [--principal name] [--limit 20]
   keylore catalog search [--query text] [--service name] [--owner name] [--scope-tier tier] [--sensitivity level] [--status active|disabled] [--tag tag] [--limit 20]
   keylore catalog get <credential-id> [--principal name]
+  keylore catalog report [credential-id] [--principal name]
   keylore catalog create --file /path/to/credential.json [--principal name]
   keylore catalog update <credential-id> --file /path/to/patch.json [--principal name]
   keylore catalog delete <credential-id> [--principal name]
@@ -41,6 +43,8 @@ Usage:
   keylore auth clients rotate-secret <client-id> [--secret value]
   keylore auth tokens list [--client-id id] [--status active|revoked]
   keylore auth tokens revoke <token-id>
+  keylore runtime run --file /path/to/runtime.json [--principal name]
+  keylore system adapters
   keylore audit recent [--principal name] [--limit 20]
   keylore approvals list [--status pending|approved|denied|expired]
   keylore approvals approve <approval-id> [--note text]
@@ -106,6 +110,11 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
     const result = await app.broker.getCredential(context, subject);
     return output({ credential: result ?? null });
+  }
+
+  if (resource === "catalog" && action === "report") {
+    const reports = await app.broker.listCredentialReports(context, subject);
+    return output({ reports });
   }
 
   if (resource === "catalog" && action === "create") {
@@ -235,6 +244,22 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
     const token = await app.auth.revokeToken(context, tokenId);
     return output({ token: token ?? null });
+  }
+
+  if (resource === "runtime" && action === "run") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("runtime run requires --file.");
+    }
+
+    const payload = runtimeExecutionInputSchema.parse(await readJsonFile(filePath));
+    const result = await app.broker.runSandboxed(context, payload);
+    return output({ result });
+  }
+
+  if (resource === "system" && action === "adapters") {
+    const adapters = await app.broker.adapterHealth();
+    return output({ adapters });
   }
 
   if (resource === "audit" && action === "recent") {

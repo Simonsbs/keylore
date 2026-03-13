@@ -9,6 +9,7 @@ import { KeyLoreApp } from "../app.js";
 import {
   AccessScope,
   accessRequestInputSchema,
+  runtimeExecutionInputSchema,
   authClientCreateInputSchema,
   authClientRotateSecretInputSchema,
   authClientUpdateInputSchema,
@@ -462,6 +463,25 @@ async function handleApiRequest(
     return;
   }
 
+  if (url.pathname === "/v1/runtime/sandbox" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["sandbox:run"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const body = runtimeExecutionInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const result = await app.broker.runSandboxed(context, body);
+    respondJson(res, 200, { result });
+    return;
+  }
+
   if (url.pathname === "/v1/audit/events" && req.method === "GET") {
     const context = await authenticateRequest(
       app,
@@ -537,6 +557,24 @@ async function handleApiRequest(
     });
     const tokens = await app.auth.listTokens(query);
     respondJson(res, 200, { tokens });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/adapters" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    const adapters = await app.broker.adapterHealth();
+    respondJson(res, 200, { adapters });
     return;
   }
 
@@ -701,6 +739,43 @@ async function handleApiRequest(
   }
 
   const credentialId = routeParam(url.pathname, "/v1/catalog/credentials/");
+  if (credentialId && req.method === "GET" && url.pathname.endsWith("/report")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    const id = credentialId.replace(/\/report$/, "");
+    const reports = await app.broker.listCredentialReports(context, id);
+    respondJson(res, reports.length > 0 ? 200 : 404, { reports });
+    return;
+  }
+
+  if (url.pathname === "/v1/catalog/reports" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    const reports = await app.broker.listCredentialReports(context);
+    respondJson(res, 200, { reports });
+    return;
+  }
+
   if (credentialId && req.method === "GET") {
     const context = await authenticateRequest(
       app,

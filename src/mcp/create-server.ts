@@ -4,11 +4,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { KeyLoreApp } from "../app.js";
 import {
   accessDecisionSchema,
+  adapterHealthListOutputSchema,
   auditRecentOutputSchema,
   catalogGetOutputSchema,
+  credentialStatusReportListOutputSchema,
   catalogSearchInputSchema,
   catalogSearchOutputSchema,
   operationSchema,
+  runtimeExecutionResultSchema,
   sensitivitySchema,
   scopeTierSchema,
 } from "../domain/types.js";
@@ -115,6 +118,30 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
   );
 
   server.registerTool(
+    "catalog_report",
+    {
+      description: "Inspect credential rotation and expiry status without exposing secret values.",
+      inputSchema: {
+        credentialId: z.string().min(1).optional(),
+      },
+      outputSchema: credentialStatusReportListOutputSchema,
+    },
+    async ({ credentialId }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["catalog:read"]);
+      app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+      const reports = await app.broker.listCredentialReports(context, credentialId);
+
+      return {
+        content: [{ type: "text", text: makeText(reports) }],
+        structuredContent: {
+          reports,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
     "access_request",
     {
       description:
@@ -189,6 +216,56 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         structuredContent: {
           events,
         },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_adapters",
+    {
+      description: "Read adapter availability and health for configured secret backends.",
+      inputSchema: {},
+      outputSchema: adapterHealthListOutputSchema,
+    },
+    async (_input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["admin:read"]);
+      app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+      const adapters = await app.broker.adapterHealth();
+
+      return {
+        content: [{ type: "text", text: makeText(adapters) }],
+        structuredContent: {
+          adapters,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "runtime_run_sandboxed",
+    {
+      description:
+        "Run a tightly allowlisted command with a credential injected into a temporary process environment, with output scrubbing.",
+      inputSchema: {
+        credentialId: z.string().min(1),
+        command: z.string().min(1),
+        args: z.array(z.string()).max(32).default([]),
+        secretEnvName: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
+        env: z.record(z.string().regex(/^[A-Z_][A-Z0-9_]*$/), z.string()).optional(),
+        timeoutMs: z.number().int().min(100).max(60000).optional(),
+      },
+      outputSchema: runtimeExecutionResultSchema,
+    },
+    async (input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["sandbox:run"]);
+      app.auth.requireRoles(context, ["admin", "operator"]);
+      const result = await app.broker.runSandboxed(context, input);
+
+      return {
+        content: [{ type: "text", text: makeText(result) }],
+        structuredContent: result,
       };
     },
   );

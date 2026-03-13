@@ -6,6 +6,7 @@ const allScopes: AccessScope[] = [
   "admin:read",
   "admin:write",
   "broker:use",
+  "sandbox:run",
   "audit:read",
   "approval:read",
   "approval:review",

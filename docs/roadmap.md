@@ -18,6 +18,7 @@
 
 ## v0.4
 
+- completed:
 - add sandboxed injection mode for tightly controlled compatibility cases
 - add adapter plugins for Vault, 1Password, AWS Secrets Manager, and GCP Secret Manager
 - add rotation and expiry reporting

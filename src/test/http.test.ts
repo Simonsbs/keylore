@@ -597,6 +597,180 @@ test("auth client lifecycle and token revocation APIs operate over HTTP", async 
   await close();
 });
 
+test("catalog reports and adapter health expose rotation metadata without secrets", async () => {
+  process.env.KEYLORE_TEST_SECRET = "report-secret";
+  const { app, close } = await makeTestApp({
+    catalog: {
+      version: 1,
+      credentials: [
+        {
+          id: "demo",
+          displayName: "Demo",
+          service: "github",
+          owner: "platform",
+          scopeTier: "read_only",
+          sensitivity: "high",
+          allowedDomains: ["localhost"],
+          permittedOperations: ["http.get"],
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          rotationPolicy: "30 days",
+          lastValidatedAt: null,
+          selectionNotes: "Demo credential",
+          binding: {
+            adapter: "env",
+            ref: "KEYLORE_TEST_SECRET",
+            authType: "bearer",
+            headerName: "Authorization",
+            headerPrefix: "Bearer ",
+            injectionEnvName: "DEMO_TOKEN",
+          },
+          tags: ["demo"],
+          status: "active",
+        },
+      ],
+    },
+    configOverrides: {
+      httpPort: 8883,
+      publicBaseUrl: "http://127.0.0.1:8883",
+      oauthIssuerUrl: "http://127.0.0.1:8883/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const adminTokenResponse = await fetch("http://127.0.0.1:8883/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read admin:read",
+      resource: "http://127.0.0.1:8883/v1",
+    }),
+  });
+  assert.equal(adminTokenResponse.status, 200);
+  const adminToken = (await adminTokenResponse.json()) as { access_token: string };
+
+  const reportResponse = await fetch("http://127.0.0.1:8883/v1/catalog/credentials/demo/report", {
+    headers: {
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+  });
+  assert.equal(reportResponse.status, 200);
+  const reportBody = (await reportResponse.json()) as {
+    reports: Array<{
+      runtimeMode: string;
+      inspection: { adapter: string; status: string; resolved: boolean; error?: string };
+    }>;
+  };
+  assert.equal(reportBody.reports.length, 1);
+  assert.equal(reportBody.reports[0]?.runtimeMode, "sandbox_injection");
+  assert.equal(reportBody.reports[0]?.inspection.adapter, "env");
+  assert.equal(reportBody.reports[0]?.inspection.resolved, true);
+
+  const adaptersResponse = await fetch("http://127.0.0.1:8883/v1/system/adapters", {
+    headers: {
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+  });
+  assert.equal(adaptersResponse.status, 200);
+  const adaptersBody = (await adaptersResponse.json()) as {
+    adapters: Array<{ adapter: string }>;
+  };
+  assert.equal(adaptersBody.adapters.some((adapter) => adapter.adapter === "env"), true);
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await close();
+});
+
+test("sandbox runtime injects a secret without exposing it in the result", async () => {
+  process.env.KEYLORE_TEST_SECRET = "sandbox-secret";
+  const { app, close } = await makeTestApp({
+    catalog: {
+      version: 1,
+      credentials: [
+        {
+          id: "sandbox-demo",
+          displayName: "Sandbox Demo",
+          service: "github",
+          owner: "platform",
+          scopeTier: "read_only",
+          sensitivity: "high",
+          allowedDomains: ["localhost"],
+          permittedOperations: ["http.get"],
+          expiresAt: null,
+          rotationPolicy: "30 days",
+          lastValidatedAt: null,
+          selectionNotes: "Sandbox credential",
+          binding: {
+            adapter: "env",
+            ref: "KEYLORE_TEST_SECRET",
+            authType: "bearer",
+            headerName: "Authorization",
+            headerPrefix: "Bearer ",
+            injectionEnvName: "SANDBOX_TOKEN",
+          },
+          tags: ["sandbox"],
+          status: "active",
+        },
+      ],
+    },
+    configOverrides: {
+      httpPort: 8884,
+      publicBaseUrl: "http://127.0.0.1:8884",
+      oauthIssuerUrl: "http://127.0.0.1:8884/oauth",
+      sandboxInjectionEnabled: true,
+      sandboxCommandAllowlist: [process.execPath],
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const adminTokenResponse = await fetch("http://127.0.0.1:8884/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "sandbox:run",
+      resource: "http://127.0.0.1:8884/v1",
+    }),
+  });
+  assert.equal(adminTokenResponse.status, 200);
+  const adminToken = (await adminTokenResponse.json()) as { access_token: string };
+
+  const runtimeResponse = await fetch("http://127.0.0.1:8884/v1/runtime/sandbox", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "sandbox-demo",
+      command: process.execPath,
+      args: ["-e", "console.log(process.env.SANDBOX_TOKEN); console.error(`Bearer ${process.env.SANDBOX_TOKEN}`);"],
+    }),
+  });
+  assert.equal(runtimeResponse.status, 200);
+  const runtimeBody = (await runtimeResponse.json()) as {
+    result: { stdoutPreview: string; stderrPreview: string; exitCode: number };
+  };
+  assert.equal(runtimeBody.result.exitCode, 0);
+  assert.equal(runtimeBody.result.stdoutPreview.includes("sandbox-secret"), false);
+  assert.equal(runtimeBody.result.stderrPreview.includes("sandbox-secret"), false);
+  assert.match(runtimeBody.result.stdoutPreview, /REDACTED/);
+  assert.match(runtimeBody.result.stderrPreview, /REDACTED/);
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await close();
+});
+
 test("audit endpoint requires an auditor or admin role even when the scope is present", async () => {
   const { app, close } = await makeTestApp({
     authClients: [
