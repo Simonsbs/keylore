@@ -19,20 +19,24 @@ This repository is incubating privately today, but it is structured to be publis
 - metadata-only catalogue search and retrieval tools
 - default-deny policy engine with domain and operation constraints
 - PostgreSQL-backed catalogue, policy, and audit persistence with startup migrations
+- OAuth-style client credentials token issuance for remote HTTP and MCP access
+- protected-resource metadata for REST and MCP surfaces
+- identity-aware policy evaluation with role-aware rule matching
+- approval-required policy outcomes with review endpoints and CLI support
+- RBAC separation for admin, operator, auditor, approver, and consumer clients
 - environment-backed secret adapter
 - constrained proxy execution for `http.get` and `http.post`
-- HTTP admin/API surface for catalogue search, access requests, and audit reads
-- local admin CLI for catalogue and audit operations
+- HTTP admin/API surface for catalogue search, access requests, approvals, audit reads, and auth-client inspection
+- local admin CLI for catalogue, approvals, auth-client, and audit operations
 - request-size limits, in-memory rate limiting, outbound timeouts, and response-size caps
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.2 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.3 delivery. This repo does not yet implement:
 
-- OAuth 2.1 authorization server flows for remote MCP
 - secret-store adapters beyond environment variables
 - sandboxed injection mode
-- multi-tenant RBAC, approvals, and break-glass workflows
+- multi-tenant isolation, delegated approvals, and break-glass workflows
 - admin UI and rotation orchestration
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
@@ -45,11 +49,13 @@ Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md
 npm install
 ```
 
-2. Copy `.env.example` to `.env` and populate the demo secret refs:
+2. Copy `.env.example` to `.env` and populate the demo secret refs and bootstrap client secrets:
 
 ```bash
 KEYLORE_SECRET_GITHUB_READONLY=...
 KEYLORE_SECRET_NPM_READONLY=...
+KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=...
+KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=...
 ```
 
 3. Start PostgreSQL:
@@ -76,7 +82,15 @@ npm run dev:stdio
 npm run dev:cli -- catalog list
 ```
 
-7. Verify the health endpoint:
+7. Mint an access token for the REST API:
+
+```bash
+curl -X POST http://127.0.0.1:8787/oauth/token \
+  -H 'content-type: application/x-www-form-urlencoded' \
+  -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20admin:read&resource=http://127.0.0.1:8787/v1'
+```
+
+8. Verify the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
@@ -87,7 +101,9 @@ curl http://127.0.0.1:8787/healthz
 Search the catalogue:
 
 ```bash
+TOKEN=...
 curl -X POST http://127.0.0.1:8787/v1/catalog/search \
+  -H "authorization: Bearer ${TOKEN}" \
   -H 'content-type: application/json' \
   -d '{"query":"github","limit":5}'
 ```
@@ -95,7 +111,9 @@ curl -X POST http://127.0.0.1:8787/v1/catalog/search \
 Request a proxy call:
 
 ```bash
+TOKEN=...
 curl -X POST http://127.0.0.1:8787/v1/access/request \
+  -H "authorization: Bearer ${TOKEN}" \
   -H 'content-type: application/json' \
   -d '{
     "credentialId":"github-readonly-demo",
@@ -106,7 +124,7 @@ curl -X POST http://127.0.0.1:8787/v1/access/request \
 
 ## Example Codex configuration
 
-See [examples/codex/config.toml](/home/simon/keylore/examples/codex/config.toml) for both `stdio` and remote HTTP MCP registration examples.
+See [examples/codex/config.toml](/home/simon/keylore/examples/codex/config.toml) for both `stdio` and remote HTTP MCP registration examples. For remote MCP, mint a token with `resource=http://127.0.0.1:8787/mcp` and export it into the configured client env var.
 
 ## CLI examples
 

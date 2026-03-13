@@ -6,19 +6,26 @@ import pino from "pino";
 
 import { KeyLoreApp } from "../app.js";
 import { KeyLoreConfig } from "../config.js";
-import { CatalogFile, PolicyFile } from "../domain/types.js";
+import { AuthClientRecord, CatalogFile, PolicyFile } from "../domain/types.js";
+import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
+import { PgAccessTokenRepository } from "../repositories/pg-access-token-repository.js";
+import { PgApprovalRepository } from "../repositories/pg-approval-repository.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
+import { PgAuthClientRepository } from "../repositories/pg-auth-client-repository.js";
 import { PgCredentialRepository } from "../repositories/pg-credential-repository.js";
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
+import { ApprovalService } from "../services/approval-service.js";
+import { AuthService } from "../services/auth-service.js";
+import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
 import { runMigrations } from "../storage/migrations.js";
-import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 
 export async function makeTestApp(options?: {
   catalog?: CatalogFile;
   policies?: PolicyFile;
+  authClients?: Array<AuthClientRecord & { clientSecret: string }>;
   configOverrides?: Partial<KeyLoreConfig>;
 }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "keylore-test-"));
@@ -72,18 +79,20 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.2.0",
+    version: "0.3.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
+    bootstrapAuthClientsPath: path.join(tempDir, "auth-clients.json"),
     migrationsDir: "/home/simon/keylore/migrations",
     databaseUrl: "postgres://memory/keylore",
     databasePoolMax: 4,
     httpHost: "127.0.0.1",
     httpPort: 8787,
+    publicBaseUrl: "http://127.0.0.1:8787",
+    oauthIssuerUrl: "http://127.0.0.1:8787/oauth",
     environment: "test",
     defaultPrincipal: "local-operator",
-    mcpBearerToken: undefined,
     logLevel: "silent",
     bootstrapFromFiles: false,
     maxRequestBytes: 4096,
@@ -91,12 +100,17 @@ export async function makeTestApp(options?: {
     maxResponseBytes: 2048,
     rateLimitWindowMs: 60000,
     rateLimitMaxRequests: 120,
+    accessTokenTtlSeconds: 3600,
+    approvalTtlSeconds: 1800,
     ...options?.configOverrides,
   };
 
   const credentialRepository = new PgCredentialRepository(database);
   const policyRepository = new PgPolicyRepository(database);
+  const authClientRepository = new PgAuthClientRepository(database);
   const audit = new PgAuditLogService(database);
+  const accessTokens = new PgAccessTokenRepository(database);
+  const approvalRepository = new PgApprovalRepository(database);
 
   const catalog = options?.catalog ?? defaultCatalog;
   for (const credential of catalog.credentials) {
@@ -105,12 +119,65 @@ export async function makeTestApp(options?: {
 
   await policyRepository.replaceAll(options?.policies ?? defaultPolicies);
 
+  const authClients =
+    options?.authClients ??
+    [
+      {
+        clientId: "admin-client",
+        displayName: "Admin Client",
+        roles: ["admin", "operator", "auditor", "approver"],
+        allowedScopes: [
+          "catalog:read",
+          "catalog:write",
+          "admin:read",
+          "broker:use",
+          "audit:read",
+          "approval:read",
+          "approval:review",
+          "mcp:use",
+        ],
+        status: "active" as const,
+        clientSecret: "admin-secret",
+      },
+      {
+        clientId: "consumer-client",
+        displayName: "Consumer Client",
+        roles: ["consumer"],
+        allowedScopes: ["catalog:read", "broker:use", "mcp:use"],
+        status: "active" as const,
+        clientSecret: "consumer-secret",
+      },
+    ];
+
+  for (const client of authClients) {
+    const hashed = hashSecret(client.clientSecret);
+    await authClientRepository.upsert({
+      clientId: client.clientId,
+      displayName: client.displayName,
+      secretHash: hashed.hash,
+      secretSalt: hashed.salt,
+      roles: client.roles,
+      allowedScopes: client.allowedScopes,
+      status: client.status,
+    });
+  }
+
+  const auth = new AuthService(
+    authClientRepository,
+    accessTokens,
+    config.oauthIssuerUrl,
+    config.publicBaseUrl,
+    config.accessTokenTtlSeconds,
+  );
+  const approvals = new ApprovalService(approvalRepository, audit, config.approvalTtlSeconds);
+
   const broker = new BrokerService(
     credentialRepository,
     policyRepository,
     audit,
     new EnvSecretAdapter(),
     new PolicyEngine(),
+    approvals,
     config,
   );
 
@@ -118,6 +185,8 @@ export async function makeTestApp(options?: {
     config,
     logger: pino({ enabled: false }),
     broker,
+    auth,
+    approvals,
     database,
     health: {
       readiness: async () => {
@@ -134,6 +203,7 @@ export async function makeTestApp(options?: {
   return {
     app,
     broker,
+    auth,
     tempDir,
     close: async () => {
       await database.close();

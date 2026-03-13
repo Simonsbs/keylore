@@ -6,6 +6,8 @@
 - accidental secret disclosure in MCP responses
 - accidental secret disclosure in logs or audit records
 - policy bypass by changing target URLs or headers
+- token replay or token misuse across protected resources
+- unreviewed sensitive access when a policy should require human approval
 - over-broad proxy behavior that becomes a generic exfiltration tunnel
 
 ## Current mitigations
@@ -20,14 +22,16 @@
 - database-backed state is migrated on startup instead of mutated directly in local files
 - HTTP request size and rate limits reduce trivial abuse paths
 - outbound calls are bounded by timeout and response-size caps
+- remote access is mediated by issued bearer tokens with scopes, roles, and optional resource binding
+- approval-required policies create persisted review records before access is allowed
+- audit records capture approval creation and approval review actions
 
 ## Known gaps
 
-- remote MCP uses bearer-token protection today, not full OAuth 2.1
-- no human approval workflow yet
 - no sandbox injection mode yet
 - rate limiting is local-memory only; no distributed limiter or anomaly detection yet
 - no tenant isolation layer yet
+- no token revocation endpoint or external identity provider integration yet
 
 ## Review rule
 

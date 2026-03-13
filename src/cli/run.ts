@@ -2,10 +2,12 @@ import fs from "node:fs/promises";
 
 import { KeyLoreApp } from "../app.js";
 import {
+  approvalReviewInputSchema,
   catalogSearchInputSchema,
   createCredentialInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
+import { localOperatorContext } from "../services/auth-context.js";
 import {
   parseCliArgs,
   readBooleanFlag,
@@ -25,7 +27,11 @@ Usage:
   keylore catalog create --file /path/to/credential.json [--principal name]
   keylore catalog update <credential-id> --file /path/to/patch.json [--principal name]
   keylore catalog delete <credential-id> [--principal name]
+  keylore auth clients list
   keylore audit recent [--principal name] [--limit 20]
+  keylore approvals list [--status pending|approved|denied|expired]
+  keylore approvals approve <approval-id> [--note text]
+  keylore approvals deny <approval-id> [--note text]
 
 Flags:
   --json      Force JSON output. This is the default.
@@ -48,7 +54,7 @@ function principalFor(app: KeyLoreApp, flags: Map<string, string | boolean>): st
 export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
   const parsed = parseCliArgs(argv);
   const [resource, action, subject] = parsed.positionals;
-  const principal = principalFor(app, parsed.flags);
+  const context = localOperatorContext(principalFor(app, parsed.flags));
   void readBooleanFlag(parsed.flags, "json");
 
   if (!resource || resource === "help" || parsed.flags.get("help") === true) {
@@ -61,7 +67,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
   if (resource === "catalog" && action === "list") {
     const limit = readNumberFlag(parsed.flags, "limit") ?? 50;
-    const results = await app.broker.searchCatalog(principal, { limit });
+    const results = await app.broker.searchCatalog(context, { limit });
     return output({ credentials: results });
   }
 
@@ -76,7 +82,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       tag: readStringFlag(parsed.flags, "tag"),
       limit: readNumberFlag(parsed.flags, "limit") ?? 10,
     });
-    const results = await app.broker.searchCatalog(principal, input);
+    const results = await app.broker.searchCatalog(context, input);
     return output({ credentials: results });
   }
 
@@ -85,7 +91,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       throw new Error("catalog get requires a credential id.");
     }
 
-    const result = await app.broker.getCredential(principal, subject);
+    const result = await app.broker.getCredential(context, subject);
     return output({ credential: result ?? null });
   }
 
@@ -96,7 +102,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     }
 
     const payload = createCredentialInputSchema.parse(await readJsonFile(filePath));
-    const created = await app.broker.createCredential(principal, payload);
+    const created = await app.broker.createCredential(context, payload);
     return output({ credential: created });
   }
 
@@ -111,7 +117,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     }
 
     const payload = updateCredentialInputSchema.parse(await readJsonFile(filePath));
-    const updated = await app.broker.updateCredential(principal, subject, payload);
+    const updated = await app.broker.updateCredential(context, subject, payload);
     return output({ credential: updated });
   }
 
@@ -120,14 +126,47 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       throw new Error("catalog delete requires a credential id.");
     }
 
-    const deleted = await app.broker.deleteCredential(principal, subject);
+    const deleted = await app.broker.deleteCredential(context, subject);
     return output({ deleted, credentialId: subject });
+  }
+
+  if (resource === "auth" && action === "clients" && subject === "list") {
+    const clients = await app.auth.listClients();
+    return output({ clients });
   }
 
   if (resource === "audit" && action === "recent") {
     const limit = readNumberFlag(parsed.flags, "limit") ?? 20;
     const events = await app.broker.listRecentAuditEvents(limit);
     return output({ events });
+  }
+
+  if (resource === "approvals" && action === "list") {
+    const status = readStringFlag(parsed.flags, "status") as
+      | "pending"
+      | "approved"
+      | "denied"
+      | "expired"
+      | undefined;
+    const approvals = await app.broker.listApprovalRequests(status);
+    return output({ approvals });
+  }
+
+  if (resource === "approvals" && (action === "approve" || action === "deny")) {
+    if (!subject) {
+      throw new Error(`approvals ${action} requires an approval id.`);
+    }
+
+    const note = approvalReviewInputSchema.parse({
+      note: readStringFlag(parsed.flags, "note"),
+    }).note;
+    const approval = await app.broker.reviewApprovalRequest(
+      context,
+      subject,
+      action === "approve" ? "approved" : "denied",
+      note,
+    );
+    return output({ approval: approval ?? null });
   }
 
   throw new Error(`Unknown command: ${parsed.positionals.join(" ")}`);

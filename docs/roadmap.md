@@ -1,22 +1,22 @@
 # Roadmap
 
-## v0.2
+## v0.3
 
 - completed:
 - PostgreSQL-backed persistence and migrations
 - explicit output schemas for MCP tools
 - request-size, rate-limit, timeout, and response-size controls
 - admin CLI for catalogue and audit operations
+- OAuth-style client credentials issuance and protected-resource metadata
+- resource-bound bearer token validation for REST and MCP
+- identity-aware policy evaluation with principal roles
+- approval-required policy outcomes with review workflow
+- RBAC separation for admin, operator, auditor, approver, and consumer
+- expanded CLI for approvals and auth-client visibility
 
 - next:
-- add adapter interface tests and secret-store adapter fixtures
-- expand the admin CLI with policy and access-request workflows
-
-## v0.3
-
-- add OAuth 2.1 protected-resource metadata and token validation flow
-- add approval-required policy outcomes
 - add policy simulation endpoint and dry-run mode
+- add explicit token revocation and client lifecycle management APIs
 
 ## v0.4
 

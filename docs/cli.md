@@ -1,6 +1,6 @@
 # CLI
 
-KeyLore includes a local operator CLI for managing the catalogue and inspecting audit events without editing JSON files by hand.
+KeyLore includes a local operator CLI for managing the catalogue, inspecting audit events, and reviewing approvals without editing JSON files by hand.
 
 ## Usage
 
@@ -72,6 +72,30 @@ npm run dev:cli -- catalog delete github-readonly-demo
 
 ```bash
 npm run dev:cli -- audit recent --limit 10
+```
+
+### `auth clients list`
+
+```bash
+npm run dev:cli -- auth clients list
+```
+
+### `approvals list`
+
+```bash
+npm run dev:cli -- approvals list --status pending
+```
+
+### `approvals approve`
+
+```bash
+npm run dev:cli -- approvals approve <approval-id> --note "approved for deployment"
+```
+
+### `approvals deny`
+
+```bash
+npm run dev:cli -- approvals deny <approval-id> --note "target not justified"
 ```
 
 ## Output

@@ -6,4 +6,4 @@ args = ["/absolute/path/to/keylore/dist/index.js", "--transport", "stdio"]
 # Remote Streamable HTTP registration
 [mcp_servers.keylore_http]
 url = "http://127.0.0.1:8787/mcp"
-bearer_token_env_var = "KEYLORE_MCP_BEARER_TOKEN"
+bearer_token_env_var = "KEYLORE_MCP_ACCESS_TOKEN"

@@ -12,9 +12,39 @@ import {
   sensitivitySchema,
   scopeTierSchema,
 } from "../domain/types.js";
+import { authContextFromToken, localOperatorContext } from "../services/auth-context.js";
 
 function makeText(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function contextFromExtra(
+  app: KeyLoreApp,
+  extra?: {
+    authInfo?: {
+      clientId: string;
+      scopes: string[];
+      resource?: URL;
+      extra?: Record<string, unknown>;
+    };
+  },
+) {
+  if (!extra?.authInfo) {
+    return localOperatorContext(app.config.defaultPrincipal);
+  }
+
+  return authContextFromToken({
+    principal:
+      typeof extra.authInfo.extra?.principal === "string"
+        ? extra.authInfo.extra.principal
+        : extra.authInfo.clientId,
+    clientId: extra.authInfo.clientId,
+    scopes: extra.authInfo.scopes as Parameters<typeof authContextFromToken>[0]["scopes"],
+    roles: (Array.isArray(extra.authInfo.extra?.roles)
+      ? extra.authInfo.extra.roles
+      : []) as Parameters<typeof authContextFromToken>[0]["roles"],
+    resource: extra.authInfo.resource?.href,
+  });
 }
 
 export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
@@ -40,9 +70,11 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       },
       outputSchema: catalogSearchOutputSchema,
     },
-    async (input) => {
+    async (input, extra) => {
       const parsed = catalogSearchInputSchema.parse(input);
-      const results = await app.broker.searchCatalog(app.config.defaultPrincipal, parsed);
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["catalog:read"]);
+      const results = await app.broker.searchCatalog(context, parsed);
 
       return {
         content: [{ type: "text", text: makeText(results) }],
@@ -63,8 +95,10 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       },
       outputSchema: catalogGetOutputSchema,
     },
-    async ({ credentialId }) => {
-      const result = await app.broker.getCredential(app.config.defaultPrincipal, credentialId);
+    async ({ credentialId }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["catalog:read"]);
+      const result = await app.broker.getCredential(context, credentialId);
 
       return {
         content: [
@@ -94,8 +128,10 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       },
       outputSchema: accessDecisionSchema,
     },
-    async (input) => {
-      const decision = await app.broker.requestAccess(app.config.defaultPrincipal, input);
+    async (input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["broker:use"]);
+      const decision = await app.broker.requestAccess(context, input);
 
       return {
         content: [{ type: "text", text: makeText(decision) }],
@@ -113,7 +149,10 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       },
       outputSchema: auditRecentOutputSchema,
     },
-    async ({ limit }) => {
+    async ({ limit }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["audit:read"]);
+      app.auth.requireRoles(context, ["admin", "auditor"]);
       const events = await app.broker.listRecentAuditEvents(limit);
 
       return {

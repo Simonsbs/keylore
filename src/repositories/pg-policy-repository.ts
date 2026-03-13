@@ -7,6 +7,7 @@ interface PolicyRow {
   effect: PolicyRule["effect"];
   description: string;
   principals: string[];
+  principal_roles: PolicyRule["principalRoles"] | null;
   credential_ids: string[] | null;
   services: string[] | null;
   operations: string[];
@@ -20,6 +21,7 @@ function mapRow(row: PolicyRow): PolicyRule {
     effect: row.effect,
     description: row.description,
     principals: row.principals,
+    principalRoles: row.principal_roles ?? undefined,
     credentialIds: row.credential_ids ?? undefined,
     services: row.services ?? undefined,
     operations: row.operations as Array<PolicyRule["operations"][number]>,
@@ -52,16 +54,17 @@ export class PgPolicyRepository implements PolicyRepository {
       for (const rule of parsed.rules) {
         await client.query(
           `INSERT INTO policy_rules (
-            id, effect, description, principals, credential_ids, services,
+            id, effect, description, principals, principal_roles, credential_ids, services,
             operations, domain_patterns, environments
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
           )`,
           [
             rule.id,
             rule.effect,
             rule.description,
             rule.principals,
+            rule.principalRoles ?? null,
             rule.credentialIds ?? null,
             rule.services ?? null,
             rule.operations,

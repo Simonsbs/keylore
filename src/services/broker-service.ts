@@ -4,6 +4,9 @@ import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 import {
   AccessDecision,
   AccessRequestInput,
+  ApprovalRequest,
+  approvalRequestSchema,
+  AuthContext,
   CatalogSearchInput,
   CredentialRecord,
   CredentialSummary,
@@ -12,6 +15,7 @@ import {
 import { KeyLoreConfig } from "../config.js";
 import { CredentialRepository, PolicyRepository } from "../repositories/interfaces.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
+import { ApprovalService } from "./approval-service.js";
 import { PolicyDecision, PolicyEngine } from "./policy-engine.js";
 
 function summarizeCredential(credential: CredentialRecord): CredentialSummary {
@@ -116,11 +120,12 @@ export class BrokerService {
     private readonly audit: PgAuditLogService,
     private readonly adapter: EnvSecretAdapter,
     private readonly policyEngine: PolicyEngine,
+    private readonly approvals: ApprovalService,
     private readonly config: KeyLoreConfig,
   ) {}
 
   public async searchCatalog(
-    principal: string,
+    context: AuthContext,
     input: CatalogSearchInput,
   ): Promise<CredentialSummary[]> {
     const correlationId = randomUUID();
@@ -130,7 +135,7 @@ export class BrokerService {
       type: "catalog.search",
       action: "catalog.search",
       outcome: "success",
-      principal,
+      principal: context.principal,
       correlationId,
       metadata: {
         query: input.query ?? null,
@@ -142,8 +147,8 @@ export class BrokerService {
     return results;
   }
 
-  public async listCredentials(principal: string): Promise<CredentialSummary[]> {
-    return this.searchCatalog(principal, { limit: 50 });
+  public async listCredentials(context: AuthContext): Promise<CredentialSummary[]> {
+    return this.searchCatalog(context, { limit: 50 });
   }
 
   public async countCredentials(): Promise<number> {
@@ -151,7 +156,7 @@ export class BrokerService {
   }
 
   public async getCredential(
-    principal: string,
+    context: AuthContext,
     id: string,
   ): Promise<CredentialSummary | undefined> {
     const correlationId = randomUUID();
@@ -161,7 +166,7 @@ export class BrokerService {
       type: "catalog.read",
       action: "catalog.get",
       outcome: credential ? "success" : "error",
-      principal,
+      principal: context.principal,
       correlationId,
       metadata: {
         credentialId: id,
@@ -172,14 +177,14 @@ export class BrokerService {
     return credential ? summarizeCredential(credential) : undefined;
   }
 
-  public async createCredential(principal: string, credential: CredentialRecord): Promise<CredentialRecord> {
+  public async createCredential(context: AuthContext, credential: CredentialRecord): Promise<CredentialRecord> {
     const created = await this.credentials.create(credential);
 
     await this.audit.record({
       type: "catalog.write",
       action: "catalog.create",
       outcome: "success",
-      principal,
+      principal: context.principal,
       metadata: {
         credentialId: created.id,
         service: created.service,
@@ -190,7 +195,7 @@ export class BrokerService {
   }
 
   public async updateCredential(
-    principal: string,
+    context: AuthContext,
     id: string,
     patch: Partial<Omit<CredentialRecord, "id">>,
   ): Promise<CredentialRecord> {
@@ -200,7 +205,7 @@ export class BrokerService {
       type: "catalog.write",
       action: "catalog.update",
       outcome: "success",
-      principal,
+      principal: context.principal,
       metadata: {
         credentialId: id,
         fields: Object.keys(patch),
@@ -210,14 +215,14 @@ export class BrokerService {
     return updated;
   }
 
-  public async deleteCredential(principal: string, id: string): Promise<boolean> {
+  public async deleteCredential(context: AuthContext, id: string): Promise<boolean> {
     const deleted = await this.credentials.delete(id);
 
     await this.audit.record({
       type: "catalog.write",
       action: "catalog.delete",
       outcome: deleted ? "success" : "error",
-      principal,
+      principal: context.principal,
       metadata: {
         credentialId: id,
       },
@@ -227,7 +232,7 @@ export class BrokerService {
   }
 
   public async requestAccess(
-    principal: string,
+    context: AuthContext,
     input: AccessRequestInput,
   ): Promise<AccessDecision> {
     const correlationId = randomUUID();
@@ -238,7 +243,7 @@ export class BrokerService {
         type: "authz.decision",
         action: "access.request",
         outcome: "denied",
-        principal,
+        principal: context.principal,
         correlationId,
         metadata: {
           credentialId: input.credentialId,
@@ -257,7 +262,8 @@ export class BrokerService {
     const policies = await this.policies.read();
     const decision = this.policyEngine.evaluate(
       policies,
-      principal,
+      context.principal,
+      context.roles,
       credential,
       input.operation,
       targetUrl.hostname,
@@ -267,8 +273,8 @@ export class BrokerService {
     await this.audit.record({
       type: "authz.decision",
       action: "access.request",
-      outcome: decision.allowed ? "allowed" : "denied",
-      principal,
+      outcome: decision.decision === "allow" ? "allowed" : "denied",
+      principal: context.principal,
       correlationId,
       metadata: {
         credentialId: credential.id,
@@ -279,10 +285,52 @@ export class BrokerService {
       },
     });
 
-    if (!decision.allowed) {
+    if (decision.decision === "deny") {
       return this.toDeniedDecision(correlationId, credential, decision);
     }
 
+    if (decision.decision === "approval") {
+      const approved = await this.approvals.verifyApproval(context, input);
+      if (approved) {
+        return this.executeAllowedRequest(context, input, credential, decision, correlationId);
+      }
+
+      const approval = await this.approvals.createPending(context, input, {
+        reason: decision.reason,
+        ruleId: decision.ruleId,
+        correlationId,
+      });
+      return this.toApprovalRequiredDecision(correlationId, credential, decision, approval);
+    }
+
+    return this.executeAllowedRequest(context, input, credential, decision, correlationId);
+  }
+
+  public async listRecentAuditEvents(limit = 20) {
+    return this.audit.listRecent(limit);
+  }
+
+  public async listApprovalRequests(status?: ApprovalRequest["status"]) {
+    return this.approvals.list(status);
+  }
+
+  public async reviewApprovalRequest(
+    context: AuthContext,
+    id: string,
+    status: "approved" | "denied",
+    note?: string,
+  ) {
+    return this.approvals.review(id, context, status, note);
+  }
+
+  private async executeAllowedRequest(
+    context: AuthContext,
+    input: AccessRequestInput,
+    credential: CredentialRecord,
+    decision: PolicyDecision,
+    correlationId: string,
+  ): Promise<AccessDecision> {
+    const targetUrl = validateTargetUrl(input.targetUrl);
     const resolved = await this.adapter.resolve(credential);
     const httpResult = await this.executeProxyRequest(input, targetUrl, resolved.secret, {
       [resolved.headerName]: resolved.headerValue,
@@ -292,7 +340,7 @@ export class BrokerService {
       type: "credential.use",
       action: "proxy.http",
       outcome: "success",
-      principal,
+      principal: context.principal,
       correlationId,
       metadata: {
         credentialId: credential.id,
@@ -313,10 +361,6 @@ export class BrokerService {
     };
   }
 
-  public async listRecentAuditEvents(limit = 20) {
-    return this.audit.listRecent(limit);
-  }
-
   private toDeniedDecision(
     correlationId: string,
     credential: CredentialRecord,
@@ -328,6 +372,23 @@ export class BrokerService {
       correlationId,
       credential: summarizeCredential(credential),
       ruleId: decision.ruleId,
+    };
+  }
+
+  private toApprovalRequiredDecision(
+    correlationId: string,
+    credential: CredentialRecord,
+    decision: PolicyDecision,
+    approval: ApprovalRequest,
+  ): AccessDecision {
+    approvalRequestSchema.parse(approval);
+    return {
+      decision: "approval_required",
+      reason: decision.reason,
+      correlationId,
+      credential: summarizeCredential(credential),
+      ruleId: decision.ruleId,
+      approvalRequestId: approval.id,
     };
   }
 
