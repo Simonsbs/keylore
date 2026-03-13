@@ -5,7 +5,7 @@
 - add adapter interface tests and secret-store adapter fixtures
 - add explicit output schemas for all MCP tools
 - add rate limiting and request size controls
-- add a small admin CLI for catalogue and policy operations
+- expand the admin CLI with policy and access-request workflows
 
 ## v0.3
 

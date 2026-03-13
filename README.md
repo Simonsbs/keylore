@@ -22,6 +22,7 @@ This repository is incubating privately today, but it is structured to be publis
 - constrained proxy execution for `http.get` and `http.post`
 - append-only NDJSON audit log
 - HTTP admin/API surface for catalogue search, access requests, and audit reads
+- local admin CLI for catalogue and audit operations
 
 ## What is intentionally deferred
 
@@ -62,7 +63,13 @@ npm run dev:http
 npm run dev:stdio
 ```
 
-5. Verify the health endpoint:
+5. Use the local CLI:
+
+```bash
+npm run dev:cli -- catalog list
+```
+
+6. Verify the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
@@ -94,11 +101,32 @@ curl -X POST http://127.0.0.1:8787/v1/access/request \
 
 See [examples/codex/config.toml](/home/simon/keylore/examples/codex/config.toml) for both `stdio` and remote HTTP MCP registration examples.
 
+## CLI examples
+
+List the catalogue:
+
+```bash
+npm run dev:cli -- catalog list
+```
+
+Search the catalogue:
+
+```bash
+npm run dev:cli -- catalog search --query github --limit 5
+```
+
+Read recent audit events:
+
+```bash
+npm run dev:cli -- audit recent --limit 10
+```
+
 ## Documentation
 
 - [docs/architecture.md](/home/simon/keylore/docs/architecture.md)
 - [docs/api.md](/home/simon/keylore/docs/api.md)
 - [docs/configuration.md](/home/simon/keylore/docs/configuration.md)
+- [docs/cli.md](/home/simon/keylore/docs/cli.md)
 - [docs/threat-model.md](/home/simon/keylore/docs/threat-model.md)
 - [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md)
 - [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md)

@@ -83,3 +83,7 @@ Evaluate policy and execute a constrained proxy call if authorized.
 ### `audit_recent`
 
 Read recent audit events.
+
+## Local CLI
+
+KeyLore also exposes a local operator CLI documented in [docs/cli.md](/home/simon/keylore/docs/cli.md). This is the preferred local administration surface until a dedicated admin UI exists.
