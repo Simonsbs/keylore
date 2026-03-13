@@ -45,6 +45,11 @@ Usage:
   keylore auth tokens revoke <token-id>
   keylore runtime run --file /path/to/runtime.json [--principal name]
   keylore system adapters
+  keylore system maintenance
+  keylore system maintenance run
+  keylore system backup create --file /path/to/backup.json
+  keylore system backup inspect --file /path/to/backup.json
+  keylore system backup restore --file /path/to/backup.json --yes
   keylore audit recent [--principal name] [--limit 20]
   keylore approvals list [--status pending|approved|denied|expired]
   keylore approvals approve <approval-id> [--note text]
@@ -260,6 +265,77 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
   if (resource === "system" && action === "adapters") {
     const adapters = await app.broker.adapterHealth();
     return output({ adapters });
+  }
+
+  if (resource === "system" && action === "maintenance" && !subject) {
+    return output({ maintenance: app.maintenance.status() });
+  }
+
+  if (resource === "system" && action === "maintenance" && subject === "run") {
+    const result = await app.maintenance.runOnce();
+    return output({ maintenance: app.maintenance.status(), result });
+  }
+
+  if (resource === "system" && action === "backup" && subject === "create") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("system backup create requires --file.");
+    }
+
+    const backup = await app.backup.writeBackup(filePath);
+    return output({
+      file: filePath,
+      createdAt: backup.createdAt,
+      credentials: backup.credentials.length,
+      authClients: backup.authClients.length,
+      accessTokens: backup.accessTokens.length,
+      approvals: backup.approvals.length,
+      auditEvents: backup.auditEvents.length,
+    });
+  }
+
+  if (resource === "system" && action === "backup" && subject === "inspect") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("system backup inspect requires --file.");
+    }
+
+    const backup = await app.backup.readBackup(filePath);
+    return output({
+      file: filePath,
+      format: backup.format,
+      version: backup.version,
+      sourceVersion: backup.sourceVersion,
+      createdAt: backup.createdAt,
+      credentials: backup.credentials.length,
+      authClients: backup.authClients.length,
+      accessTokens: backup.accessTokens.length,
+      approvals: backup.approvals.length,
+      auditEvents: backup.auditEvents.length,
+    });
+  }
+
+  if (resource === "system" && action === "backup" && subject === "restore") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("system backup restore requires --file.");
+    }
+    if (!readBooleanFlag(parsed.flags, "yes")) {
+      throw new Error("system backup restore requires --yes.");
+    }
+
+    const backup = await app.backup.restoreBackup(filePath);
+    return output({
+      restored: true,
+      file: filePath,
+      sourceVersion: backup.sourceVersion,
+      createdAt: backup.createdAt,
+      credentials: backup.credentials.length,
+      authClients: backup.authClients.length,
+      accessTokens: backup.accessTokens.length,
+      approvals: backup.approvals.length,
+      auditEvents: backup.auditEvents.length,
+    });
   }
 
   if (resource === "audit" && action === "recent") {

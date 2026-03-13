@@ -19,6 +19,7 @@ import {
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { AccessTokenRepository, AuthClientRepository } from "../repositories/interfaces.js";
 import { hashOpaqueToken, hashSecret, verifySecret } from "./auth-secrets.js";
+import { TelemetryService } from "./telemetry.js";
 
 function uniqueScopes(scopes: string[]): AccessScope[] {
   return Array.from(new Set(scopes)).map((scope) => accessScopeSchema.parse(scope));
@@ -36,6 +37,7 @@ export class AuthService {
     private readonly issuerUrl: string,
     private readonly publicBaseUrl: string,
     private readonly accessTokenTtlSeconds: number,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   private generateClientSecret(): string {
@@ -66,10 +68,12 @@ export class AuthService {
   public async issueToken(input: TokenIssueInput): Promise<TokenIssueOutput> {
     const client = await this.clients.getByClientId(input.clientId);
     if (!client || client.status !== "active") {
+      this.telemetry.recordAuthTokenIssued("error");
       throw new Error("Invalid client credentials.");
     }
 
     if (!verifySecret(input.clientSecret, client.secretSalt, client.secretHash)) {
+      this.telemetry.recordAuthTokenIssued("error");
       throw new Error("Invalid client credentials.");
     }
 
@@ -79,6 +83,7 @@ export class AuthService {
     );
 
     if (grantedScopes.length === 0) {
+      this.telemetry.recordAuthTokenIssued("error");
       throw new Error("No valid scopes were granted.");
     }
 
@@ -107,6 +112,8 @@ export class AuthService {
       },
     });
 
+    this.telemetry.recordAuthTokenIssued("success");
+
     return tokenIssueOutputSchema.parse({
       access_token: token,
       token_type: "Bearer",
@@ -118,10 +125,12 @@ export class AuthService {
   public async authenticateBearerToken(token: string, requestedResource?: string): Promise<AuthContext> {
     const stored = await this.tokens.getByHash(hashOpaqueToken(token));
     if (!stored || stored.status !== "active") {
+      this.telemetry.recordAuthTokenValidation("error");
       throw new Error("Invalid access token.");
     }
 
     if (new Date(stored.expiresAt).getTime() <= Date.now()) {
+      this.telemetry.recordAuthTokenValidation("error");
       throw new Error("Access token expired.");
     }
 
@@ -130,10 +139,12 @@ export class AuthService {
       requestedResource &&
       normalizeResource(stored.resource) !== normalizeResource(requestedResource)
     ) {
+      this.telemetry.recordAuthTokenValidation("error");
       throw new Error("Access token resource does not match this protected resource.");
     }
 
     await this.tokens.touch(stored.tokenHash);
+    this.telemetry.recordAuthTokenValidation("success");
 
     return authContextSchema.parse({
       principal: stored.subject,

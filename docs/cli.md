@@ -155,6 +155,31 @@ npm run dev:cli -- runtime run --file ./runtime.json
 npm run dev:cli -- system adapters
 ```
 
+### `system maintenance`
+
+```bash
+npm run dev:cli -- system maintenance
+npm run dev:cli -- system maintenance run
+```
+
+### `system backup create`
+
+```bash
+npm run dev:cli -- system backup create --file ./keylore-backup.json
+```
+
+### `system backup inspect`
+
+```bash
+npm run dev:cli -- system backup inspect --file ./keylore-backup.json
+```
+
+### `system backup restore`
+
+```bash
+npm run dev:cli -- system backup restore --file ./keylore-backup.json --yes
+```
+
 ### `approvals list`
 
 ```bash

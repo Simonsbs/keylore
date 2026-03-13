@@ -367,6 +367,28 @@ export const adapterHealthListOutputSchema = z.object({
   adapters: z.array(adapterHealthSchema),
 });
 
+export const maintenanceTaskResultSchema = z.object({
+  approvalsExpired: z.number().int().min(0),
+  accessTokensExpired: z.number().int().min(0),
+  rateLimitBucketsDeleted: z.number().int().min(0),
+});
+
+export const maintenanceStatusSchema = z.object({
+  enabled: z.boolean(),
+  intervalMs: z.number().int().min(0),
+  running: z.boolean(),
+  lastRunAt: z.string().datetime().optional(),
+  lastSuccessAt: z.string().datetime().optional(),
+  lastDurationMs: z.number().int().min(0).optional(),
+  consecutiveFailures: z.number().int().min(0),
+  lastError: z.string().optional(),
+  lastResult: maintenanceTaskResultSchema.optional(),
+});
+
+export const maintenanceStatusOutputSchema = z.object({
+  maintenance: maintenanceStatusSchema,
+});
+
 export type CredentialRecord = z.infer<typeof credentialRecordSchema>;
 export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
 export type CatalogFile = z.infer<typeof catalogFileSchema>;
@@ -395,3 +417,5 @@ export type RuntimeExecutionResult = z.infer<typeof runtimeExecutionResultSchema
 export type SecretInspection = z.infer<typeof secretInspectionSchema>;
 export type CredentialStatusReport = z.infer<typeof credentialStatusReportSchema>;
 export type AdapterHealth = z.infer<typeof adapterHealthSchema>;
+export type MaintenanceTaskResult = z.infer<typeof maintenanceTaskResultSchema>;
+export type MaintenanceStatus = z.infer<typeof maintenanceStatusSchema>;

@@ -32,12 +32,13 @@ This repository is incubating privately today, but it is structured to be publis
 - sandboxed injection mode for tightly allowlisted compatibility commands
 - constrained proxy execution for `http.get` and `http.post`
 - HTTP admin/API surface for catalogue search, access requests, approvals, audit reads, adapter health, runtime injection, and auth-client inspection
-- local admin CLI for catalogue, reporting, access evaluation, runtime injection, approvals, auth-client, and audit operations
-- request-size limits, in-memory rate limiting, outbound timeouts, and response-size caps
+- local admin CLI for catalogue, reporting, access evaluation, runtime injection, approvals, auth-client, maintenance, and backup operations
+- request-size limits, database-backed rate limiting, background maintenance cleanup, outbound timeouts, and response-size caps
+- Prometheus-style `/metrics` telemetry and request correlation headers for operational visibility
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.4 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.5 delivery. This repo does not yet implement:
 
 - multi-tenant isolation, delegated approvals, and break-glass workflows
 - admin UI and rotation orchestration
@@ -99,6 +100,13 @@ curl -X POST http://127.0.0.1:8787/oauth/token \
 
 ```bash
 curl http://127.0.0.1:8787/healthz
+```
+
+9. Inspect metrics and maintenance status:
+
+```bash
+curl http://127.0.0.1:8787/metrics
+npm run dev:cli -- system maintenance
 ```
 
 ## Example API usage
@@ -197,6 +205,12 @@ Inspect rotation status locally:
 
 ```bash
 npm run dev:cli -- catalog report
+```
+
+Create a logical backup locally:
+
+```bash
+npm run dev:cli -- system backup create --file ./keylore-backup.json
 ```
 
 ## Documentation

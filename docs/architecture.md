@@ -2,19 +2,21 @@
 
 ## Current shape
 
-KeyLore v0.4 is a single TypeScript service with two entry modes:
+KeyLore v0.5 is a single TypeScript service with two entry modes:
 
 - `stdio` MCP transport for local tool execution
 - Streamable HTTP MCP transport plus REST endpoints for remote or service deployment
 
-The runtime is organized into six layers:
+The runtime is organized into eight layers:
 
 1. Catalogue repository
 2. Policy repository and evaluation
 3. Secret adapter registry and provider plugins
 4. Broker service, constrained proxy executor, and status reporting
 5. Sandboxed runtime injection executor
-6. MCP and HTTP presentation layers
+6. Database-backed rate limiting and maintenance
+7. Backup/export tooling
+8. MCP and HTTP presentation layers
 
 ## Core flow
 
@@ -34,6 +36,10 @@ System of record:
 - PostgreSQL `credentials`
 - PostgreSQL `policy_rules`
 - PostgreSQL `audit_events`
+- PostgreSQL `oauth_clients`
+- PostgreSQL `access_tokens`
+- PostgreSQL `approval_requests`
+- PostgreSQL `request_rate_limits`
 - PostgreSQL `schema_migrations`
 
 Bootstrap seed inputs:
@@ -52,7 +58,10 @@ Secret values are not stored in either the seed files or the database.
 - auth-related user headers are stripped before proxy execution
 - HTTP request size and response capture are bounded
 - outbound requests are bounded by timeout
+- shared rate limiting is enforced through PostgreSQL state instead of per-process memory
+- background maintenance expires stale approvals, revokes expired access tokens, and reaps old rate-limit buckets
+- logical backups operate at the application data model, not through opaque database dumps
 
 ## Why this is not split into microservices yet
 
-`KeyLore.md` describes a larger system, but v0.2 keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.
+`KeyLore.md` describes a larger system, but v0.5 still keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.

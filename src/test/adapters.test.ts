@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
 
+import { SecretAdapterRegistry } from "../adapters/adapter-registry.js";
 import { AwsSecretsManagerAdapter } from "../adapters/aws-secrets-manager-adapter.js";
 import { GcpSecretManagerAdapter } from "../adapters/gcp-secret-manager-adapter.js";
 import { OnePasswordSecretAdapter } from "../adapters/onepassword-secret-adapter.js";
 import { VaultSecretAdapter } from "../adapters/vault-secret-adapter.js";
 import { CommandRunner } from "../adapters/command-runner.js";
+import { SecretAdapter } from "../adapters/types.js";
+import { TelemetryService } from "../services/telemetry.js";
 
 class FakeCommandRunner implements CommandRunner {
   public constructor(
@@ -200,4 +203,95 @@ test("GCP Secret Manager adapter reads a version and exposes version metadata", 
   assert.equal(resolved.secret, "gcp-secret");
   assert.equal(resolved.inspection.state, "ENABLED");
   assert.equal(resolved.inspection.nextRotationAt, "2026-04-01T00:00:00Z");
+});
+
+test("adapter registry retries transient failures and opens the circuit after repeated errors", async () => {
+  let attempts = 0;
+  const adapter: SecretAdapter = {
+    id: "env",
+    async resolve(credential) {
+      attempts += 1;
+      if (attempts < 2) {
+        throw new Error("ETIMEDOUT during adapter resolve");
+      }
+      return {
+        secret: "retry-secret",
+        headerName: credential.binding.headerName,
+        headerValue: `${credential.binding.headerPrefix}retry-secret`,
+        inspection: {
+          adapter: "env",
+          ref: credential.binding.ref,
+          status: "warning",
+          resolved: true,
+          notes: [],
+        },
+      };
+    },
+    async inspect(credential) {
+      return {
+        adapter: "env",
+        ref: credential.binding.ref,
+        status: "warning",
+        resolved: true,
+        notes: [],
+      };
+    },
+    async healthcheck() {
+      return {
+        adapter: "env",
+        available: true,
+        status: "ok",
+        details: "ok",
+      };
+    },
+  };
+
+  const registry = new SecretAdapterRegistry(
+    [adapter],
+    {
+      adapterMaxAttempts: 2,
+      adapterRetryDelayMs: 1,
+      adapterCircuitBreakerThreshold: 2,
+      adapterCircuitBreakerCooldownMs: 1000,
+    },
+    new TelemetryService(),
+  );
+
+  const credential = {
+    ...baseCredential,
+    binding: {
+      adapter: "env" as const,
+      ref: "KEYLORE_TEST_SECRET",
+      authType: "bearer" as const,
+      headerName: "Authorization",
+      headerPrefix: "Bearer ",
+    },
+  };
+
+  const resolved = await registry.resolve(credential);
+  assert.equal(resolved.secret, "retry-secret");
+  assert.equal(attempts, 2);
+
+  let hardFailures = 0;
+  const failingAdapter: SecretAdapter = {
+    ...adapter,
+    async resolve() {
+      hardFailures += 1;
+      throw new Error("timeout contacting adapter backend");
+    },
+  };
+  const failingRegistry = new SecretAdapterRegistry(
+    [failingAdapter],
+    {
+      adapterMaxAttempts: 1,
+      adapterRetryDelayMs: 1,
+      adapterCircuitBreakerThreshold: 1,
+      adapterCircuitBreakerCooldownMs: 10_000,
+    },
+    new TelemetryService(),
+  );
+
+  await assert.rejects(() => failingRegistry.resolve(credential), /timeout contacting adapter backend/);
+  await assert.rejects(() => failingRegistry.resolve(credential), /Adapter circuit is open/);
+  assert.equal(hardFailures, 1);
 });

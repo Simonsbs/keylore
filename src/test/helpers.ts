@@ -17,11 +17,16 @@ import { PgCredentialRepository } from "../repositories/pg-credential-repository
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
 import { ApprovalService } from "../services/approval-service.js";
 import { AuthService } from "../services/auth-service.js";
+import { BackupService } from "../services/backup-service.js";
 import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
+import { MaintenanceService } from "../services/maintenance-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
+import { PgRateLimitService } from "../services/rate-limit-service.js";
+import { TelemetryService } from "../services/telemetry.js";
 import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
+import { SqlDatabase } from "../storage/database.js";
 import { runMigrations } from "../storage/migrations.js";
 
 export async function makeTestApp(options?: {
@@ -29,6 +34,8 @@ export async function makeTestApp(options?: {
   policies?: PolicyFile;
   authClients?: Array<AuthClientRecord & { clientSecret: string }>;
   configOverrides?: Partial<KeyLoreConfig>;
+  database?: SqlDatabase;
+  skipMigrations?: boolean;
 }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "keylore-test-"));
   const defaultCatalog: CatalogFile = {
@@ -76,12 +83,15 @@ export async function makeTestApp(options?: {
     ],
   };
 
-  const database = createInMemoryDatabase();
-  await runMigrations(database, "/home/simon/keylore/migrations");
+  const database = options?.database ?? createInMemoryDatabase();
+  const ownsDatabase = !options?.database;
+  if (!options?.skipMigrations) {
+    await runMigrations(database, "/home/simon/keylore/migrations");
+  }
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.4.0",
+    version: "0.5.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -102,6 +112,8 @@ export async function makeTestApp(options?: {
     maxResponseBytes: 2048,
     rateLimitWindowMs: 60000,
     rateLimitMaxRequests: 120,
+    maintenanceEnabled: false,
+    maintenanceIntervalMs: 60000,
     accessTokenTtlSeconds: 3600,
     approvalTtlSeconds: 1800,
     vaultAddr: undefined,
@@ -114,6 +126,10 @@ export async function makeTestApp(options?: {
     sandboxCommandAllowlist: [process.execPath],
     sandboxDefaultTimeoutMs: 1000,
     sandboxMaxOutputBytes: 2048,
+    adapterMaxAttempts: 2,
+    adapterRetryDelayMs: 1,
+    adapterCircuitBreakerThreshold: 2,
+    adapterCircuitBreakerCooldownMs: 1000,
     ...options?.configOverrides,
   };
 
@@ -123,10 +139,20 @@ export async function makeTestApp(options?: {
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
   const approvalRepository = new PgApprovalRepository(database);
+  const telemetry = new TelemetryService();
+  const rateLimits = new PgRateLimitService(
+    database,
+    config.rateLimitWindowMs,
+    config.rateLimitMaxRequests,
+    telemetry,
+  );
 
   const catalog = options?.catalog ?? defaultCatalog;
   for (const credential of catalog.credentials) {
-    await credentialRepository.create(credential);
+    const existing = await credentialRepository.getById(credential.id);
+    if (!existing) {
+      await credentialRepository.create(credential);
+    }
   }
 
   await policyRepository.replaceAll(options?.policies ?? defaultPolicies);
@@ -183,14 +209,23 @@ export async function makeTestApp(options?: {
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,
+    telemetry,
   );
   const approvals = new ApprovalService(approvalRepository, audit, config.approvalTtlSeconds);
+  const maintenance = new MaintenanceService(
+    config.maintenanceEnabled,
+    config.maintenanceIntervalMs,
+    approvalRepository,
+    accessTokens,
+    rateLimits,
+    telemetry,
+  );
 
   const broker = new BrokerService(
     credentialRepository,
     policyRepository,
     audit,
-    new SecretAdapterRegistry([new EnvSecretAdapter()]),
+    new SecretAdapterRegistry([new EnvSecretAdapter()], config, telemetry),
     new PolicyEngine(),
     approvals,
     new SandboxRunner(config),
@@ -204,6 +239,10 @@ export async function makeTestApp(options?: {
     auth,
     approvals,
     database,
+    telemetry,
+    rateLimits,
+    maintenance,
+    backup: new BackupService(database, config.version),
     health: {
       readiness: async () => {
         await database.healthcheck();
@@ -211,8 +250,13 @@ export async function makeTestApp(options?: {
           status: "ready",
           environment: config.environment,
           credentialCount: await broker.countCredentials(),
+          maintenance: maintenance.status(),
         };
       },
+    },
+    close: async () => {
+      await maintenance.stop();
+      await database.close();
     },
   };
 
@@ -222,7 +266,11 @@ export async function makeTestApp(options?: {
     auth,
     tempDir,
     close: async () => {
-      await database.close();
+      if (ownsDatabase) {
+        await app.close();
+      } else {
+        await maintenance.stop();
+      }
       await fs.rm(tempDir, { recursive: true, force: true });
     },
   };

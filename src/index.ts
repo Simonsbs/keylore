@@ -35,7 +35,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await server.close();
-    await app.database.close();
+    await app.close();
     process.exit(0);
   };
 

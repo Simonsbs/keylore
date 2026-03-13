@@ -8,7 +8,7 @@ async function main(): Promise<void> {
     const result = await runCli(app, process.argv.slice(2));
     process.stdout.write(result);
   } finally {
-    await app.database.close();
+    await app.close();
   }
 }
 

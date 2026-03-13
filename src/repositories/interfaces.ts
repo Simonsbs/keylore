@@ -63,6 +63,7 @@ export interface AccessTokenRepository {
     clientId?: string;
     status?: "active" | "revoked";
   }): Promise<AccessTokenRecord[]>;
+  expireStale(): Promise<number>;
   revokeById(tokenId: string): Promise<AccessTokenRecord | undefined>;
   revokeByClientId(clientId: string): Promise<number>;
 }

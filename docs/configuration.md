@@ -4,7 +4,7 @@
 
 - `KEYLORE_DATABASE_URL`: PostgreSQL connection string
 - `KEYLORE_DATABASE_POOL_MAX`: max PostgreSQL pool size
-- `KEYLORE_DATA_DIR`: base directory for catalogue, policy, and audit files
+- `KEYLORE_DATA_DIR`: base directory for catalogue, policy, and auth-client seed files
 - `KEYLORE_CATALOG_FILE`: catalogue filename inside the data dir
 - `KEYLORE_POLICY_FILE`: policy filename inside the data dir
 - `KEYLORE_AUTH_CLIENTS_FILE`: OAuth client bootstrap filename inside the data dir
@@ -19,8 +19,10 @@
 - `KEYLORE_MAX_REQUEST_BYTES`: HTTP request body limit
 - `KEYLORE_OUTBOUND_TIMEOUT_MS`: outbound proxy timeout
 - `KEYLORE_MAX_RESPONSE_BYTES`: outbound response capture limit
-- `KEYLORE_RATE_LIMIT_WINDOW_MS`: in-memory rate limit window
-- `KEYLORE_RATE_LIMIT_MAX_REQUESTS`: in-memory max requests per client address per window
+- `KEYLORE_RATE_LIMIT_WINDOW_MS`: shared PostgreSQL-backed rate limit window
+- `KEYLORE_RATE_LIMIT_MAX_REQUESTS`: max requests per client address per window
+- `KEYLORE_MAINTENANCE_ENABLED`: enable periodic maintenance
+- `KEYLORE_MAINTENANCE_INTERVAL_MS`: maintenance interval
 - `KEYLORE_ACCESS_TOKEN_TTL_SECONDS`: issued bearer token lifetime
 - `KEYLORE_APPROVAL_TTL_SECONDS`: pending approval lifetime
 - `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET`: seed secret for `keylore-admin-local`
@@ -35,6 +37,10 @@
 - `KEYLORE_SANDBOX_COMMAND_ALLOWLIST`: comma-separated executable allowlist for sandbox mode
 - `KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS`: default sandbox runtime timeout
 - `KEYLORE_SANDBOX_MAX_OUTPUT_BYTES`: max captured sandbox output after redaction
+- `KEYLORE_ADAPTER_MAX_ATTEMPTS`: adapter retry attempts for transient failures
+- `KEYLORE_ADAPTER_RETRY_DELAY_MS`: adapter retry backoff base
+- `KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD`: failures before opening an adapter circuit
+- `KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS`: time before a tripped adapter circuit may be retried
 
 ## Secret bindings
 
@@ -122,6 +128,16 @@ KeyLore reports both:
 - secret-source metadata when an adapter can inspect version, rotation, or expiry state
 
 This is available through `GET /v1/catalog/reports`, `GET /v1/catalog/credentials/:id/report`, `GET /v1/system/adapters`, and the matching CLI/MCP admin surfaces.
+
+## Operations and maintenance
+
+Operational visibility is exposed through:
+
+- `GET /metrics`
+- `GET /readyz`
+- `GET /v1/system/maintenance`
+
+The maintenance loop expires stale approvals, revokes expired tokens, and removes old rate-limit buckets.
 
 ## Persistence model
 

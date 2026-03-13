@@ -10,6 +10,7 @@ import {
   credentialStatusReportListOutputSchema,
   catalogSearchInputSchema,
   catalogSearchOutputSchema,
+  maintenanceStatusOutputSchema,
   operationSchema,
   runtimeExecutionResultSchema,
   sensitivitySchema,
@@ -237,6 +238,27 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         content: [{ type: "text", text: makeText(adapters) }],
         structuredContent: {
           adapters,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_maintenance_status",
+    {
+      description: "Read background maintenance loop status and last cleanup result.",
+      inputSchema: {},
+      outputSchema: maintenanceStatusOutputSchema,
+    },
+    async (_input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["admin:read"]);
+      app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+
+      return {
+        content: [{ type: "text", text: makeText(app.maintenance.status()) }],
+        structuredContent: {
+          maintenance: app.maintenance.status(),
         },
       };
     },

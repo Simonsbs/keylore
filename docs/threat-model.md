@@ -21,7 +21,7 @@
 - proxy responses are redacted and truncated before return
 - secret values are resolved from environment bindings only at execution time
 - database-backed state is migrated on startup instead of mutated directly in local files
-- HTTP request size and rate limits reduce trivial abuse paths
+- HTTP request size limits and PostgreSQL-backed rate limits reduce trivial abuse paths
 - outbound calls are bounded by timeout and response-size caps
 - remote access is mediated by issued bearer tokens with scopes, roles, and optional resource binding
 - approval-required policies create persisted review records before access is allowed
@@ -30,12 +30,14 @@
 - simulation and dry-run modes let operators validate policy paths without leaking secrets or hitting upstream systems
 - sandbox mode is disabled by default and requires an explicit executable allowlist, a dedicated scope, and output scrubbing
 - provider adapters expose metadata for rotation/expiry reporting without returning secret material
+- adapter retries and circuit breaking reduce repeated backend failure thrash
+- logical backups provide an auditable recovery path for self-hosted operators
 
 ## Known gaps
 
-- rate limiting is local-memory only; no distributed limiter or anomaly detection yet
 - no tenant isolation layer yet
-- no token revocation endpoint or external identity provider integration yet
+- no external identity provider integration or end-user delegated OAuth flows yet
+- no anomaly detection, alert rules, or shipped dashboards yet
 
 ## Review rule
 

@@ -16,8 +16,12 @@ import { PgCredentialRepository } from "./repositories/pg-credential-repository.
 import { PgPolicyRepository } from "./repositories/pg-policy-repository.js";
 import { ApprovalService } from "./services/approval-service.js";
 import { AuthService } from "./services/auth-service.js";
+import { BackupService } from "./services/backup-service.js";
 import { BrokerService } from "./services/broker-service.js";
+import { MaintenanceService } from "./services/maintenance-service.js";
 import { PolicyEngine } from "./services/policy-engine.js";
+import { PgRateLimitService } from "./services/rate-limit-service.js";
+import { TelemetryService } from "./services/telemetry.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
 import { createPostgresDatabase, SqlDatabase } from "./storage/database.js";
 import { runMigrations } from "./storage/migrations.js";
@@ -28,6 +32,7 @@ export interface KeyLoreHealth {
     status: "ready";
     environment: string;
     credentialCount: number;
+    maintenance: ReturnType<MaintenanceService["status"]>;
   }>;
 }
 
@@ -38,13 +43,19 @@ export interface KeyLoreApp {
   auth: AuthService;
   approvals: ApprovalService;
   database: SqlDatabase;
+  telemetry: TelemetryService;
+  rateLimits: PgRateLimitService;
+  maintenance: MaintenanceService;
+  backup: BackupService;
   health: KeyLoreHealth;
+  close(): Promise<void>;
 }
 
 export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const config = loadConfig();
   const logger = pino({ name: config.appName, level: config.logLevel });
   const database = createPostgresDatabase(config);
+  const telemetry = new TelemetryService();
 
   await database.healthcheck();
   await runMigrations(database, config.migrationsDir);
@@ -53,31 +64,40 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
   const audit = new PgAuditLogService(database);
+  const accessTokens = new PgAccessTokenRepository(database);
+  const approvals = new PgApprovalRepository(database);
+  const rateLimits = new PgRateLimitService(
+    database,
+    config.rateLimitWindowMs,
+    config.rateLimitMaxRequests,
+    telemetry,
+  );
   const commandRunner = new ExecFileCommandRunner();
-  const adapterRegistry = new SecretAdapterRegistry([
-    new EnvSecretAdapter(),
-    new VaultSecretAdapter(config.vaultAddr, config.vaultToken, config.vaultNamespace),
-    new OnePasswordSecretAdapter(commandRunner, config.opBinary),
-    new AwsSecretsManagerAdapter(commandRunner, config.awsBinary),
-    new GcpSecretManagerAdapter(commandRunner, config.gcloudBinary),
-  ]);
+  const adapterRegistry = new SecretAdapterRegistry(
+    [
+      new EnvSecretAdapter(),
+      new VaultSecretAdapter(config.vaultAddr, config.vaultToken, config.vaultNamespace),
+      new OnePasswordSecretAdapter(commandRunner, config.opBinary),
+      new AwsSecretsManagerAdapter(commandRunner, config.awsBinary),
+      new GcpSecretManagerAdapter(commandRunner, config.gcloudBinary),
+    ],
+    config,
+    telemetry,
+  );
   await credentialRepository.ensureInitialized();
   await policyRepository.ensureInitialized();
   await authClientRepository.ensureInitialized();
 
   const authService = new AuthService(
     authClientRepository,
-    new PgAccessTokenRepository(database),
+    accessTokens,
     audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,
+    telemetry,
   );
-  const approvalService = new ApprovalService(
-    new PgApprovalRepository(database),
-    audit,
-    config.approvalTtlSeconds,
-  );
+  const approvalService = new ApprovalService(approvals, audit, config.approvalTtlSeconds);
 
   if (config.bootstrapFromFiles) {
     await bootstrapFromFiles(
@@ -100,6 +120,16 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     new SandboxRunner(config),
     config,
   );
+  const maintenance = new MaintenanceService(
+    config.maintenanceEnabled,
+    config.maintenanceIntervalMs,
+    approvals,
+    accessTokens,
+    rateLimits,
+    telemetry,
+  );
+  maintenance.start();
+  const backup = new BackupService(database, config.version);
 
   return {
     config,
@@ -108,6 +138,10 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     auth: authService,
     approvals: approvalService,
     database,
+    telemetry,
+    rateLimits,
+    maintenance,
+    backup,
     health: {
       readiness: async () => {
         await database.healthcheck();
@@ -117,8 +151,13 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
           status: "ready",
           environment: config.environment,
           credentialCount,
+          maintenance: maintenance.status(),
         };
       },
+    },
+    close: async () => {
+      await maintenance.stop();
+      await database.close();
     },
   };
 }

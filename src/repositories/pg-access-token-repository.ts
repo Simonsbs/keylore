@@ -124,6 +124,19 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
     });
   }
 
+  public async expireStale(): Promise<number> {
+    const result = await this.database.query<{ count: string }>(
+      `WITH expired AS (
+         UPDATE access_tokens
+         SET status = 'revoked'
+         WHERE status = 'active' AND expires_at <= NOW()
+         RETURNING 1
+       )
+       SELECT COUNT(*)::text AS count FROM expired`,
+    );
+    return Number.parseInt(result.rows[0]?.count ?? "0", 10);
+  }
+
   public async revokeById(tokenId: string): Promise<AccessTokenRecord | undefined> {
     const result = await this.database.query<AccessTokenRow>(
       `UPDATE access_tokens

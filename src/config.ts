@@ -25,6 +25,8 @@ export interface KeyLoreConfig {
   maxResponseBytes: number;
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
+  maintenanceEnabled: boolean;
+  maintenanceIntervalMs: number;
   accessTokenTtlSeconds: number;
   approvalTtlSeconds: number;
   vaultAddr: string | undefined;
@@ -37,6 +39,10 @@ export interface KeyLoreConfig {
   sandboxCommandAllowlist: string[];
   sandboxDefaultTimeoutMs: number;
   sandboxMaxOutputBytes: number;
+  adapterMaxAttempts: number;
+  adapterRetryDelayMs: number;
+  adapterCircuitBreakerThreshold: number;
+  adapterCircuitBreakerCooldownMs: number;
 }
 
 const envSchema = z.object({
@@ -63,6 +69,11 @@ const envSchema = z.object({
   KEYLORE_MAX_RESPONSE_BYTES: z.coerce.number().int().min(1024).default(32768),
   KEYLORE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),
   KEYLORE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(120),
+  KEYLORE_MAINTENANCE_ENABLED: z
+    .string()
+    .transform((value) => value !== "false")
+    .prefault("true"),
+  KEYLORE_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
   KEYLORE_APPROVAL_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
   KEYLORE_VAULT_ADDR: z.string().url().optional(),
@@ -78,6 +89,10 @@ const envSchema = z.object({
   KEYLORE_SANDBOX_COMMAND_ALLOWLIST: z.string().default(""),
   KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
   KEYLORE_SANDBOX_MAX_OUTPUT_BYTES: z.coerce.number().int().min(256).default(16384),
+  KEYLORE_ADAPTER_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(2),
+  KEYLORE_ADAPTER_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(250),
+  KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().min(1).default(3),
+  KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).default(60000),
 });
 
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
@@ -89,7 +104,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.4.0",
+    version: "0.5.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -113,6 +128,8 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     maxResponseBytes: env.KEYLORE_MAX_RESPONSE_BYTES,
     rateLimitWindowMs: env.KEYLORE_RATE_LIMIT_WINDOW_MS,
     rateLimitMaxRequests: env.KEYLORE_RATE_LIMIT_MAX_REQUESTS,
+    maintenanceEnabled: env.KEYLORE_MAINTENANCE_ENABLED,
+    maintenanceIntervalMs: env.KEYLORE_MAINTENANCE_INTERVAL_MS,
     accessTokenTtlSeconds: env.KEYLORE_ACCESS_TOKEN_TTL_SECONDS,
     approvalTtlSeconds: env.KEYLORE_APPROVAL_TTL_SECONDS,
     vaultAddr: env.KEYLORE_VAULT_ADDR || undefined,
@@ -128,5 +145,9 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
       .filter(Boolean),
     sandboxDefaultTimeoutMs: env.KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS,
     sandboxMaxOutputBytes: env.KEYLORE_SANDBOX_MAX_OUTPUT_BYTES,
+    adapterMaxAttempts: env.KEYLORE_ADAPTER_MAX_ATTEMPTS,
+    adapterRetryDelayMs: env.KEYLORE_ADAPTER_RETRY_DELAY_MS,
+    adapterCircuitBreakerThreshold: env.KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD,
+    adapterCircuitBreakerCooldownMs: env.KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS,
   };
 }

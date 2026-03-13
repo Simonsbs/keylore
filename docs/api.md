@@ -34,7 +34,11 @@ Returns a basic liveness payload.
 
 ### `GET /readyz`
 
-Returns readiness status and the current credential count.
+Returns readiness status, the current credential count, and maintenance-loop status.
+
+### `GET /metrics`
+
+Returns Prometheus-style process and application metrics.
 
 ### `GET /v1/catalog/credentials`
 
@@ -203,6 +207,18 @@ Returns adapter availability and health.
 Required scope: `admin:read`
 Required role: `admin`, `operator`, or `auditor`
 
+### `GET /v1/system/maintenance`
+
+Returns maintenance-loop status and the last cleanup result.
+Required scope: `admin:read`
+Required role: `admin`, `operator`, or `auditor`
+
+### `POST /v1/system/maintenance/run`
+
+Runs maintenance immediately.
+Required scope: `admin:write`
+Required role: `admin` or `operator`
+
 ## MCP tools
 
 ### `catalog_search`
@@ -228,6 +244,10 @@ Inspect credential rotation and expiry status.
 ### `system_adapters`
 
 Read adapter health and availability.
+
+### `system_maintenance_status`
+
+Read background maintenance status.
 
 ### `runtime_run_sandboxed`
 

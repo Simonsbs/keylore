@@ -28,11 +28,6 @@ interface HttpServerHandle {
   close(): Promise<void>;
 }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
 interface RequestWithAuth extends IncomingMessage {
   auth?: {
     token: string;
@@ -107,32 +102,38 @@ function clientKey(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? "unknown";
 }
 
-function enforceRateLimit(
-  app: KeyLoreApp,
-  req: IncomingMessage,
-  limits: Map<string, RateLimitEntry>,
-): { limited: boolean; retryAfterSeconds?: number } {
-  const key = clientKey(req);
-  const now = Date.now();
-  const current = limits.get(key);
-
-  if (!current || current.resetAt <= now) {
-    limits.set(key, {
-      count: 1,
-      resetAt: now + app.config.rateLimitWindowMs,
-    });
-    return { limited: false };
+function normalizeRoute(pathname: string): string {
+  if (pathname.startsWith("/v1/catalog/credentials/") && pathname.endsWith("/report")) {
+    return "/v1/catalog/credentials/:id/report";
   }
-
-  if (current.count >= app.config.rateLimitMaxRequests) {
-    return {
-      limited: true,
-      retryAfterSeconds: Math.ceil((current.resetAt - now) / 1000),
-    };
+  if (pathname.startsWith("/v1/catalog/credentials/")) {
+    return "/v1/catalog/credentials/:id";
   }
-
-  current.count += 1;
-  return { limited: false };
+  if (pathname.startsWith("/v1/approvals/") && pathname.endsWith("/approve")) {
+    return "/v1/approvals/:id/approve";
+  }
+  if (pathname.startsWith("/v1/approvals/") && pathname.endsWith("/deny")) {
+    return "/v1/approvals/:id/deny";
+  }
+  if (pathname.startsWith("/v1/auth/clients/") && pathname.endsWith("/rotate-secret")) {
+    return "/v1/auth/clients/:id/rotate-secret";
+  }
+  if (pathname.startsWith("/v1/auth/clients/") && pathname.endsWith("/enable")) {
+    return "/v1/auth/clients/:id/enable";
+  }
+  if (pathname.startsWith("/v1/auth/clients/") && pathname.endsWith("/disable")) {
+    return "/v1/auth/clients/:id/disable";
+  }
+  if (pathname.startsWith("/v1/auth/clients/")) {
+    return "/v1/auth/clients/:id";
+  }
+  if (pathname.startsWith("/v1/auth/tokens/") && pathname.endsWith("/revoke")) {
+    return "/v1/auth/tokens/:id/revoke";
+  }
+  if (pathname.startsWith("/mcp")) {
+    return "/mcp";
+  }
+  return pathname;
 }
 
 function bearerChallenge(app: KeyLoreApp, target: "api" | "mcp"): string {
@@ -216,23 +217,42 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
     string,
     { transport: StreamableHTTPServerTransport; closeServer: () => Promise<void> }
   >();
-  const limits = new Map<string, RateLimitEntry>();
 
   const server = http.createServer(async (req, res) => {
-    const limited = enforceRateLimit(app, req, limits);
-    if (limited.limited) {
-      if (limited.retryAfterSeconds) {
-        res.setHeader("retry-after", String(limited.retryAfterSeconds));
-      }
-      respondJson(res, 429, { error: "Rate limit exceeded." });
-      return;
-    }
+    const startedAt = Date.now();
+    let routeLabel = req.url ?? "/";
+    app.telemetry.adjustGauge("keylore_http_inflight_requests", {}, 1);
+    const requestId = randomUUID();
+    res.setHeader("x-request-id", requestId);
+    res.on("finish", () => {
+      app.telemetry.adjustGauge("keylore_http_inflight_requests", {}, -1);
+      app.telemetry.recordHttpRequest(
+        routeLabel,
+        req.method ?? "UNKNOWN",
+        res.statusCode,
+        Date.now() - startedAt,
+      );
+    });
 
     try {
       const url = new URL(
         req.url ?? "/",
         `http://${req.headers.host ?? `${app.config.httpHost}:${app.config.httpPort}`}`,
       );
+      routeLabel = normalizeRoute(url.pathname);
+
+      const rateLimitExempt =
+        url.pathname === "/healthz" || url.pathname === "/readyz" || url.pathname === "/metrics";
+      if (!rateLimitExempt) {
+        const limited = await app.rateLimits.check(clientKey(req));
+        if (limited.limited) {
+          if (limited.retryAfterSeconds) {
+            res.setHeader("retry-after", String(limited.retryAfterSeconds));
+          }
+          respondJson(res, 429, { error: "Rate limit exceeded." });
+          return;
+        }
+      }
 
       if (url.pathname === "/healthz" && req.method === "GET") {
         respondJson(res, 200, { status: "ok", service: app.config.appName });
@@ -241,6 +261,14 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
 
       if (url.pathname === "/readyz" && req.method === "GET") {
         respondJson(res, 200, await app.health.readiness());
+        return;
+      }
+
+      if (url.pathname === "/metrics" && req.method === "GET") {
+        res.writeHead(200, {
+          "content-type": "text/plain; version=0.0.4; charset=utf-8",
+        });
+        res.end(app.telemetry.renderPrometheus());
         return;
       }
 
@@ -314,7 +342,7 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
               : message.startsWith("Missing required scopes")
                 ? 403
               : 500;
-      app.logger.error({ err: error }, "http_request_failed");
+      app.logger.error({ err: error, requestId, route: routeLabel }, "http_request_failed");
       respondJson(res, statusCode, { error: message });
     }
   });
@@ -575,6 +603,41 @@ async function handleApiRequest(
     app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
     const adapters = await app.broker.adapterHealth();
     respondJson(res, 200, { adapters });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/maintenance" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator", "auditor"]);
+    respondJson(res, 200, { maintenance: app.maintenance.status() });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/maintenance/run" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const result = await app.maintenance.runOnce();
+    respondJson(res, 200, { maintenance: app.maintenance.status(), result });
     return;
   }
 

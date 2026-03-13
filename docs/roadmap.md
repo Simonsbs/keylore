@@ -23,6 +23,15 @@
 - add adapter plugins for Vault, 1Password, AWS Secrets Manager, and GCP Secret Manager
 - add rotation and expiry reporting
 
+## v0.5
+
+- completed:
+- add Prometheus-style metrics and request correlation for HTTP operations
+- move rate limiting to PostgreSQL-backed shared state
+- add background maintenance for stale approvals, expired tokens, and rate-limit bucket cleanup
+- add logical backup and restore tooling for self-hosted recovery
+- harden adapter behavior with retries and circuit breaking
+
 ## v1.0
 
 - add multi-tenant RBAC and audit partitioning
