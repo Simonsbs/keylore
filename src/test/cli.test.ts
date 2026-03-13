@@ -66,3 +66,38 @@ test("cli catalog create adds a credential from file", async () => {
 
   await close();
 });
+
+test("cli auth clients create returns a generated secret", async () => {
+  const { app, close, tempDir } = await makeTestApp();
+  const payloadPath = path.join(tempDir, "client.json");
+  await fs.writeFile(
+    payloadPath,
+    `${JSON.stringify(
+      {
+        clientId: "cli-generated-client",
+        displayName: "CLI Generated Client",
+        roles: ["consumer"],
+        allowedScopes: ["catalog:read"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const result = JSON.parse(
+    await runCli(app, ["auth", "clients", "create", "--file", payloadPath]),
+  ) as {
+    client: { clientId: string };
+    clientSecret: string;
+  };
+
+  assert.equal(result.client.clientId, "cli-generated-client");
+  assert.ok(result.clientSecret.length >= 16);
+
+  const clients = JSON.parse(await runCli(app, ["auth", "clients", "list"])) as {
+    clients: Array<{ clientId: string }>;
+  };
+  assert.equal(clients.clients.some((client) => client.clientId === "cli-generated-client"), true);
+
+  await close();
+});

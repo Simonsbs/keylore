@@ -43,6 +43,8 @@ On process startup KeyLore now:
 - metadata-only catalogue responses
 - default-deny policy enforcement
 - approval workflow for policy rules that require human review
+- dry-run and simulation paths that avoid outbound execution
+- token revocation and auth-client lifecycle control for remote access
 
 ## Local verification flow
 
@@ -53,8 +55,10 @@ With `.env` populated, a minimal smoke test is:
 3. `node dist/index.js --transport http`
 4. mint an API token through `POST /oauth/token`
 5. call `POST /v1/catalog/search` with `Authorization: Bearer ...`
-6. call `GET /.well-known/oauth-protected-resource/mcp`
-7. request an approval-gated action, approve it, and retry with `approvalId`
+6. call `POST /v1/access/simulate` to verify dry-run evaluation
+7. call `GET /.well-known/oauth-protected-resource/mcp`
+8. request an approval-gated action, approve it, and retry with `approvalId`
+9. create a temporary auth client, mint a token for it, and revoke that token
 
 ## Migration policy
 

@@ -2,7 +2,11 @@ import fs from "node:fs/promises";
 
 import { KeyLoreApp } from "../app.js";
 import {
+  accessRequestInputSchema,
   approvalReviewInputSchema,
+  authClientCreateInputSchema,
+  authClientRotateSecretInputSchema,
+  authClientUpdateInputSchema,
   catalogSearchInputSchema,
   createCredentialInputSchema,
   updateCredentialInputSchema,
@@ -27,7 +31,16 @@ Usage:
   keylore catalog create --file /path/to/credential.json [--principal name]
   keylore catalog update <credential-id> --file /path/to/patch.json [--principal name]
   keylore catalog delete <credential-id> [--principal name]
+  keylore access request --file /path/to/request.json [--dry-run] [--principal name]
+  keylore access simulate --file /path/to/request.json [--principal name]
   keylore auth clients list
+  keylore auth clients create --file /path/to/client.json
+  keylore auth clients update <client-id> --file /path/to/patch.json
+  keylore auth clients enable <client-id>
+  keylore auth clients disable <client-id>
+  keylore auth clients rotate-secret <client-id> [--secret value]
+  keylore auth tokens list [--client-id id] [--status active|revoked]
+  keylore auth tokens revoke <token-id>
   keylore audit recent [--principal name] [--limit 20]
   keylore approvals list [--status pending|approved|denied|expired]
   keylore approvals approve <approval-id> [--note text]
@@ -130,9 +143,98 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     return output({ deleted, credentialId: subject });
   }
 
+  if (resource === "access" && (action === "request" || action === "simulate")) {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error(`access ${action} requires --file.`);
+    }
+
+    const payload = accessRequestInputSchema.parse(await readJsonFile(filePath));
+    if (action === "simulate") {
+      const decision = await app.broker.simulateAccess(context, payload);
+      return output({ decision });
+    }
+
+    const decision = await app.broker.requestAccess(context, {
+      ...payload,
+      dryRun: readBooleanFlag(parsed.flags, "dry-run") || payload.dryRun,
+    });
+    return output({ decision });
+  }
+
   if (resource === "auth" && action === "clients" && subject === "list") {
     const clients = await app.auth.listClients();
     return output({ clients });
+  }
+
+  if (resource === "auth" && action === "clients" && subject === "create") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("auth clients create requires --file.");
+    }
+
+    const payload = authClientCreateInputSchema.parse(await readJsonFile(filePath));
+    const client = await app.auth.createClient(context, payload);
+    return output(client);
+  }
+
+  if (resource === "auth" && action === "clients" && subject === "update") {
+    const clientId = parsed.positionals[3];
+    if (!clientId) {
+      throw new Error("auth clients update requires a client id.");
+    }
+
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("auth clients update requires --file.");
+    }
+
+    const payload = authClientUpdateInputSchema.parse(await readJsonFile(filePath));
+    const client = await app.auth.updateClient(context, clientId, payload);
+    return output({ client: client ?? null });
+  }
+
+  if (resource === "auth" && action === "clients" && (subject === "enable" || subject === "disable")) {
+    const clientId = parsed.positionals[3];
+    if (!clientId) {
+      throw new Error(`auth clients ${subject} requires a client id.`);
+    }
+
+    const client = await app.auth.updateClient(context, clientId, {
+      status: subject === "enable" ? "active" : "disabled",
+    });
+    return output({ client: client ?? null });
+  }
+
+  if (resource === "auth" && action === "clients" && subject === "rotate-secret") {
+    const clientId = parsed.positionals[3];
+    if (!clientId) {
+      throw new Error("auth clients rotate-secret requires a client id.");
+    }
+
+    const secret = authClientRotateSecretInputSchema.parse({
+      clientSecret: readStringFlag(parsed.flags, "secret"),
+    }).clientSecret;
+    const result = await app.auth.rotateClientSecret(context, clientId, secret);
+    return output(result ? result : { client: null });
+  }
+
+  if (resource === "auth" && action === "tokens" && subject === "list") {
+    const tokens = await app.auth.listTokens({
+      clientId: readStringFlag(parsed.flags, "client-id"),
+      status: readStringFlag(parsed.flags, "status") as "active" | "revoked" | undefined,
+    });
+    return output({ tokens });
+  }
+
+  if (resource === "auth" && action === "tokens" && subject === "revoke") {
+    const tokenId = parsed.positionals[3];
+    if (!tokenId) {
+      throw new Error("auth tokens revoke requires a token id.");
+    }
+
+    const token = await app.auth.revokeToken(context, tokenId);
+    return output({ token: token ?? null });
   }
 
   if (resource === "audit" && action === "recent") {

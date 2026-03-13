@@ -130,6 +130,7 @@ export async function makeTestApp(options?: {
           "catalog:read",
           "catalog:write",
           "admin:read",
+          "admin:write",
           "broker:use",
           "audit:read",
           "approval:read",
@@ -165,6 +166,7 @@ export async function makeTestApp(options?: {
   const auth = new AuthService(
     authClientRepository,
     accessTokens,
+    audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,

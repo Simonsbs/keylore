@@ -14,6 +14,8 @@ This file maps the current repository state to the local `KeyLore.md` production
 - OAuth-style token issuance and protected-resource metadata for REST and MCP
 - resource-bound token validation and scope enforcement
 - approval-required policy rules with persisted approval requests
+- policy simulation and non-executing dry-run evaluation
+- auth-client lifecycle management and token revocation
 - RBAC-aware policy matching and endpoint authorization
 - container packaging and CI basics
 - startup migrations, config validation, and bootstrap import

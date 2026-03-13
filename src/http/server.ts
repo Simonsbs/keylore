@@ -9,6 +9,10 @@ import { KeyLoreApp } from "../app.js";
 import {
   AccessScope,
   accessRequestInputSchema,
+  authClientCreateInputSchema,
+  authClientRotateSecretInputSchema,
+  authClientUpdateInputSchema,
+  authTokenListQuerySchema,
   approvalReviewInputSchema,
   AuthContext,
   catalogSearchInputSchema,
@@ -294,8 +298,20 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
           ? 413
           : message.includes("JSON")
             ? 400
+            : message === "Invalid client credentials." || message === "Invalid access token."
+              ? 401
+              : message === "Access token expired."
+                ? 401
+                : message === "Access token resource does not match this protected resource."
+                  ? 401
+                  : message === "No valid scopes were granted."
+                    ? 400
+                    : message.startsWith("Client already exists")
+                      ? 409
             : message.startsWith("Missing required role")
               ? 403
+              : message.startsWith("Missing required scopes")
+                ? 403
               : 500;
       app.logger.error({ err: error }, "http_request_failed");
       respondJson(res, statusCode, { error: message });
@@ -428,6 +444,24 @@ async function handleApiRequest(
     return;
   }
 
+  if (url.pathname === "/v1/access/simulate" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["broker:use"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    const body = accessRequestInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const decision = await app.broker.simulateAccess(context, body);
+    respondJson(res, 200, decision);
+    return;
+  }
+
   if (url.pathname === "/v1/audit/events" && req.method === "GET") {
     const context = await authenticateRequest(
       app,
@@ -462,6 +496,47 @@ async function handleApiRequest(
     app.auth.requireRoles(context, ["admin"]);
     const clients = await app.auth.listClients();
     respondJson(res, 200, { clients });
+    return;
+  }
+
+  if (url.pathname === "/v1/auth/clients" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const body = authClientCreateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const client = await app.auth.createClient(context, body);
+    respondJson(res, 201, client);
+    return;
+  }
+
+  if (url.pathname === "/v1/auth/tokens" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const query = authTokenListQuerySchema.parse({
+      clientId: url.searchParams.get("clientId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    });
+    const tokens = await app.auth.listTokens(query);
+    respondJson(res, 200, { tokens });
     return;
   }
 
@@ -522,6 +597,106 @@ async function handleApiRequest(
     const id = approvalId.replace(/\/deny$/, "");
     const approval = await app.broker.reviewApprovalRequest(context, id, "denied", body.note);
     respondJson(res, approval ? 200 : 404, { approval: approval ?? null });
+    return;
+  }
+
+  const authClientId = routeParam(url.pathname, "/v1/auth/clients/");
+  if (authClientId && req.method === "PATCH") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const patch = authClientUpdateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const client = await app.auth.updateClient(context, authClientId, patch);
+    respondJson(res, client ? 200 : 404, { client: client ?? null });
+    return;
+  }
+
+  if (authClientId && req.method === "POST" && url.pathname.endsWith("/rotate-secret")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const body = authClientRotateSecretInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
+    const clientId = authClientId.replace(/\/rotate-secret$/, "");
+    const client = await app.auth.rotateClientSecret(context, clientId, body.clientSecret);
+    respondJson(res, client ? 200 : 404, client ?? { client: null });
+    return;
+  }
+
+  if (authClientId && req.method === "POST" && url.pathname.endsWith("/enable")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const clientId = authClientId.replace(/\/enable$/, "");
+    const client = await app.auth.updateClient(context, clientId, { status: "active" });
+    respondJson(res, client ? 200 : 404, { client: client ?? null });
+    return;
+  }
+
+  if (authClientId && req.method === "POST" && url.pathname.endsWith("/disable")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const clientId = authClientId.replace(/\/disable$/, "");
+    const client = await app.auth.updateClient(context, clientId, { status: "disabled" });
+    respondJson(res, client ? 200 : 404, { client: client ?? null });
+    return;
+  }
+
+  const tokenId = routeParam(url.pathname, "/v1/auth/tokens/");
+  if (tokenId && req.method === "POST" && url.pathname.endsWith("/revoke")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const id = tokenId.replace(/\/revoke$/, "");
+    const token = await app.auth.revokeToken(context, id);
+    respondJson(res, token ? 200 : 404, { token: token ?? null });
     return;
   }
 

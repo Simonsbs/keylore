@@ -68,6 +68,20 @@ The file must contain a partial credential patch object.
 npm run dev:cli -- catalog delete github-readonly-demo
 ```
 
+### `access request`
+
+```bash
+npm run dev:cli -- access request --file ./request.json
+```
+
+Add `--dry-run` to evaluate without executing the outbound call.
+
+### `access simulate`
+
+```bash
+npm run dev:cli -- access simulate --file ./request.json
+```
+
 ### `audit recent`
 
 ```bash
@@ -78,6 +92,48 @@ npm run dev:cli -- audit recent --limit 10
 
 ```bash
 npm run dev:cli -- auth clients list
+```
+
+### `auth clients create`
+
+```bash
+npm run dev:cli -- auth clients create --file ./client.json
+```
+
+### `auth clients update`
+
+```bash
+npm run dev:cli -- auth clients update <client-id> --file ./client-patch.json
+```
+
+### `auth clients enable`
+
+```bash
+npm run dev:cli -- auth clients enable <client-id>
+```
+
+### `auth clients disable`
+
+```bash
+npm run dev:cli -- auth clients disable <client-id>
+```
+
+### `auth clients rotate-secret`
+
+```bash
+npm run dev:cli -- auth clients rotate-secret <client-id>
+```
+
+### `auth tokens list`
+
+```bash
+npm run dev:cli -- auth tokens list --client-id demo-client --status active
+```
+
+### `auth tokens revoke`
+
+```bash
+npm run dev:cli -- auth tokens revoke <token-id>
 ```
 
 ### `approvals list`

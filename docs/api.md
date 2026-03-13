@@ -102,6 +102,11 @@ Response fields:
 
 Required scope: `broker:use`
 
+### `POST /v1/access/simulate`
+
+Evaluates policy for an access request without creating approval side effects or executing the outbound call.
+Required scope: `broker:use`
+
 ### `GET /v1/audit/events?limit=20`
 
 Returns recent audit events in reverse chronological order.
@@ -132,6 +137,48 @@ Lists configured OAuth clients without secret material.
 Required scope: `admin:read`
 Required role: `admin`
 
+### `POST /v1/auth/clients`
+
+Creates an OAuth client and returns the generated or supplied secret exactly once.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `PATCH /v1/auth/clients/:id`
+
+Updates auth-client display name, roles, scopes, or status. Security-relevant changes revoke the client's active tokens.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `POST /v1/auth/clients/:id/rotate-secret`
+
+Rotates the client secret and revokes the client's active tokens.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `POST /v1/auth/clients/:id/enable`
+
+Re-enables a disabled auth client.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `POST /v1/auth/clients/:id/disable`
+
+Disables an auth client and revokes its active tokens.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `GET /v1/auth/tokens`
+
+Lists issued access tokens without exposing token material.
+Required scope: `admin:read`
+Required role: `admin`
+
+### `POST /v1/auth/tokens/:id/revoke`
+
+Revokes one issued access token.
+Required scope: `admin:write`
+Required role: `admin`
+
 ## MCP tools
 
 ### `catalog_search`
@@ -145,6 +192,10 @@ Read one credential metadata record by ID.
 ### `access_request`
 
 Evaluate policy and execute a constrained proxy call if authorized.
+
+### `policy_simulate`
+
+Evaluate policy for a proposed access request without executing it.
 
 ### `audit_recent`
 

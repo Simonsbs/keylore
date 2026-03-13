@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 import {
   AccessDecision,
+  AccessMode,
   AccessRequestInput,
   ApprovalRequest,
   approvalRequestSchema,
@@ -235,26 +236,105 @@ export class BrokerService {
     context: AuthContext,
     input: AccessRequestInput,
   ): Promise<AccessDecision> {
+    if (input.dryRun) {
+      return this.simulateAccess(context, input, "dry_run");
+    }
+
+    const evaluation = await this.evaluateAccess(context, input, "live");
+    if (!evaluation.credential || !evaluation.policyDecision) {
+      return evaluation.decision;
+    }
+
+    const { credential, policyDecision, correlationId } = evaluation;
+    if (policyDecision.decision === "deny") {
+      return this.toDeniedDecision("live", correlationId, credential, policyDecision);
+    }
+
+    if (policyDecision.decision === "approval") {
+      const approved = await this.approvals.verifyApproval(context, input);
+      if (approved) {
+        return this.executeAllowedRequest("live", context, input, credential, policyDecision, correlationId);
+      }
+
+      const approval = await this.approvals.createPending(context, input, {
+        reason: policyDecision.reason,
+        ruleId: policyDecision.ruleId,
+        correlationId,
+      });
+      return this.toApprovalRequiredDecision("live", correlationId, credential, policyDecision, approval);
+    }
+
+    return this.executeAllowedRequest("live", context, input, credential, policyDecision, correlationId);
+  }
+
+  public async simulateAccess(
+    context: AuthContext,
+    input: AccessRequestInput,
+    mode: "dry_run" | "simulation" = "simulation",
+  ): Promise<AccessDecision> {
+    const evaluation = await this.evaluateAccess(context, input, mode);
+    if (!evaluation.credential || !evaluation.policyDecision) {
+      return evaluation.decision;
+    }
+
+    const { credential, policyDecision, correlationId } = evaluation;
+    if (policyDecision.decision === "deny") {
+      return this.toDeniedDecision(mode, correlationId, credential, policyDecision);
+    }
+
+    if (policyDecision.decision === "approval") {
+      const approved = await this.approvals.verifyApproval(context, input);
+      if (approved) {
+        return this.toAllowedDecision(mode, correlationId, credential, policyDecision);
+      }
+
+      return this.toApprovalRequiredDecision(mode, correlationId, credential, policyDecision);
+    }
+
+    return this.toAllowedDecision(mode, correlationId, credential, policyDecision);
+  }
+
+  private async evaluateAccess(
+    context: AuthContext,
+    input: AccessRequestInput,
+    mode: AccessMode,
+  ): Promise<{
+    correlationId: string;
+    credential?: CredentialRecord;
+    decision: AccessDecision;
+    policyDecision?: PolicyDecision;
+  }> {
     const correlationId = randomUUID();
     const credential = await this.credentials.getById(input.credentialId);
+    const action =
+      mode === "simulation"
+        ? "access.simulate"
+        : mode === "dry_run"
+          ? "access.dry_run"
+          : "access.request";
 
     if (!credential) {
       await this.audit.record({
         type: "authz.decision",
-        action: "access.request",
+        action,
         outcome: "denied",
         principal: context.principal,
         correlationId,
         metadata: {
           credentialId: input.credentialId,
           reason: "Credential not found.",
+          mode,
         },
       });
 
       return {
-        decision: "denied",
-        reason: "Credential not found.",
         correlationId,
+        decision: {
+          decision: "denied",
+          mode,
+          reason: "Credential not found.",
+          correlationId,
+        },
       };
     }
 
@@ -272,7 +352,7 @@ export class BrokerService {
 
     await this.audit.record({
       type: "authz.decision",
-      action: "access.request",
+      action,
       outcome: decision.decision === "allow" ? "allowed" : "denied",
       principal: context.principal,
       correlationId,
@@ -282,28 +362,17 @@ export class BrokerService {
         targetHost: targetUrl.hostname,
         ruleId: decision.ruleId ?? null,
         reason: decision.reason,
+        mode,
+        dryRun: mode !== "live",
       },
     });
 
-    if (decision.decision === "deny") {
-      return this.toDeniedDecision(correlationId, credential, decision);
-    }
-
-    if (decision.decision === "approval") {
-      const approved = await this.approvals.verifyApproval(context, input);
-      if (approved) {
-        return this.executeAllowedRequest(context, input, credential, decision, correlationId);
-      }
-
-      const approval = await this.approvals.createPending(context, input, {
-        reason: decision.reason,
-        ruleId: decision.ruleId,
-        correlationId,
-      });
-      return this.toApprovalRequiredDecision(correlationId, credential, decision, approval);
-    }
-
-    return this.executeAllowedRequest(context, input, credential, decision, correlationId);
+    return {
+      correlationId,
+      credential,
+      policyDecision: decision,
+      decision: this.toAllowedDecision(mode, correlationId, credential, decision),
+    };
   }
 
   public async listRecentAuditEvents(limit = 20) {
@@ -324,6 +393,7 @@ export class BrokerService {
   }
 
   private async executeAllowedRequest(
+    mode: AccessMode,
     context: AuthContext,
     input: AccessRequestInput,
     credential: CredentialRecord,
@@ -353,6 +423,7 @@ export class BrokerService {
 
     return {
       decision: "allowed",
+      mode,
       reason: decision.reason,
       correlationId,
       credential: summarizeCredential(credential),
@@ -362,12 +433,30 @@ export class BrokerService {
   }
 
   private toDeniedDecision(
+    mode: AccessMode,
     correlationId: string,
     credential: CredentialRecord,
     decision: PolicyDecision,
   ): AccessDecision {
     return {
       decision: "denied",
+      mode,
+      reason: decision.reason,
+      correlationId,
+      credential: summarizeCredential(credential),
+      ruleId: decision.ruleId,
+    };
+  }
+
+  private toAllowedDecision(
+    mode: AccessMode,
+    correlationId: string,
+    credential: CredentialRecord,
+    decision: PolicyDecision,
+  ): AccessDecision {
+    return {
+      decision: "allowed",
+      mode,
       reason: decision.reason,
       correlationId,
       credential: summarizeCredential(credential),
@@ -376,19 +465,23 @@ export class BrokerService {
   }
 
   private toApprovalRequiredDecision(
+    mode: AccessMode,
     correlationId: string,
     credential: CredentialRecord,
     decision: PolicyDecision,
-    approval: ApprovalRequest,
+    approval?: ApprovalRequest,
   ): AccessDecision {
-    approvalRequestSchema.parse(approval);
+    if (approval) {
+      approvalRequestSchema.parse(approval);
+    }
     return {
       decision: "approval_required",
+      mode,
       reason: decision.reason,
       correlationId,
       credential: summarizeCredential(credential),
       ruleId: decision.ruleId,
-      approvalRequestId: approval.id,
+      approvalRequestId: approval?.id,
     };
   }
 

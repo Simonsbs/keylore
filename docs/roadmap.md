@@ -13,8 +13,6 @@
 - approval-required policy outcomes with review workflow
 - RBAC separation for admin, operator, auditor, approver, and consumer
 - expanded CLI for approvals and auth-client visibility
-
-- next:
 - add policy simulation endpoint and dry-run mode
 - add explicit token revocation and client lifecycle management APIs
 

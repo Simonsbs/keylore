@@ -125,6 +125,8 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         targetUrl: z.string().url(),
         headers: z.record(z.string(), z.string()).optional(),
         payload: z.string().optional(),
+        approvalId: z.string().uuid().optional(),
+        dryRun: z.boolean().optional(),
       },
       outputSchema: accessDecisionSchema,
     },
@@ -132,6 +134,33 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       const context = contextFromExtra(app, extra);
       app.auth.requireScopes(context, ["broker:use"]);
       const decision = await app.broker.requestAccess(context, input);
+
+      return {
+        content: [{ type: "text", text: makeText(decision) }],
+        structuredContent: decision,
+      };
+    },
+  );
+
+  server.registerTool(
+    "policy_simulate",
+    {
+      description:
+        "Evaluate policy for a proposed access request without executing the outbound call or creating approval side effects.",
+      inputSchema: {
+        credentialId: z.string().min(1),
+        operation: operationSchema,
+        targetUrl: z.string().url(),
+        headers: z.record(z.string(), z.string()).optional(),
+        payload: z.string().optional(),
+        approvalId: z.string().uuid().optional(),
+      },
+      outputSchema: accessDecisionSchema,
+    },
+    async (input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["broker:use"]);
+      const decision = await app.broker.simulateAccess(context, input);
 
       return {
         content: [{ type: "text", text: makeText(decision) }],

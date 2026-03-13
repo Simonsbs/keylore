@@ -17,6 +17,7 @@ export const accessScopeSchema = z.enum([
   "catalog:read",
   "catalog:write",
   "admin:read",
+  "admin:write",
   "broker:use",
   "audit:read",
   "approval:read",
@@ -25,6 +26,8 @@ export const accessScopeSchema = z.enum([
 ]);
 export const authClientStatusSchema = z.enum(["active", "disabled"]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "expired"]);
+export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
+export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
 
 export const credentialBindingSchema = z.object({
   adapter: bindingAdapterSchema,
@@ -90,6 +93,8 @@ export const auditEventSchema = z.object({
     "credential.use",
     "approval.request",
     "approval.review",
+    "auth.client",
+    "auth.token",
   ]),
   action: z.string().min(1),
   outcome: z.enum(["allowed", "denied", "success", "error"]),
@@ -107,6 +112,7 @@ export const httpResultSchema = z.object({
 
 export const accessDecisionSchema = z.object({
   decision: z.enum(["allowed", "denied", "approval_required"]),
+  mode: accessModeSchema,
   reason: z.string(),
   correlationId: z.string().uuid(),
   credential: credentialSummarySchema.optional(),
@@ -155,6 +161,7 @@ export const accessRequestInputSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   payload: z.string().max(20_000).optional(),
   approvalId: z.string().uuid().optional(),
+  dryRun: z.boolean().optional(),
 });
 
 export const authClientSeedSchema = z.object({
@@ -177,6 +184,35 @@ export const authClientRecordSchema = z.object({
   roles: z.array(principalRoleSchema).min(1),
   allowedScopes: z.array(accessScopeSchema).min(1),
   status: authClientStatusSchema,
+});
+
+export const authClientCreateInputSchema = z.object({
+  clientId: z.string().min(1),
+  displayName: z.string().min(1),
+  roles: z.array(principalRoleSchema).min(1),
+  allowedScopes: z.array(accessScopeSchema).min(1),
+  clientSecret: z.string().min(16).optional(),
+  status: authClientStatusSchema.default("active"),
+});
+
+export const authClientUpdateInputSchema = z
+  .object({
+    displayName: z.string().min(1).optional(),
+    roles: z.array(principalRoleSchema).min(1).optional(),
+    allowedScopes: z.array(accessScopeSchema).min(1).optional(),
+    status: authClientStatusSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided.",
+  });
+
+export const authClientRotateSecretInputSchema = z.object({
+  clientSecret: z.string().min(16).optional(),
+});
+
+export const authClientSecretOutputSchema = z.object({
+  client: authClientRecordSchema,
+  clientSecret: z.string().min(16),
 });
 
 export const tokenIssueInputSchema = z.object({
@@ -234,6 +270,32 @@ export const authClientListOutputSchema = z.object({
   clients: z.array(authClientRecordSchema),
 });
 
+export const accessTokenRecordSchema = z.object({
+  tokenId: z.string().uuid(),
+  clientId: z.string().min(1),
+  subject: z.string().min(1),
+  scopes: z.array(accessScopeSchema).min(1),
+  roles: z.array(principalRoleSchema).min(1),
+  resource: z.string().url().optional(),
+  expiresAt: z.string().datetime(),
+  status: accessTokenStatusSchema,
+  createdAt: z.string().datetime(),
+  lastUsedAt: z.string().datetime().optional(),
+});
+
+export const accessTokenListOutputSchema = z.object({
+  tokens: z.array(accessTokenRecordSchema),
+});
+
+export const accessTokenRevokeOutputSchema = z.object({
+  token: accessTokenRecordSchema.nullable(),
+});
+
+export const authTokenListQuerySchema = z.object({
+  clientId: z.string().min(1).optional(),
+  status: accessTokenStatusSchema.optional(),
+});
+
 export type CredentialRecord = z.infer<typeof credentialRecordSchema>;
 export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
 export type CatalogFile = z.infer<typeof catalogFileSchema>;
@@ -248,7 +310,11 @@ export type AccessScope = z.infer<typeof accessScopeSchema>;
 export type AuthClientSeed = z.infer<typeof authClientSeedSchema>;
 export type AuthClientSeedFile = z.infer<typeof authClientSeedFileSchema>;
 export type AuthClientRecord = z.infer<typeof authClientRecordSchema>;
+export type AuthClientCreateInput = z.infer<typeof authClientCreateInputSchema>;
+export type AuthClientUpdateInput = z.infer<typeof authClientUpdateInputSchema>;
 export type AuthContext = z.infer<typeof authContextSchema>;
 export type TokenIssueInput = z.infer<typeof tokenIssueInputSchema>;
 export type TokenIssueOutput = z.infer<typeof tokenIssueOutputSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
+export type AccessMode = z.infer<typeof accessModeSchema>;
+export type AccessTokenRecord = z.infer<typeof accessTokenRecordSchema>;

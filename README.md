@@ -24,10 +24,13 @@ This repository is incubating privately today, but it is structured to be publis
 - identity-aware policy evaluation with role-aware rule matching
 - approval-required policy outcomes with review endpoints and CLI support
 - RBAC separation for admin, operator, auditor, approver, and consumer clients
+- policy simulation and non-executing dry-run access evaluation
+- auth-client lifecycle APIs with secret rotation and status control
+- token listing and explicit token revocation APIs
 - environment-backed secret adapter
 - constrained proxy execution for `http.get` and `http.post`
 - HTTP admin/API surface for catalogue search, access requests, approvals, audit reads, and auth-client inspection
-- local admin CLI for catalogue, approvals, auth-client, and audit operations
+- local admin CLI for catalogue, access evaluation, approvals, auth-client, and audit operations
 - request-size limits, in-memory rate limiting, outbound timeouts, and response-size caps
 
 ## What is intentionally deferred
@@ -108,6 +111,20 @@ curl -X POST http://127.0.0.1:8787/v1/catalog/search \
   -d '{"query":"github","limit":5}'
 ```
 
+Simulate an access request without executing it:
+
+```bash
+TOKEN=...
+curl -X POST http://127.0.0.1:8787/v1/access/simulate \
+  -H "authorization: Bearer ${TOKEN}" \
+  -H 'content-type: application/json' \
+  -d '{
+    "credentialId":"github-readonly-demo",
+    "operation":"http.get",
+    "targetUrl":"https://api.github.com/repos/modelcontextprotocol/specification"
+  }'
+```
+
 Request a proxy call:
 
 ```bash
@@ -144,6 +161,12 @@ Read recent audit events:
 
 ```bash
 npm run dev:cli -- audit recent --limit 10
+```
+
+Simulate a request locally:
+
+```bash
+npm run dev:cli -- access simulate --file ./request.json
 ```
 
 ## Documentation

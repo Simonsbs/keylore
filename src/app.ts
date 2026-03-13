@@ -53,6 +53,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const authService = new AuthService(
     authClientRepository,
     new PgAccessTokenRepository(database),
+    audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,

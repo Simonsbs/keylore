@@ -225,6 +225,117 @@ test("oauth token endpoint and approval workflow operate over HTTP", async () =>
   await close();
 });
 
+test("simulation and dry-run evaluate policy without executing the outbound request", async () => {
+  process.env.KEYLORE_TEST_SECRET = "dry-run-secret";
+  let requestCount = 0;
+  const target = await startLocalTargetServer((_req, res) => {
+    requestCount += 1;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
+  const { app, close } = await makeTestApp({
+    policies: {
+      version: 1,
+      rules: [
+        {
+          id: "allow-admin-demo",
+          effect: "allow",
+          description: "Allow admin demo reads",
+          principals: ["admin-client"],
+          principalRoles: ["admin"],
+          credentialIds: ["demo"],
+          operations: ["http.get"],
+          domainPatterns: ["localhost"],
+          environments: ["test"],
+        },
+      ],
+    },
+    configOverrides: {
+      httpPort: 8881,
+      publicBaseUrl: "http://127.0.0.1:8881",
+      oauthIssuerUrl: "http://127.0.0.1:8881/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8881/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "broker:use",
+      resource: "http://127.0.0.1:8881/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const token = (await tokenResponse.json()) as { access_token: string };
+
+  const simulateResponse = await fetch("http://127.0.0.1:8881/v1/access/simulate", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/simulate`,
+    }),
+  });
+  assert.equal(simulateResponse.status, 200);
+  const simulated = (await simulateResponse.json()) as { decision: string; mode: string };
+  assert.equal(simulated.decision, "allowed");
+  assert.equal(simulated.mode, "simulation");
+  assert.equal(requestCount, 0);
+
+  const dryRunResponse = await fetch("http://127.0.0.1:8881/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/dry-run`,
+      dryRun: true,
+    }),
+  });
+  assert.equal(dryRunResponse.status, 200);
+  const dryRun = (await dryRunResponse.json()) as { decision: string; mode: string };
+  assert.equal(dryRun.decision, "allowed");
+  assert.equal(dryRun.mode, "dry_run");
+  assert.equal(requestCount, 0);
+
+  const liveResponse = await fetch("http://127.0.0.1:8881/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/live`,
+    }),
+  });
+  assert.equal(liveResponse.status, 200);
+  const live = (await liveResponse.json()) as { decision: string; mode: string };
+  assert.equal(live.decision, "allowed");
+  assert.equal(live.mode, "live");
+  assert.equal(requestCount, 1);
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await target.close();
+  await close();
+});
+
 test("resource metadata is exposed and resource-bound tokens cannot cross protected resources", async () => {
   const { app, close } = await makeTestApp({
     configOverrides: {
@@ -269,6 +380,218 @@ test("resource metadata is exposed and resource-bound tokens cannot cross protec
   assert.equal(apiResponse.status, 401);
   const body = (await apiResponse.json()) as { error: string };
   assert.match(body.error, /resource/i);
+
+  await server.close();
+  await close();
+});
+
+test("auth client lifecycle and token revocation APIs operate over HTTP", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8882,
+      publicBaseUrl: "http://127.0.0.1:8882",
+      oauthIssuerUrl: "http://127.0.0.1:8882/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const adminTokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "admin:read admin:write catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(adminTokenResponse.status, 200);
+  const adminToken = (await adminTokenResponse.json()) as { access_token: string };
+
+  const createClientResponse = await fetch("http://127.0.0.1:8882/v1/auth/clients", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+    body: JSON.stringify({
+      clientId: "ephemeral-client",
+      displayName: "Ephemeral Client",
+      roles: ["consumer"],
+      allowedScopes: ["catalog:read"],
+    }),
+  });
+  assert.equal(createClientResponse.status, 201);
+  const createdClient = (await createClientResponse.json()) as {
+    client: { clientId: string; status: string };
+    clientSecret: string;
+  };
+  assert.equal(createdClient.client.clientId, "ephemeral-client");
+  assert.equal(createdClient.client.status, "active");
+  assert.ok(createdClient.clientSecret.length >= 16);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "ephemeral-client",
+      client_secret: createdClient.clientSecret,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const clientToken = (await tokenResponse.json()) as { access_token: string };
+
+  const searchResponse = await fetch("http://127.0.0.1:8882/v1/catalog/search", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${clientToken.access_token}`,
+    },
+    body: JSON.stringify({ limit: 1 }),
+  });
+  assert.equal(searchResponse.status, 200);
+
+  const tokenListResponse = await fetch(
+    "http://127.0.0.1:8882/v1/auth/tokens?clientId=ephemeral-client",
+    {
+      headers: {
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+    },
+  );
+  assert.equal(tokenListResponse.status, 200);
+  const tokenList = (await tokenListResponse.json()) as {
+    tokens: Array<{ tokenId: string; status: string }>;
+  };
+  assert.equal(tokenList.tokens.length, 1);
+  assert.equal(tokenList.tokens[0]?.status, "active");
+
+  const revokeResponse = await fetch(
+    `http://127.0.0.1:8882/v1/auth/tokens/${tokenList.tokens[0]?.tokenId}/revoke`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+    },
+  );
+  assert.equal(revokeResponse.status, 200);
+
+  const revokedSearchResponse = await fetch("http://127.0.0.1:8882/v1/catalog/search", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${clientToken.access_token}`,
+    },
+    body: JSON.stringify({ limit: 1 }),
+  });
+  assert.equal(revokedSearchResponse.status, 401);
+
+  const rotateResponse = await fetch(
+    "http://127.0.0.1:8882/v1/auth/clients/ephemeral-client/rotate-secret",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  assert.equal(rotateResponse.status, 200);
+  const rotated = (await rotateResponse.json()) as { clientSecret: string };
+  assert.ok(rotated.clientSecret.length >= 16);
+  assert.notEqual(rotated.clientSecret, createdClient.clientSecret);
+
+  const oldSecretTokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "ephemeral-client",
+      client_secret: createdClient.clientSecret,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(oldSecretTokenResponse.status, 401);
+
+  const newSecretTokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "ephemeral-client",
+      client_secret: rotated.clientSecret,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(newSecretTokenResponse.status, 200);
+
+  const disableResponse = await fetch(
+    "http://127.0.0.1:8882/v1/auth/clients/ephemeral-client/disable",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+    },
+  );
+  assert.equal(disableResponse.status, 200);
+
+  const disabledTokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "ephemeral-client",
+      client_secret: rotated.clientSecret,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(disabledTokenResponse.status, 401);
+
+  const enableResponse = await fetch(
+    "http://127.0.0.1:8882/v1/auth/clients/ephemeral-client/enable",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+    },
+  );
+  assert.equal(enableResponse.status, 200);
+
+  const enabledTokenResponse = await fetch("http://127.0.0.1:8882/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "ephemeral-client",
+      client_secret: rotated.clientSecret,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8882/v1",
+    }),
+  });
+  assert.equal(enabledTokenResponse.status, 200);
 
   await server.close();
   await close();

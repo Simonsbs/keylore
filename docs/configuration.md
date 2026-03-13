@@ -77,6 +77,7 @@ Built-in scopes are:
 - `catalog:read`
 - `catalog:write`
 - `admin:read`
+- `admin:write`
 - `broker:use`
 - `audit:read`
 - `approval:read`

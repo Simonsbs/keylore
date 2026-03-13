@@ -1,4 +1,5 @@
 import {
+  AccessTokenRecord,
   ApprovalRequest,
   AuthClientRecord,
   CatalogSearchInput,
@@ -44,6 +45,30 @@ export interface AuthClientRepository {
     allowedScopes: string[];
     status: "active" | "disabled";
   }): Promise<void>;
+}
+
+export interface AccessTokenRepository {
+  issue(input: {
+    tokenHash: string;
+    clientId: string;
+    subject: string;
+    scopes: string[];
+    roles: PrincipalRole[];
+    resource?: string;
+    expiresAt: string;
+  }): Promise<void>;
+  getByHash(tokenHash: string): Promise<AccessTokenRecordWithHash | undefined>;
+  touch(tokenHash: string): Promise<void>;
+  list(filter?: {
+    clientId?: string;
+    status?: "active" | "revoked";
+  }): Promise<AccessTokenRecord[]>;
+  revokeById(tokenId: string): Promise<AccessTokenRecord | undefined>;
+  revokeByClientId(clientId: string): Promise<number>;
+}
+
+export interface AccessTokenRecordWithHash extends AccessTokenRecord {
+  tokenHash: string;
 }
 
 export interface ApprovalRepository {

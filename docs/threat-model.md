@@ -25,6 +25,8 @@
 - remote access is mediated by issued bearer tokens with scopes, roles, and optional resource binding
 - approval-required policies create persisted review records before access is allowed
 - audit records capture approval creation and approval review actions
+- auth-client mutations revoke stale tokens instead of leaving old privilege snapshots active
+- simulation and dry-run modes let operators validate policy paths without leaking secrets or hitting upstream systems
 
 ## Known gaps
 
