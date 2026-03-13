@@ -76,6 +76,35 @@ export const auditEventSchema = z.object({
   metadata: z.record(z.string(), z.unknown()),
 });
 
+export const httpResultSchema = z.object({
+  status: z.number().int(),
+  contentType: z.string().nullable(),
+  bodyPreview: z.string(),
+  bodyTruncated: z.boolean(),
+});
+
+export const accessDecisionSchema = z.object({
+  decision: z.enum(["allowed", "denied"]),
+  reason: z.string(),
+  correlationId: z.string().uuid(),
+  credential: credentialSummarySchema.optional(),
+  ruleId: z.string().optional(),
+  httpResult: httpResultSchema.optional(),
+});
+
+export const catalogSearchOutputSchema = z.object({
+  results: z.array(credentialSummarySchema),
+  count: z.number().int().min(0),
+});
+
+export const catalogGetOutputSchema = z.object({
+  result: credentialSummarySchema.nullable(),
+});
+
+export const auditRecentOutputSchema = z.object({
+  events: z.array(auditEventSchema),
+});
+
 export const catalogSearchInputSchema = z.object({
   query: z.string().trim().optional(),
   service: z.string().trim().optional(),
@@ -112,3 +141,4 @@ export type PolicyFile = z.infer<typeof policyFileSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type CatalogSearchInput = z.infer<typeof catalogSearchInputSchema>;
 export type AccessRequestInput = z.infer<typeof accessRequestInputSchema>;
+export type AccessDecision = z.infer<typeof accessDecisionSchema>;

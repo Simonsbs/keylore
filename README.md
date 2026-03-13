@@ -18,15 +18,16 @@ This repository is incubating privately today, but it is structured to be publis
 - MCP server for `stdio` and Streamable HTTP
 - metadata-only catalogue search and retrieval tools
 - default-deny policy engine with domain and operation constraints
+- PostgreSQL-backed catalogue, policy, and audit persistence with startup migrations
 - environment-backed secret adapter
 - constrained proxy execution for `http.get` and `http.post`
-- append-only NDJSON audit log
 - HTTP admin/API surface for catalogue search, access requests, and audit reads
 - local admin CLI for catalogue and audit operations
+- request-size limits, in-memory rate limiting, outbound timeouts, and response-size caps
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.1 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.2 delivery. This repo does not yet implement:
 
 - OAuth 2.1 authorization server flows for remote MCP
 - secret-store adapters beyond environment variables
@@ -51,25 +52,31 @@ KEYLORE_SECRET_GITHUB_READONLY=...
 KEYLORE_SECRET_NPM_READONLY=...
 ```
 
-3. Start the HTTP server:
+3. Start PostgreSQL:
+
+```bash
+npm run db:up
+```
+
+4. Start the HTTP server:
 
 ```bash
 npm run dev:http
 ```
 
-4. Or run KeyLore as a local stdio MCP server:
+5. Or run KeyLore as a local stdio MCP server:
 
 ```bash
 npm run dev:stdio
 ```
 
-5. Use the local CLI:
+6. Use the local CLI:
 
 ```bash
 npm run dev:cli -- catalog list
 ```
 
-6. Verify the health endpoint:
+7. Verify the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
@@ -127,6 +134,7 @@ npm run dev:cli -- audit recent --limit 10
 - [docs/api.md](/home/simon/keylore/docs/api.md)
 - [docs/configuration.md](/home/simon/keylore/docs/configuration.md)
 - [docs/cli.md](/home/simon/keylore/docs/cli.md)
+- [docs/operations.md](/home/simon/keylore/docs/operations.md)
 - [docs/threat-model.md](/home/simon/keylore/docs/threat-model.md)
 - [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md)
 - [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md)

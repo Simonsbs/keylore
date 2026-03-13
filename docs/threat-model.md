@@ -17,13 +17,16 @@
 - request headers such as `Authorization` and `Cookie` are stripped from user input
 - proxy responses are redacted and truncated before return
 - secret values are resolved from environment bindings only at execution time
+- database-backed state is migrated on startup instead of mutated directly in local files
+- HTTP request size and rate limits reduce trivial abuse paths
+- outbound calls are bounded by timeout and response-size caps
 
 ## Known gaps
 
 - remote MCP uses bearer-token protection today, not full OAuth 2.1
 - no human approval workflow yet
 - no sandbox injection mode yet
-- no rate limiting or anomaly detection yet
+- rate limiting is local-memory only; no distributed limiter or anomaly detection yet
 - no tenant isolation layer yet
 
 ## Review rule

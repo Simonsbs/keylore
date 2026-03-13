@@ -1,8 +1,28 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: keylore
+      POSTGRES_USER: keylore
+      POSTGRES_PASSWORD: keylore
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keylore -d keylore"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - keylore-postgres:/var/lib/postgresql/data
   keylore:
     build:
       context: .
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8787:8787"
     env_file:
       - .env
+volumes:
+  keylore-postgres:

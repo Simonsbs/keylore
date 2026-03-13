@@ -1,34 +1,18 @@
 import { randomUUID } from "node:crypto";
 
+import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 import {
+  AccessDecision,
   AccessRequestInput,
   CatalogSearchInput,
   CredentialRecord,
   CredentialSummary,
   credentialSummarySchema,
 } from "../domain/types.js";
-import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 import { KeyLoreConfig } from "../config.js";
-import { JsonCredentialRepository } from "../repositories/credential-repository.js";
-import { JsonPolicyRepository } from "../repositories/policy-repository.js";
-import { AuditLogService } from "./audit-log.js";
+import { CredentialRepository, PolicyRepository } from "../repositories/interfaces.js";
+import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { PolicyDecision, PolicyEngine } from "./policy-engine.js";
-
-export interface AccessDecision extends Record<string, unknown> {
-  decision: "allowed" | "denied";
-  reason: string;
-  correlationId: string;
-  credential: CredentialSummary | undefined;
-  ruleId: string | undefined;
-  httpResult:
-    | {
-    status: number;
-    contentType: string | null;
-    bodyPreview: string;
-    bodyTruncated: boolean;
-  }
-    | undefined;
-}
 
 function summarizeCredential(credential: CredentialRecord): CredentialSummary {
   return credentialSummarySchema.parse({
@@ -81,18 +65,55 @@ function validateTargetUrl(rawUrl: string): URL {
 }
 
 function methodForOperation(operation: AccessRequestInput["operation"]): "GET" | "POST" {
-  if (operation === "http.post") {
-    return "POST";
+  return operation === "http.post" ? "POST" : "GET";
+}
+
+async function readLimitedResponseBody(
+  response: Response,
+  maxBytes: number,
+): Promise<{ text: string; truncated: boolean }> {
+  if (!response.body) {
+    return { text: "", truncated: false };
   }
 
-  return "GET";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    if (!value) {
+      continue;
+    }
+
+    total += value.byteLength;
+    if (total > maxBytes) {
+      const allowed = value.subarray(0, Math.max(0, value.byteLength - (total - maxBytes)));
+      if (allowed.byteLength > 0) {
+        chunks.push(allowed);
+      }
+      truncated = true;
+      await reader.cancel();
+      break;
+    }
+
+    chunks.push(value);
+  }
+
+  const combined = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
+  return { text: combined, truncated };
 }
 
 export class BrokerService {
   public constructor(
-    private readonly credentials: JsonCredentialRepository,
-    private readonly policies: JsonPolicyRepository,
-    private readonly audit: AuditLogService,
+    private readonly credentials: CredentialRepository,
+    private readonly policies: PolicyRepository,
+    private readonly audit: PgAuditLogService,
     private readonly adapter: EnvSecretAdapter,
     private readonly policyEngine: PolicyEngine,
     private readonly config: KeyLoreConfig,
@@ -123,6 +144,10 @@ export class BrokerService {
 
   public async listCredentials(principal: string): Promise<CredentialSummary[]> {
     return this.searchCatalog(principal, { limit: 50 });
+  }
+
+  public async countCredentials(): Promise<number> {
+    return this.credentials.count();
   }
 
   public async getCredential(
@@ -225,9 +250,6 @@ export class BrokerService {
         decision: "denied",
         reason: "Credential not found.",
         correlationId,
-        credential: undefined,
-        ruleId: undefined,
-        httpResult: undefined,
       };
     }
 
@@ -262,7 +284,7 @@ export class BrokerService {
     }
 
     const resolved = await this.adapter.resolve(credential);
-    const httpResult = await this.executeProxyRequest(credential, input, targetUrl, resolved.secret, {
+    const httpResult = await this.executeProxyRequest(input, targetUrl, resolved.secret, {
       [resolved.headerName]: resolved.headerValue,
     });
 
@@ -306,12 +328,10 @@ export class BrokerService {
       correlationId,
       credential: summarizeCredential(credential),
       ruleId: decision.ruleId,
-      httpResult: undefined,
     };
   }
 
   private async executeProxyRequest(
-    credential: CredentialRecord,
     input: AccessRequestInput,
     targetUrl: URL,
     secret: string,
@@ -325,6 +345,7 @@ export class BrokerService {
         ...userHeaders,
         ...authHeaders,
       },
+      signal: AbortSignal.timeout(this.config.outboundTimeoutMs),
     };
 
     if (input.operation === "http.post" && input.payload) {
@@ -332,17 +353,15 @@ export class BrokerService {
     }
 
     const response = await fetch(targetUrl, requestInit);
-    const responseText = await response.text();
-    const redactedText = redactText(responseText, secret);
-    const truncated = truncate(redactedText, 8_000);
-
-    void credential;
+    const limitedBody = await readLimitedResponseBody(response, this.config.maxResponseBytes);
+    const redactedText = redactText(limitedBody.text, secret);
+    const truncated = truncate(redactedText, this.config.maxResponseBytes);
 
     return {
       status: response.status,
       contentType: response.headers.get("content-type"),
       bodyPreview: truncated.text,
-      bodyTruncated: truncated.truncated,
+      bodyTruncated: limitedBody.truncated || truncated.truncated,
     };
   }
 }

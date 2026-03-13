@@ -10,12 +10,14 @@ This file maps the current repository state to the local `KeyLore.md` production
 - default-deny policy evaluation
 - proxy mode execution for constrained HTTP calls
 - MCP server support for `stdio` and Streamable HTTP
-- audit event generation for search, read, write, authz, and use
+- audit event generation for search, read, write, authz, and use backed by PostgreSQL
 - container packaging and CI basics
+- startup migrations, config validation, and bootstrap import
+- ingress and egress hardening controls
 
 ## Partially implemented
 
-- Catalogue CRUD: REST implemented, no UI yet
+- Catalogue CRUD: REST and CLI implemented, no UI yet
 - Remote MCP auth: bearer-token gate exists, OAuth 2.1 remains open
 - Deployment readiness: Docker is present, Helm/Kubernetes artifacts are not
 

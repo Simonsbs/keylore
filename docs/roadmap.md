@@ -2,9 +2,14 @@
 
 ## v0.2
 
+- completed:
+- PostgreSQL-backed persistence and migrations
+- explicit output schemas for MCP tools
+- request-size, rate-limit, timeout, and response-size controls
+- admin CLI for catalogue and audit operations
+
+- next:
 - add adapter interface tests and secret-store adapter fixtures
-- add explicit output schemas for all MCP tools
-- add rate limiting and request size controls
 - expand the admin CLI with policy and access-request workflows
 
 ## v0.3

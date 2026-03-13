@@ -3,7 +3,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { KeyLoreApp } from "../app.js";
 import {
+  accessDecisionSchema,
+  auditRecentOutputSchema,
+  catalogGetOutputSchema,
   catalogSearchInputSchema,
+  catalogSearchOutputSchema,
   operationSchema,
   sensitivitySchema,
   scopeTierSchema,
@@ -34,6 +38,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         tag: z.string().optional(),
         limit: z.number().int().min(1).max(50).default(10),
       },
+      outputSchema: catalogSearchOutputSchema,
     },
     async (input) => {
       const parsed = catalogSearchInputSchema.parse(input);
@@ -56,6 +61,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       inputSchema: {
         credentialId: z.string().min(1),
       },
+      outputSchema: catalogGetOutputSchema,
     },
     async ({ credentialId }) => {
       const result = await app.broker.getCredential(app.config.defaultPrincipal, credentialId);
@@ -86,6 +92,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         headers: z.record(z.string(), z.string()).optional(),
         payload: z.string().optional(),
       },
+      outputSchema: accessDecisionSchema,
     },
     async (input) => {
       const decision = await app.broker.requestAccess(app.config.defaultPrincipal, input);
@@ -104,6 +111,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       inputSchema: {
         limit: z.number().int().min(1).max(100).default(20),
       },
+      outputSchema: auditRecentOutputSchema,
     },
     async ({ limit }) => {
       const events = await app.broker.listRecentAuditEvents(limit);

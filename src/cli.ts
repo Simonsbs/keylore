@@ -4,8 +4,12 @@ import { runCli } from "./cli/run.js";
 
 async function main(): Promise<void> {
   const app = await createKeyLoreApp();
-  const result = await runCli(app, process.argv.slice(2));
-  process.stdout.write(result);
+  try {
+    const result = await runCli(app, process.argv.slice(2));
+    process.stdout.write(result);
+  } finally {
+    await app.database.close();
+  }
 }
 
 main().catch((error) => {

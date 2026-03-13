@@ -18,8 +18,9 @@ interface HttpServerHandle {
   close(): Promise<void>;
 }
 
-interface JsonRequest extends IncomingMessage {
-  body?: unknown;
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
 }
 
 function respondJson(
@@ -36,11 +37,25 @@ function respondText(res: ServerResponse, statusCode: number, body: string): voi
   res.end(body);
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {
+  const contentLengthHeader = req.headers["content-length"];
+  const contentLength =
+    typeof contentLengthHeader === "string" ? Number.parseInt(contentLengthHeader, 10) : undefined;
+  if (contentLength && contentLength > maxBytes) {
+    throw new Error(`Request body exceeds the ${maxBytes} byte limit.`);
+  }
+
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
 
   for await (const chunk of req) {
-    chunks.push(Buffer.from(chunk));
+    const buffer = Buffer.from(chunk);
+    totalBytes += buffer.byteLength;
+    if (totalBytes > maxBytes) {
+      throw new Error(`Request body exceeds the ${maxBytes} byte limit.`);
+    }
+
+    chunks.push(buffer);
   }
 
   const raw = Buffer.concat(chunks).toString("utf8").trim();
@@ -76,13 +91,55 @@ function routeParam(pathname: string, prefix: string): string | undefined {
   return value.length > 0 ? decodeURIComponent(value) : undefined;
 }
 
+function clientKey(req: IncomingMessage): string {
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+function enforceRateLimit(
+  app: KeyLoreApp,
+  req: IncomingMessage,
+  limits: Map<string, RateLimitEntry>,
+): { limited: boolean; retryAfterSeconds?: number } {
+  const key = clientKey(req);
+  const now = Date.now();
+  const current = limits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    limits.set(key, {
+      count: 1,
+      resetAt: now + app.config.rateLimitWindowMs,
+    });
+    return { limited: false };
+  }
+
+  if (current.count >= app.config.rateLimitMaxRequests) {
+    return {
+      limited: true,
+      retryAfterSeconds: Math.ceil((current.resetAt - now) / 1000),
+    };
+  }
+
+  current.count += 1;
+  return { limited: false };
+}
+
 export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle> {
   const transports = new Map<
     string,
     { transport: StreamableHTTPServerTransport; closeServer: () => Promise<void> }
   >();
+  const limits = new Map<string, RateLimitEntry>();
 
   const server = http.createServer(async (req, res) => {
+    const limited = enforceRateLimit(app, req, limits);
+    if (limited.limited) {
+      if (limited.retryAfterSeconds) {
+        res.setHeader("retry-after", String(limited.retryAfterSeconds));
+      }
+      respondJson(res, 429, { error: "Rate limit exceeded." });
+      return;
+    }
+
     try {
       const url = new URL(
         req.url ?? "/",
@@ -95,12 +152,7 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
       }
 
       if (url.pathname === "/readyz" && req.method === "GET") {
-        const credentials = await app.broker.listCredentials(app.config.defaultPrincipal);
-        respondJson(res, 200, {
-          status: "ready",
-          environment: app.config.environment,
-          credentialCount: credentials.length,
-        });
+        respondJson(res, 200, await app.health.readiness());
         return;
       }
 
@@ -121,10 +173,11 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
 
       respondJson(res, 404, { error: "Not found" });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Internal server error";
+      const statusCode =
+        message.includes("Request body exceeds") ? 413 : message.includes("JSON") ? 400 : 500;
       app.logger.error({ err: error }, "http_request_failed");
-      respondJson(res, 500, {
-        error: error instanceof Error ? error.message : "Internal server error",
-      });
+      respondJson(res, statusCode, { error: message });
     }
   });
 
@@ -170,7 +223,9 @@ async function handleApiRequest(
   }
 
   if (url.pathname === "/v1/catalog/credentials" && req.method === "POST") {
-    const body = createCredentialInputSchema.parse(await readJsonBody(req));
+    const body = createCredentialInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
     const credential = await app.broker.createCredential(principal, body);
     respondJson(res, 201, { credential });
     return;
@@ -189,7 +244,7 @@ async function handleApiRequest(
   }
 
   if (credentialId && req.method === "PATCH") {
-    const patch = updateCredentialInputSchema.parse(await readJsonBody(req));
+    const patch = updateCredentialInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
     const credential = await app.broker.updateCredential(principal, credentialId, patch);
     respondJson(res, 200, { credential });
     return;
@@ -202,14 +257,14 @@ async function handleApiRequest(
   }
 
   if (url.pathname === "/v1/catalog/search" && req.method === "POST") {
-    const body = catalogSearchInputSchema.parse(await readJsonBody(req));
+    const body = catalogSearchInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
     const credentials = await app.broker.searchCatalog(principal, body);
     respondJson(res, 200, { credentials });
     return;
   }
 
   if (url.pathname === "/v1/access/request" && req.method === "POST") {
-    const body = accessRequestInputSchema.parse(await readJsonBody(req));
+    const body = accessRequestInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
     const decision = await app.broker.requestAccess(principal, body);
     respondJson(res, 200, decision);
     return;
@@ -274,8 +329,7 @@ async function handleMcpRequest(
     return;
   }
 
-  const body = await readJsonBody(req);
-  (req as JsonRequest).body = body;
+  const body = await readJsonBody(req, app.config.maxRequestBytes);
 
   if (sessionId) {
     const existing = transports.get(sessionId);
@@ -300,7 +354,7 @@ async function handleMcpRequest(
     return;
   }
 
-  let connectedServer = createKeyLoreMcpServer(app);
+  const connectedServer = createKeyLoreMcpServer(app);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (newSessionId) => {

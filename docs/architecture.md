@@ -2,7 +2,7 @@
 
 ## Current shape
 
-KeyLore v0.1 is a single TypeScript service with two entry modes:
+KeyLore v0.2 is a single TypeScript service with two entry modes:
 
 - `stdio` MCP transport for local tool execution
 - Streamable HTTP MCP transport plus REST endpoints for remote or service deployment
@@ -27,11 +27,19 @@ The runtime is organized into five layers:
 
 ## Storage
 
-- `data/catalog.json`: non-secret credential metadata and adapter bindings
-- `data/policies.json`: policy rules
-- `data/audit.ndjson`: append-only audit events
+System of record:
 
-Secret values are not stored in these files.
+- PostgreSQL `credentials`
+- PostgreSQL `policy_rules`
+- PostgreSQL `audit_events`
+- PostgreSQL `schema_migrations`
+
+Bootstrap seed inputs:
+
+- `data/catalog.json`
+- `data/policies.json`
+
+Secret values are not stored in either the seed files or the database.
 
 ## Design constraints
 
@@ -40,7 +48,9 @@ Secret values are not stored in these files.
 - no raw credentials in audit events
 - HTTPS-only proxy targets, except local loopback development
 - auth-related user headers are stripped before proxy execution
+- HTTP request size and response capture are bounded
+- outbound requests are bounded by timeout
 
 ## Why this is not split into microservices yet
 
-`KeyLore.md` describes a larger system, but v0.1 keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.
+`KeyLore.md` describes a larger system, but v0.2 keeps the broker, catalogue, and MCP surface in one process to reduce operational complexity while the security model stabilizes. The seams already exist in the codebase for later extraction.
