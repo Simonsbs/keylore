@@ -4,6 +4,7 @@ import { KeyLoreApp } from "../app.js";
 import {
   accessRequestInputSchema,
   approvalReviewInputSchema,
+  authorizationRequestInputSchema,
   authClientCreateInputSchema,
   authClientRotateSecretInputSchema,
   authClientUpdateInputSchema,
@@ -15,6 +16,9 @@ import {
   rotationCreateInputSchema,
   rotationTransitionInputSchema,
   runtimeExecutionInputSchema,
+  tenantBootstrapInputSchema,
+  tenantCreateInputSchema,
+  tenantUpdateInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
 import { localOperatorContext } from "../services/auth-context.js";
@@ -46,8 +50,16 @@ Usage:
   keylore auth clients enable <client-id>
   keylore auth clients disable <client-id>
   keylore auth clients rotate-secret <client-id> [--secret value]
+  keylore auth authorize --file /path/to/authorize.json
   keylore auth tokens list [--client-id id] [--status active|revoked]
   keylore auth tokens revoke <token-id>
+  keylore auth refresh-tokens list [--client-id id] [--status active|revoked]
+  keylore auth refresh-tokens revoke <refresh-token-id>
+  keylore tenants list
+  keylore tenants get <tenant-id>
+  keylore tenants create --file /path/to/tenant.json
+  keylore tenants update <tenant-id> --file /path/to/patch.json
+  keylore tenants bootstrap --file /path/to/bootstrap.json
   keylore runtime run --file /path/to/runtime.json [--principal name]
   keylore system adapters
   keylore system maintenance
@@ -254,6 +266,17 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     return output(result ? result : { client: null });
   }
 
+  if (resource === "auth" && action === "authorize") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("auth authorize requires --file.");
+    }
+
+    const payload = authorizationRequestInputSchema.parse(await readJsonFile(filePath));
+    const authorization = await app.auth.authorize(context, payload);
+    return output({ authorization });
+  }
+
   if (resource === "auth" && action === "tokens" && subject === "list") {
     const tokens = await app.auth.listTokens({
       clientId: readStringFlag(parsed.flags, "client-id"),
@@ -271,6 +294,76 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
     const token = await app.auth.revokeToken(context, tokenId);
     return output({ token: token ?? null });
+  }
+
+  if (resource === "auth" && action === "refresh-tokens" && subject === "list") {
+    const tokens = await app.auth.listRefreshTokens({
+      clientId: readStringFlag(parsed.flags, "client-id"),
+      tenantId: context.tenantId,
+      status: (readStringFlag(parsed.flags, "status") as "active" | "revoked" | undefined) ?? undefined,
+    });
+    return output({ tokens });
+  }
+
+  if (resource === "auth" && action === "refresh-tokens" && subject === "revoke") {
+    const refreshTokenId = parsed.positionals[3];
+    if (!refreshTokenId) {
+      throw new Error("auth refresh-tokens revoke requires a refresh token id.");
+    }
+
+    const token = await app.auth.revokeRefreshToken(context, refreshTokenId);
+    return output({ token: token ?? null });
+  }
+
+  if (resource === "tenants" && action === "list") {
+    const tenants = await app.tenants.list(context);
+    return output({ tenants });
+  }
+
+  if (resource === "tenants" && action === "get") {
+    if (!subject) {
+      throw new Error("tenants get requires a tenant id.");
+    }
+
+    const tenant = await app.tenants.get(context, subject);
+    return output({ tenant: tenant ?? null });
+  }
+
+  if (resource === "tenants" && action === "create") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("tenants create requires --file.");
+    }
+
+    const payload = tenantCreateInputSchema.parse(await readJsonFile(filePath));
+    const tenant = await app.tenants.create(context, payload);
+    return output({ tenant });
+  }
+
+  if (resource === "tenants" && action === "update") {
+    if (!subject) {
+      throw new Error("tenants update requires a tenant id.");
+    }
+
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("tenants update requires --file.");
+    }
+
+    const payload = tenantUpdateInputSchema.parse(await readJsonFile(filePath));
+    const tenant = await app.tenants.update(context, subject, payload);
+    return output({ tenant: tenant ?? null });
+  }
+
+  if (resource === "tenants" && action === "bootstrap") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("tenants bootstrap requires --file.");
+    }
+
+    const payload = tenantBootstrapInputSchema.parse(await readJsonFile(filePath));
+    const result = await app.tenants.bootstrap(context, payload);
+    return output(result);
   }
 
   if (resource === "runtime" && action === "run") {

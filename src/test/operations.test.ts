@@ -65,6 +65,8 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
       approvalsExpired: number;
       breakGlassExpired: number;
       accessTokensExpired: number;
+      refreshTokensExpired: number;
+      authorizationCodesExpired: number;
       oauthClientAssertionsExpired: number;
       rateLimitBucketsDeleted: number;
     };
@@ -73,6 +75,8 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
     approvalsExpired: 0,
     breakGlassExpired: 0,
     accessTokensExpired: 0,
+    refreshTokensExpired: 0,
+    authorizationCodesExpired: 0,
     oauthClientAssertionsExpired: 0,
     rateLimitBucketsDeleted: 0,
   });

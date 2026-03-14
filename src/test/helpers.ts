@@ -11,6 +11,7 @@ import { KeyLoreConfig } from "../config.js";
 import { AuthClientRecord, CatalogFile, PolicyFile } from "../domain/types.js";
 import { EnvSecretAdapter } from "../adapters/env-secret-adapter.js";
 import { PgAccessTokenRepository } from "../repositories/pg-access-token-repository.js";
+import { PgAuthorizationCodeRepository } from "../repositories/pg-authorization-code-repository.js";
 import { PgApprovalRepository } from "../repositories/pg-approval-repository.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "../repositories/pg-auth-client-repository.js";
@@ -18,7 +19,9 @@ import { PgBreakGlassRepository } from "../repositories/pg-break-glass-repositor
 import { PgCredentialRepository } from "../repositories/pg-credential-repository.js";
 import { PgOAuthClientAssertionRepository } from "../repositories/pg-oauth-client-assertion-repository.js";
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
+import { PgRefreshTokenRepository } from "../repositories/pg-refresh-token-repository.js";
 import { PgRotationRunRepository } from "../repositories/pg-rotation-run-repository.js";
+import { PgTenantRepository } from "../repositories/pg-tenant-repository.js";
 import { ApprovalService } from "../services/approval-service.js";
 import { AuthService } from "../services/auth-service.js";
 import { BackupService } from "../services/backup-service.js";
@@ -31,6 +34,7 @@ import { NotificationService } from "../services/notification-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
 import { PgRateLimitService } from "../services/rate-limit-service.js";
 import { RotationService } from "../services/rotation-service.js";
+import { TenantService } from "../services/tenant-service.js";
 import { TelemetryService } from "../services/telemetry.js";
 import { TraceExportService } from "../services/trace-export-service.js";
 import { TraceService } from "../services/trace-service.js";
@@ -47,8 +51,13 @@ export async function makeTestApp(options?: {
   catalog?: CatalogFile;
   policies?: PolicyFile;
   authClients?: Array<
-    Omit<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks" | "tenantId"> &
-      Partial<Pick<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks" | "tenantId">> & {
+    Omit<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks" | "tenantId" | "grantTypes" | "redirectUris"> &
+      Partial<
+        Pick<
+          AuthClientRecord,
+          "tokenEndpointAuthMethod" | "jwks" | "tenantId" | "grantTypes" | "redirectUris"
+        >
+      > & {
         clientSecret?: string;
       }
   >;
@@ -112,7 +121,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.10.0",
+    version: "0.11.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -136,6 +145,8 @@ export async function makeTestApp(options?: {
     maintenanceEnabled: false,
     maintenanceIntervalMs: 60000,
     accessTokenTtlSeconds: 3600,
+    authorizationCodeTtlSeconds: 300,
+    refreshTokenTtlSeconds: 86400,
     approvalTtlSeconds: 1800,
     approvalReviewQuorum: 1,
     breakGlassMaxDurationSeconds: 900,
@@ -175,9 +186,12 @@ export async function makeTestApp(options?: {
   const credentialRepository = new PgCredentialRepository(database);
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
+  const tenantRepository = new PgTenantRepository(database);
   const assertionRepository = new PgOAuthClientAssertionRepository(database);
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
+  const refreshTokens = new PgRefreshTokenRepository(database);
+  const authorizationCodes = new PgAuthorizationCodeRepository(database);
   const approvalRepository = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
   const rotationRepository = new PgRotationRunRepository(database);
@@ -208,6 +222,11 @@ export async function makeTestApp(options?: {
   );
 
   const catalog = options?.catalog ?? defaultCatalog;
+  const seededTenantIds = new Set<string>(["default"]);
+  for (const credential of catalog.credentials) {
+    seededTenantIds.add(credential.tenantId);
+  }
+
   for (const credential of catalog.credentials) {
     const existing = await credentialRepository.getById(credential.id);
     if (!existing) {
@@ -215,7 +234,11 @@ export async function makeTestApp(options?: {
     }
   }
 
-  await policyRepository.replaceAll(options?.policies ?? defaultPolicies);
+  const policyFile = options?.policies ?? defaultPolicies;
+  for (const rule of policyFile.rules) {
+    seededTenantIds.add(rule.tenantId);
+  }
+  await policyRepository.replaceAll(policyFile);
 
   const authClients =
     options?.authClients ??
@@ -257,6 +280,8 @@ export async function makeTestApp(options?: {
         status: "active" as const,
         clientSecret: "admin-secret",
         tokenEndpointAuthMethod: "client_secret_basic" as const,
+        grantTypes: ["client_credentials"] as const,
+        redirectUris: [],
         jwks: [],
       },
       {
@@ -267,16 +292,40 @@ export async function makeTestApp(options?: {
         status: "active" as const,
         clientSecret: "consumer-secret",
         tokenEndpointAuthMethod: "client_secret_basic" as const,
+        grantTypes: ["client_credentials"] as const,
+        redirectUris: [],
         jwks: [],
       },
     ];
 
+  for (const tenantId of seededTenantIds) {
+    const existing = await tenantRepository.getById(tenantId);
+    if (!existing) {
+      await tenantRepository.create({
+        tenantId,
+        displayName: tenantId,
+        status: "active",
+      });
+    }
+  }
+
   for (const client of authClients.map((client) => ({
     tenantId: "default",
     tokenEndpointAuthMethod: "client_secret_basic" as const,
+    grantTypes: ["client_credentials"] as const,
+    redirectUris: [],
     jwks: [],
     ...client,
   }))) {
+    seededTenantIds.add(client.tenantId);
+    const existingTenant = await tenantRepository.getById(client.tenantId);
+    if (!existingTenant) {
+      await tenantRepository.create({
+        tenantId: client.tenantId,
+        displayName: client.tenantId,
+        status: "active",
+      });
+    }
     const hashed = client.clientSecret ? hashSecret(client.clientSecret) : undefined;
     await authClientRepository.upsert({
       clientId: client.clientId,
@@ -288,6 +337,8 @@ export async function makeTestApp(options?: {
       allowedScopes: client.allowedScopes,
       status: client.status,
       tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+      grantTypes: [...client.grantTypes],
+      redirectUris: [...client.redirectUris],
       jwks: client.jwks,
     });
   }
@@ -295,13 +346,19 @@ export async function makeTestApp(options?: {
   const auth = new AuthService(
     authClientRepository,
     accessTokens,
+    refreshTokens,
+    authorizationCodes,
     assertionRepository,
+    tenantRepository,
     audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,
+    config.authorizationCodeTtlSeconds,
+    config.refreshTokenTtlSeconds,
     telemetry,
   );
+  const tenants = new TenantService(tenantRepository, database, audit, auth);
   const approvals = new ApprovalService(
     approvalRepository,
     audit,
@@ -333,7 +390,9 @@ export async function makeTestApp(options?: {
     approvalRepository,
     breakGlassRepository,
     accessTokens,
+    refreshTokens,
     rateLimits,
+    authorizationCodes,
     assertionRepository,
     telemetry,
   );
@@ -347,6 +406,7 @@ export async function makeTestApp(options?: {
     new PolicyEngine(),
     approvals,
     breakGlass,
+    tenantRepository,
     new SandboxRunner(config),
     validateEgressTarget,
     config,
@@ -357,6 +417,7 @@ export async function makeTestApp(options?: {
     logger: pino({ enabled: false }),
     broker,
     auth,
+    tenants,
     rotations,
     approvals,
     breakGlass,

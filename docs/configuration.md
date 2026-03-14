@@ -24,6 +24,8 @@
 - `KEYLORE_MAINTENANCE_ENABLED`: enable periodic maintenance
 - `KEYLORE_MAINTENANCE_INTERVAL_MS`: maintenance interval
 - `KEYLORE_ACCESS_TOKEN_TTL_SECONDS`: issued bearer token lifetime
+- `KEYLORE_AUTHORIZATION_CODE_TTL_SECONDS`: authorization code lifetime
+- `KEYLORE_REFRESH_TOKEN_TTL_SECONDS`: refresh token lifetime
 - `KEYLORE_APPROVAL_TTL_SECONDS`: pending approval lifetime
 - `KEYLORE_APPROVAL_REVIEW_QUORUM`: distinct reviews required before an approval request becomes approved
 - `KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS`: max lifetime for an approved break-glass request
@@ -104,9 +106,10 @@ KeyLore exposes:
 - `GET /.well-known/oauth-authorization-server`
 - `GET /.well-known/oauth-protected-resource/api`
 - `GET /.well-known/oauth-protected-resource/mcp`
+- `POST /oauth/authorize`
 - `POST /oauth/token`
 
-Remote callers use the `client_credentials` grant. Tokens may be resource-bound:
+Remote callers use `client_credentials`, `authorization_code`, or `refresh_token` depending on client configuration. Tokens may be resource-bound:
 
 - use `resource=<publicBaseUrl>/v1` for REST API access
 - use `resource=<publicBaseUrl>/mcp` for remote MCP access
@@ -118,14 +121,19 @@ Supported client authentication methods are:
 - `client_secret_basic`
 - `client_secret_post`
 - `private_key_jwt`
+- `none`
 
 `private_key_jwt` clients must be configured with at least one public JWK and do not use shared secrets.
 
+Public clients use `tokenEndpointAuthMethod: "none"` plus `grantTypes: ["authorization_code", "refresh_token"]`, a redirect URI allowlist, and PKCE with `S256`.
+
 ## Multi-tenant model
 
-KeyLore stores `tenantId` on credentials, policy rules, OAuth clients, approvals, break-glass requests, audit events, access tokens, and rotation runs. Bootstrapped records may omit it and fall back to `default`.
+KeyLore stores first-class tenant records and also stores `tenantId` on credentials, policy rules, OAuth clients, approvals, break-glass requests, audit events, access tokens, refresh tokens, and rotation runs. Bootstrapped records may omit it and fall back to `default`.
 
 Remote HTTP and MCP callers inherit their tenant from the OAuth client used at `POST /oauth/token`. Tenant-scoped callers are restricted to that tenant. The local CLI continues to run as a global operator context and may work across tenants.
+
+Tenant administration is available through `GET/POST/PATCH /v1/tenants`, `POST /v1/tenants/bootstrap`, and the matching CLI commands.
 
 ## Approvals and break-glass quorum
 
@@ -219,7 +227,7 @@ Deployment profiles are shipped through Helm values files:
 - `charts/keylore/values-prod.yaml`
 - `charts/keylore/values-ha.yaml`
 
-The maintenance loop expires stale approvals and break-glass grants, revokes expired tokens, and removes old rate-limit buckets.
+The maintenance loop expires stale approvals, break-glass grants, access tokens, refresh tokens, and authorization codes, and removes old rate-limit buckets.
 
 ## Persistence model
 
@@ -229,7 +237,7 @@ The database is the system of record. `data/catalog.json`, `data/policies.json`,
 
 If bootstrap is enabled and the database is empty, KeyLore imports catalogue records, policies, and auth clients from `data/`.
 
-Auth client bootstrap is strict for shared-secret clients: missing `secretRef` environment variables fail startup instead of silently creating an unusable remote-auth setup. `private_key_jwt` clients bootstrap from their public JWK set and do not require `secretRef`.
+Auth client bootstrap is strict for shared-secret clients: missing `secretRef` environment variables fail startup instead of silently creating an unusable remote-auth setup. `private_key_jwt` clients bootstrap from their public JWK set and do not require `secretRef`. Public `none` clients bootstrap without `secretRef` but must provide redirect URIs and authorization-code grant types.
 
 ## Local operator context
 

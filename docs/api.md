@@ -10,7 +10,7 @@ Remote bearer tokens inherit the tenant of the OAuth client that minted them. Te
 
 ### `GET /.well-known/oauth-authorization-server`
 
-Returns OAuth-style token metadata for the `client_credentials` grant.
+Returns OAuth-style metadata for `client_credentials`, `authorization_code`, and `refresh_token`.
 
 ### `GET /.well-known/oauth-protected-resource/api`
 
@@ -20,21 +20,41 @@ Returns protected-resource metadata for the REST API. Resource identifier: `<pub
 
 Returns protected-resource metadata for remote MCP. Resource identifier: `<publicBaseUrl>/mcp`.
 
+### `POST /oauth/authorize`
+
+Accepts an already-authenticated bearer token plus a PKCE challenge and returns a short-lived authorization code for the requested client.
+
+Body fields:
+
+- `clientId`
+- `redirectUri`
+- `scope`
+- `resource`
+- `codeChallenge`
+- `codeChallengeMethod=S256`
+- `state`
+
 ### `POST /oauth/token`
 
-Accepts `client_credentials` requests via form body or HTTP Basic auth.
+Accepts `client_credentials`, `authorization_code`, and `refresh_token` requests via form body or HTTP Basic auth when the client auth method requires it.
 
 Body fields:
 
 - `grant_type=client_credentials`
+- `grant_type=authorization_code`
+- `grant_type=refresh_token`
 - `client_id`
 - `client_secret`
 - `scope`
 - `resource`
+- `code`
+- `code_verifier`
+- `redirect_uri`
+- `refresh_token`
 - `client_assertion_type`
 - `client_assertion`
 
-`client_secret_basic`, `client_secret_post`, and `private_key_jwt` are supported. `private_key_jwt` assertions are replay-protected; a reused assertion is rejected with `409`.
+`client_secret_basic`, `client_secret_post`, `private_key_jwt`, and `none` are supported depending on the client configuration. `private_key_jwt` assertions are replay-protected; a reused assertion is rejected with `409`.
 
 ### `GET /healthz`
 
@@ -199,6 +219,48 @@ Required role: `admin` or `auth_admin`
 Revokes one issued access token.
 Required scope: `auth:write`
 Required role: `admin` or `auth_admin`
+
+### `GET /v1/auth/refresh-tokens`
+
+Lists issued refresh tokens without exposing token material. Tenant-scoped callers only see tokens from their own tenant.
+Required scope: `auth:read`
+Required role: `admin` or `auth_admin`
+
+### `POST /v1/auth/refresh-tokens/:id/revoke`
+
+Revokes one issued refresh token.
+Required scope: `auth:write`
+Required role: `admin` or `auth_admin`
+
+### `GET /v1/tenants`
+
+Lists visible tenants and basic per-tenant counts.
+Required scope: `admin:read`
+Required role: `admin`
+
+### `POST /v1/tenants`
+
+Creates one tenant record.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `POST /v1/tenants/bootstrap`
+
+Creates a tenant and optional seed auth clients in one call.
+Required scope: `admin:write`
+Required role: `admin`
+
+### `GET /v1/tenants/:id`
+
+Returns one tenant summary.
+Required scope: `admin:read`
+Required role: `admin`
+
+### `PATCH /v1/tenants/:id`
+
+Updates tenant display name, description, or status.
+Required scope: `admin:write`
+Required role: `admin`
 
 ### `GET /v1/catalog/reports`
 

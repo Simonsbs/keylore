@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  createHash,
   createHmac,
   generateKeyPairSync,
   KeyObject,
@@ -35,6 +36,10 @@ async function startLocalTargetServer(
 
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function pkceChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
 }
 
 function makeClientAssertion(
@@ -907,6 +912,139 @@ test("oauth token endpoint supports private_key_jwt clients and blocks assertion
     },
   });
   assert.equal(searchResponse.status, 200);
+
+  await server.close();
+  await close();
+});
+
+test("authorization_code with PKCE issues refreshable user-bound tokens for public clients", async () => {
+  const { app, auth, close } = await makeTestApp({
+    authClients: [
+      {
+        clientId: "interactive-admin",
+        tenantId: "default",
+        displayName: "Interactive Admin",
+        roles: ["admin", "auth_admin"],
+        allowedScopes: ["auth:read", "auth:write", "catalog:read", "mcp:use"],
+        status: "active",
+        clientSecret: "interactive-admin-secret",
+      },
+      {
+        clientId: "public-mcp-client",
+        tenantId: "default",
+        displayName: "Public MCP Client",
+        roles: ["admin"],
+        allowedScopes: ["catalog:read", "mcp:use"],
+        status: "active",
+        tokenEndpointAuthMethod: "none",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["http://127.0.0.1/callback"],
+      },
+    ],
+    configOverrides: {
+      httpPort: 8884,
+      publicBaseUrl: "http://127.0.0.1:8884",
+      oauthIssuerUrl: "http://127.0.0.1:8884/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const actorToken = await auth.issueToken({
+    clientId: "interactive-admin",
+    clientSecret: "interactive-admin-secret",
+    grantType: "client_credentials",
+    scope: ["auth:read", "auth:write", "catalog:read", "mcp:use"],
+    resource: "http://127.0.0.1:8884/v1",
+  });
+
+  const verifier = "pkce-verifier-for-public-client-1234567890abcdef";
+  const authorizeResponse = await fetch("http://127.0.0.1:8884/oauth/authorize", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${actorToken.access_token}`,
+    },
+    body: JSON.stringify({
+      clientId: "public-mcp-client",
+      redirectUri: "http://127.0.0.1/callback",
+      scope: ["catalog:read", "mcp:use"],
+      resource: "http://127.0.0.1:8884/v1",
+      codeChallenge: pkceChallenge(verifier),
+      codeChallengeMethod: "S256",
+      state: "pkce-state",
+    }),
+  });
+  assert.equal(authorizeResponse.status, 200);
+  const authorization = (await authorizeResponse.json()) as {
+    code: string;
+    scope: string;
+    subject: string;
+  };
+  assert.equal(authorization.subject, "interactive-admin");
+  assert.equal(authorization.scope, "catalog:read mcp:use");
+
+  const tokenResponse = await fetch("http://127.0.0.1:8884/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: "public-mcp-client",
+      code: authorization.code,
+      code_verifier: verifier,
+      redirect_uri: "http://127.0.0.1/callback",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokenPayload = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token: string;
+  };
+  assert.ok(tokenPayload.access_token.length > 10);
+  assert.ok(tokenPayload.refresh_token.length > 10);
+
+  const catalogResponse = await fetch("http://127.0.0.1:8884/v1/catalog/credentials", {
+    headers: {
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+  });
+  assert.equal(catalogResponse.status, 200);
+
+  const refreshResponse = await fetch("http://127.0.0.1:8884/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: "public-mcp-client",
+      refresh_token: tokenPayload.refresh_token,
+    }),
+  });
+  assert.equal(refreshResponse.status, 200);
+  const refreshed = (await refreshResponse.json()) as {
+    access_token: string;
+    refresh_token: string;
+  };
+  assert.ok(refreshed.access_token.length > 10);
+  assert.notEqual(refreshed.refresh_token, tokenPayload.refresh_token);
+
+  const refreshListResponse = await fetch("http://127.0.0.1:8884/v1/auth/refresh-tokens", {
+    headers: {
+      authorization: `Bearer ${actorToken.access_token}`,
+    },
+  });
+  assert.equal(refreshListResponse.status, 200);
+  const refreshListPayload = (await refreshListResponse.json()) as {
+    tokens: Array<{ subject: string; clientId: string }>;
+  };
+  assert.equal(
+    refreshListPayload.tokens.some(
+      (token) => token.clientId === "public-mcp-client" && token.subject === "interactive-admin",
+    ),
+    true,
+  );
 
   await server.close();
   await close();

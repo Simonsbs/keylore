@@ -1,9 +1,11 @@
 import { MaintenanceStatus, MaintenanceTaskResult } from "../domain/types.js";
 import {
   AccessTokenRepository,
+  AuthorizationCodeRepository,
   ApprovalRepository,
   BreakGlassRepository,
   OAuthClientAssertionRepository,
+  RefreshTokenRepository,
 } from "../repositories/interfaces.js";
 import { PgRateLimitService } from "./rate-limit-service.js";
 import { TelemetryService } from "./telemetry.js";
@@ -21,7 +23,9 @@ export class MaintenanceService {
     private readonly approvals: ApprovalRepository,
     private readonly breakGlass: BreakGlassRepository,
     private readonly tokens: AccessTokenRepository,
+    private readonly refreshTokens: RefreshTokenRepository,
     private readonly rateLimits: PgRateLimitService,
+    private readonly authorizationCodes: AuthorizationCodeRepository,
     private readonly assertions: OAuthClientAssertionRepository,
     private readonly telemetry: TelemetryService,
   ) {
@@ -70,7 +74,9 @@ export class MaintenanceService {
         approvalsExpired: await this.approvals.expireStale(),
         breakGlassExpired: await this.breakGlass.expireStale(),
         accessTokensExpired: await this.tokens.expireStale(),
+        refreshTokensExpired: await this.refreshTokens.expireStale(),
         rateLimitBucketsDeleted: await this.rateLimits.cleanup(),
+        authorizationCodesExpired: await this.authorizationCodes.cleanup(),
         oauthClientAssertionsExpired: await this.assertions.cleanup(),
       };
       const durationMs = Date.now() - startedAt;

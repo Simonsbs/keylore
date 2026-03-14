@@ -9,6 +9,7 @@ import { OnePasswordSecretAdapter } from "./adapters/onepassword-secret-adapter.
 import { VaultSecretAdapter } from "./adapters/vault-secret-adapter.js";
 import { loadConfig, KeyLoreConfig } from "./config.js";
 import { PgAccessTokenRepository } from "./repositories/pg-access-token-repository.js";
+import { PgAuthorizationCodeRepository } from "./repositories/pg-authorization-code-repository.js";
 import { PgApprovalRepository } from "./repositories/pg-approval-repository.js";
 import { PgAuditLogService } from "./repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "./repositories/pg-auth-client-repository.js";
@@ -16,7 +17,9 @@ import { PgBreakGlassRepository } from "./repositories/pg-break-glass-repository
 import { PgCredentialRepository } from "./repositories/pg-credential-repository.js";
 import { PgOAuthClientAssertionRepository } from "./repositories/pg-oauth-client-assertion-repository.js";
 import { PgPolicyRepository } from "./repositories/pg-policy-repository.js";
+import { PgRefreshTokenRepository } from "./repositories/pg-refresh-token-repository.js";
 import { PgRotationRunRepository } from "./repositories/pg-rotation-run-repository.js";
+import { PgTenantRepository } from "./repositories/pg-tenant-repository.js";
 import { ApprovalService } from "./services/approval-service.js";
 import { AuthService } from "./services/auth-service.js";
 import { BackupService } from "./services/backup-service.js";
@@ -29,6 +32,7 @@ import { PolicyEngine } from "./services/policy-engine.js";
 import { PgRateLimitService } from "./services/rate-limit-service.js";
 import { RotationService } from "./services/rotation-service.js";
 import { TelemetryService } from "./services/telemetry.js";
+import { TenantService } from "./services/tenant-service.js";
 import { TraceExportService } from "./services/trace-export-service.js";
 import { TraceService } from "./services/trace-service.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
@@ -50,6 +54,7 @@ export interface KeyLoreApp {
   logger: pino.Logger;
   broker: BrokerService;
   auth: AuthService;
+  tenants: TenantService;
   rotations: RotationService;
   approvals: ApprovalService;
   breakGlass: BreakGlassService;
@@ -86,9 +91,12 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const credentialRepository = new PgCredentialRepository(database);
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
+  const tenantRepository = new PgTenantRepository(database);
   const assertionRepository = new PgOAuthClientAssertionRepository(database);
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
+  const refreshTokens = new PgRefreshTokenRepository(database);
+  const authorizationCodes = new PgAuthorizationCodeRepository(database);
   const approvals = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
   const rotationRuns = new PgRotationRunRepository(database);
@@ -121,17 +129,24 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   await credentialRepository.ensureInitialized();
   await policyRepository.ensureInitialized();
   await authClientRepository.ensureInitialized();
+  await tenantRepository.ensureInitialized();
 
   const authService = new AuthService(
     authClientRepository,
     accessTokens,
+    refreshTokens,
+    authorizationCodes,
     assertionRepository,
+    tenantRepository,
     audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
     config.accessTokenTtlSeconds,
+    config.authorizationCodeTtlSeconds,
+    config.refreshTokenTtlSeconds,
     telemetry,
   );
+  const tenantService = new TenantService(tenantRepository, database, audit, authService);
   const approvalService = new ApprovalService(
     approvals,
     audit,
@@ -163,6 +178,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
       credentialRepository,
       policyRepository,
       authClientRepository,
+      tenantRepository,
       config.bootstrapCatalogPath,
       config.bootstrapPolicyPath,
       config.bootstrapAuthClientsPath,
@@ -177,6 +193,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     new PolicyEngine(),
     approvalService,
     breakGlassService,
+    tenantRepository,
     new SandboxRunner(config),
     validateEgressTarget,
     config,
@@ -187,7 +204,9 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     approvals,
     breakGlassRepository,
     accessTokens,
+    refreshTokens,
     rateLimits,
+    authorizationCodes,
     assertionRepository,
     telemetry,
   );
@@ -200,6 +219,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     logger,
     broker,
     auth: authService,
+    tenants: tenantService,
     rotations: rotationService,
     approvals: approvalService,
     breakGlass: breakGlassService,

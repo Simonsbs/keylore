@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-14
+
+### Added
+
+- `authorization_code` and rotating `refresh_token` support with PKCE for interactive public or confidential clients.
+- Public OAuth clients with `tokenEndpointAuthMethod: "none"` plus redirect URI allowlists.
+- Tenant registry and tenant bootstrap operations across REST and CLI.
+- Refresh-token inspection and revocation APIs for delegated auth operators.
+- Additional integration coverage for PKCE flows, refresh rotation, and tenant bootstrap operations.
+
 ## [0.10.0] - 2026-03-14
 
 ### Added

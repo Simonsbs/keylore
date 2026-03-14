@@ -111,6 +111,7 @@ npm run dev:cli -- auth clients create --file ./client.json
 ```
 
 Shared-secret clients use `tokenEndpointAuthMethod: "client_secret_basic"` or `"client_secret_post"`. `private_key_jwt` clients omit `clientSecret` and provide `jwks`.
+Public interactive clients use `tokenEndpointAuthMethod: "none"`, `grantTypes: ["authorization_code", "refresh_token"]`, and at least one `redirectUri`.
 Include `tenantId` when creating a tenant-scoped client.
 
 ### `auth clients update`
@@ -137,6 +138,14 @@ npm run dev:cli -- auth clients disable <client-id>
 npm run dev:cli -- auth clients rotate-secret <client-id>
 ```
 
+### `auth authorize`
+
+```bash
+npm run dev:cli -- auth authorize --file ./authorize.json
+```
+
+Use this to mint a short-lived PKCE-bound authorization code for an interactive client from the current operator context.
+
 ### `auth tokens list`
 
 ```bash
@@ -148,6 +157,50 @@ npm run dev:cli -- auth tokens list --client-id demo-client --status active
 ```bash
 npm run dev:cli -- auth tokens revoke <token-id>
 ```
+
+### `auth refresh-tokens list`
+
+```bash
+npm run dev:cli -- auth refresh-tokens list --client-id public-mcp-client --status active
+```
+
+### `auth refresh-tokens revoke`
+
+```bash
+npm run dev:cli -- auth refresh-tokens revoke <refresh-token-id>
+```
+
+### `tenants list`
+
+```bash
+npm run dev:cli -- tenants list
+```
+
+### `tenants get`
+
+```bash
+npm run dev:cli -- tenants get tenant-a
+```
+
+### `tenants create`
+
+```bash
+npm run dev:cli -- tenants create --file ./tenant.json
+```
+
+### `tenants update`
+
+```bash
+npm run dev:cli -- tenants update tenant-a --file ./tenant-patch.json
+```
+
+### `tenants bootstrap`
+
+```bash
+npm run dev:cli -- tenants bootstrap --file ./tenant-bootstrap.json
+```
+
+Creates a tenant plus any seed auth clients in one operation.
 
 ### `runtime run`
 

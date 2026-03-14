@@ -13,7 +13,9 @@ import {
   breakGlassRequestSchema,
   credentialRecordSchema,
   policyFileSchema,
+  refreshTokenRecordSchema,
   rotationRunSchema,
+  tenantRecordSchema,
 } from "../domain/types.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { StoredAuthClient } from "../repositories/interfaces.js";
@@ -29,10 +31,12 @@ const backupEnvelopeSchema = z.object({
   version: z.number().int().positive(),
   createdAt: z.string().datetime(),
   sourceVersion: z.string().min(1),
+  tenants: z.array(tenantRecordSchema),
   credentials: z.array(credentialRecordSchema),
   policies: policyFileSchema,
   authClients: z.array(storedAuthClientSchema),
   accessTokens: z.array(accessTokenRecordSchema.extend({ tokenHash: z.string().min(1) })),
+  refreshTokens: z.array(refreshTokenRecordSchema.extend({ tokenHash: z.string().min(1) })),
   approvals: z.array(approvalRequestSchema),
   breakGlassRequests: z.array(breakGlassRequestSchema),
   rotationRuns: z.array(rotationRunSchema).default([]),
@@ -82,11 +86,37 @@ interface BackupAuthClientRow {
   allowed_scopes: string[];
   status: "active" | "disabled";
   token_endpoint_auth_method: string;
+  grant_types: string[];
+  redirect_uris: string[];
   jwks: unknown;
+}
+
+interface BackupTenantRow {
+  tenant_id: string;
+  display_name: string;
+  description: string | null;
+  status: "active" | "disabled";
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 interface BackupAccessTokenRow {
   token_id: string;
+  token_hash: string;
+  client_id: string;
+  tenant_id: string;
+  subject: string;
+  scopes: string[];
+  roles: string[];
+  resource: string | null;
+  expires_at: string | Date;
+  status: "active" | "revoked";
+  created_at: string | Date;
+  last_used_at: string | Date | null;
+}
+
+interface BackupRefreshTokenRow {
+  refresh_token_id: string;
   token_hash: string;
   client_id: string;
   tenant_id: string;
@@ -215,9 +245,11 @@ export class BackupService {
       version: backup.version,
       sourceVersion: backup.sourceVersion,
       createdAt: backup.createdAt,
+      tenants: backup.tenants.length,
       credentials: backup.credentials.length,
       authClients: backup.authClients.length,
       accessTokens: backup.accessTokens.length,
+      refreshTokens: backup.refreshTokens.length,
       approvals: backup.approvals.length,
       breakGlassRequests: backup.breakGlassRequests.length,
       rotationRuns: backup.rotationRuns.length,
@@ -230,11 +262,13 @@ export class BackupService {
   }
 
   public async exportBackup(actor?: AuthContext): Promise<KeyLoreBackup> {
-    const [credentials, policies, authClients, accessTokens, approvals, breakGlassRequests, rotationRuns, auditEvents] = await Promise.all([
+    const [tenants, credentials, policies, authClients, accessTokens, refreshTokens, approvals, breakGlassRequests, rotationRuns, auditEvents] = await Promise.all([
+      this.database.query<BackupTenantRow>("SELECT * FROM tenants ORDER BY tenant_id"),
       this.database.query<BackupCredentialRow>("SELECT * FROM credentials ORDER BY id"),
       this.database.query<BackupPolicyRow>("SELECT * FROM policy_rules ORDER BY id"),
       this.database.query<BackupAuthClientRow>("SELECT * FROM oauth_clients ORDER BY client_id"),
       this.database.query<BackupAccessTokenRow>("SELECT * FROM access_tokens ORDER BY created_at"),
+      this.database.query<BackupRefreshTokenRow>("SELECT * FROM refresh_tokens ORDER BY created_at"),
       this.database.query<BackupApprovalRow>("SELECT * FROM approval_requests ORDER BY created_at"),
       this.database.query<BackupBreakGlassRow>("SELECT * FROM break_glass_requests ORDER BY created_at"),
       this.database.query<BackupRotationRunRow>("SELECT * FROM rotation_runs ORDER BY planned_at"),
@@ -246,6 +280,14 @@ export class BackupService {
       version: 1,
       createdAt: new Date().toISOString(),
       sourceVersion: this.sourceVersion,
+      tenants: tenants.rows.map((row) => ({
+        tenantId: row.tenant_id,
+        displayName: row.display_name,
+        description: row.description ?? undefined,
+        status: row.status,
+        createdAt: toIso(row.created_at),
+        updatedAt: toIso(row.updated_at),
+      })),
       credentials: credentials.rows.map((row) => ({
         id: row.id,
         tenantId: row.tenant_id,
@@ -288,12 +330,28 @@ export class BackupService {
         allowedScopes: row.allowed_scopes,
         status: row.status,
         tokenEndpointAuthMethod: row.token_endpoint_auth_method,
+        grantTypes: row.grant_types,
+        redirectUris: row.redirect_uris,
         jwks: normalizeJwks(row.jwks),
         secretHash: row.secret_hash ?? undefined,
         secretSalt: row.secret_salt ?? undefined,
       })),
       accessTokens: accessTokens.rows.map((row) => ({
         tokenId: row.token_id,
+        tokenHash: row.token_hash,
+        clientId: row.client_id,
+        tenantId: row.tenant_id,
+        subject: row.subject,
+        scopes: row.scopes,
+        roles: row.roles,
+        resource: row.resource ?? undefined,
+        expiresAt: toIso(row.expires_at),
+        status: row.status,
+        createdAt: toIso(row.created_at),
+        lastUsedAt: toIso(row.last_used_at) ?? undefined,
+      })),
+      refreshTokens: refreshTokens.rows.map((row) => ({
+        refreshTokenId: row.refresh_token_id,
         tokenHash: row.token_hash,
         clientId: row.client_id,
         tenantId: row.tenant_id,
@@ -415,6 +473,7 @@ export class BackupService {
   public async restoreBackupPayload(backup: KeyLoreBackup, actor?: AuthContext): Promise<KeyLoreBackup> {
     await this.database.withTransaction(async (client) => {
       await client.query("DELETE FROM access_tokens");
+      await client.query("DELETE FROM refresh_tokens");
       await client.query("DELETE FROM approval_requests");
       await client.query("DELETE FROM break_glass_requests");
       await client.query("DELETE FROM rotation_runs");
@@ -422,7 +481,24 @@ export class BackupService {
       await client.query("DELETE FROM oauth_clients");
       await client.query("DELETE FROM policy_rules");
       await client.query("DELETE FROM credentials");
+      await client.query("DELETE FROM tenants");
       await client.query("DELETE FROM request_rate_limits");
+
+      for (const tenant of backup.tenants) {
+        await client.query(
+          `INSERT INTO tenants (
+             tenant_id, display_name, description, status, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            tenant.tenantId,
+            tenant.displayName,
+            tenant.description ?? null,
+            tenant.status,
+            tenant.createdAt,
+            tenant.updatedAt,
+          ],
+        );
+      }
 
       for (const credential of backup.credentials) {
         await client.query(
@@ -485,8 +561,8 @@ export class BackupService {
         await client.query(
           `INSERT INTO oauth_clients (
              client_id, tenant_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
-             token_endpoint_auth_method, jwks
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+             token_endpoint_auth_method, grant_types, redirect_uris, jwks
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             clientRecord.clientId,
             clientRecord.tenantId,
@@ -497,6 +573,8 @@ export class BackupService {
             clientRecord.allowedScopes,
             clientRecord.status,
             clientRecord.tokenEndpointAuthMethod,
+            clientRecord.grantTypes,
+            clientRecord.redirectUris,
             clientRecord.jwks,
           ],
         );
@@ -513,6 +591,32 @@ export class BackupService {
            )`,
           [
             token.tokenId,
+            token.tokenHash,
+            token.clientId,
+            token.tenantId,
+            token.subject,
+            token.scopes,
+            token.roles,
+            token.resource ?? null,
+            token.expiresAt,
+            token.status,
+            token.createdAt,
+            token.lastUsedAt ?? null,
+          ],
+        );
+      }
+
+      for (const token of backup.refreshTokens) {
+        await client.query(
+          `INSERT INTO refresh_tokens (
+             refresh_token_id, token_hash, client_id, tenant_id, subject, scopes, roles,
+             resource, expires_at, status, created_at, last_used_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11, $12
+           )`,
+          [
+            token.refreshTokenId,
             token.tokenHash,
             token.clientId,
             token.tenantId,

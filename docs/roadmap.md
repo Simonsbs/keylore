@@ -78,8 +78,17 @@
 - preserve tenant identity in logical backup export and restore flows
 - add end-to-end tenant-isolation coverage for auth-client visibility, catalog reads, and write rejection paths
 
+## v0.11
+
+- completed:
+- add `authorization_code` plus rotating `refresh_token` support with PKCE for public and confidential clients
+- add public OAuth client mode with `tokenEndpointAuthMethod: none`
+- add refresh-token inspection and revocation APIs for operators
+- add first-class tenant records plus tenant bootstrap, list, read, and update operations
+- add bootstrap import support for tenant records derived from seeded catalog, policy, and auth-client data
+- expand integration coverage for interactive OAuth flows and tenant bootstrap operations
+
 ## v1.0
 
-- broaden OAuth authorization flows beyond client credentials where interactive users need them
 - add admin UI
 - add formal conformance and security hardening suites

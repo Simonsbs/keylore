@@ -130,3 +130,51 @@ test("cli backup restore recreates deleted catalogue data", async () => {
 
   await close();
 });
+
+test("cli tenants bootstrap creates a tenant and seeded public client", async () => {
+  const { app, close, tempDir } = await makeTestApp();
+  const payloadPath = path.join(tempDir, "tenant-bootstrap.json");
+  await fs.writeFile(
+    payloadPath,
+    `${JSON.stringify(
+      {
+        tenant: {
+          tenantId: "tenant-cli",
+          displayName: "Tenant CLI",
+        },
+        authClients: [
+          {
+            clientId: "tenant-cli-public",
+            displayName: "Tenant CLI Public",
+            roles: ["consumer"],
+            allowedScopes: ["catalog:read", "mcp:use"],
+            status: "active",
+            tokenEndpointAuthMethod: "none",
+            grantTypes: ["authorization_code", "refresh_token"],
+            redirectUris: ["http://127.0.0.1/callback"],
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const result = JSON.parse(
+    await runCli(app, ["tenants", "bootstrap", "--file", payloadPath]),
+  ) as {
+    tenant: { tenantId: string; authClientCount: number };
+    clients: Array<{ client: { clientId: string; grantTypes: string[] } }>;
+  };
+
+  assert.equal(result.tenant.tenantId, "tenant-cli");
+  assert.equal(result.tenant.authClientCount, 1);
+  assert.deepEqual(result.clients[0]?.client.grantTypes, ["authorization_code", "refresh_token"]);
+
+  const tenants = JSON.parse(await runCli(app, ["tenants", "list"])) as {
+    tenants: Array<{ tenantId: string }>;
+  };
+  assert.equal(tenants.tenants.some((tenant) => tenant.tenantId === "tenant-cli"), true);
+
+  await close();
+});

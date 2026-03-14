@@ -21,7 +21,11 @@ import {
   RuntimeExecutionResult,
 } from "../domain/types.js";
 import { KeyLoreConfig } from "../config.js";
-import { CredentialRepository, PolicyRepository } from "../repositories/interfaces.js";
+import {
+  CredentialRepository,
+  PolicyRepository,
+  TenantRepository,
+} from "../repositories/interfaces.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { ApprovalService } from "./approval-service.js";
@@ -130,6 +134,7 @@ export class BrokerService {
     private readonly policyEngine: PolicyEngine,
     private readonly approvals: ApprovalService,
     private readonly breakGlass: BreakGlassService,
+    private readonly tenants: TenantRepository,
     private readonly sandbox: SandboxRunner,
     private readonly validateTarget: (rawUrl: string, config: KeyLoreConfig) => Promise<URL>,
     private readonly config: KeyLoreConfig,
@@ -198,9 +203,14 @@ export class BrokerService {
     if (context.tenantId && credential.tenantId !== context.tenantId) {
       throw new Error("Tenant access denied.");
     }
+    const tenantId = context.tenantId ?? credential.tenantId;
+    const tenant = await this.tenants.getById(tenantId);
+    if (!tenant) {
+      throw new Error(`Unknown tenant: ${tenantId}`);
+    }
     const created = await this.credentials.create({
       ...credential,
-      tenantId: context.tenantId ?? credential.tenantId,
+      tenantId,
     });
 
     await this.audit.record({

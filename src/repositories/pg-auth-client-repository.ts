@@ -1,4 +1,5 @@
 import {
+  AuthGrantType,
   AuthClientRecord,
   AuthClientAuthMethod,
   authClientRecordSchema,
@@ -18,6 +19,8 @@ interface AuthClientRow {
   allowed_scopes: string[];
   status: "active" | "disabled";
   token_endpoint_auth_method: AuthClientAuthMethod;
+  grant_types: AuthGrantType[];
+  redirect_uris: string[];
   jwks: unknown;
 }
 
@@ -40,6 +43,8 @@ function mapRow(row: AuthClientRow): StoredAuthClient {
     allowedScopes: row.allowed_scopes,
     status: row.status,
     tokenEndpointAuthMethod: row.token_endpoint_auth_method,
+    grantTypes: row.grant_types,
+    redirectUris: row.redirect_uris,
     jwks: normalizeJwks(row.jwks).map((entry) => publicJwkSchema.parse(entry)),
   });
 
@@ -59,6 +64,8 @@ function stripSecrets(client: StoredAuthClient): AuthClientRecord {
     allowedScopes: client.allowedScopes,
     status: client.status,
     tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+    grantTypes: client.grantTypes,
+    redirectUris: client.redirectUris,
     jwks: client.jwks,
   });
 }
@@ -102,14 +109,16 @@ export class PgAuthClientRepository implements AuthClientRepository {
     allowedScopes: string[];
     status: "active" | "disabled";
     tokenEndpointAuthMethod: AuthClientAuthMethod;
+    grantTypes: AuthGrantType[];
+    redirectUris: string[];
     jwks: Array<Record<string, unknown>>;
   }): Promise<void> {
     await this.database.query(
       `INSERT INTO oauth_clients (
         client_id, tenant_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
-        token_endpoint_auth_method, jwks
+        token_endpoint_auth_method, grant_types, redirect_uris, jwks
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
       )
       ON CONFLICT (client_id) DO UPDATE SET
         tenant_id = EXCLUDED.tenant_id,
@@ -120,6 +129,8 @@ export class PgAuthClientRepository implements AuthClientRepository {
         allowed_scopes = EXCLUDED.allowed_scopes,
         status = EXCLUDED.status,
         token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
+        grant_types = EXCLUDED.grant_types,
+        redirect_uris = EXCLUDED.redirect_uris,
         jwks = EXCLUDED.jwks,
         updated_at = NOW()`,
       [
@@ -132,6 +143,8 @@ export class PgAuthClientRepository implements AuthClientRepository {
         client.allowedScopes,
         client.status,
         client.tokenEndpointAuthMethod,
+        client.grantTypes,
+        client.redirectUris,
         client.jwks,
       ],
     );

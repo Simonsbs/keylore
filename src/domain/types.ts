@@ -50,11 +50,19 @@ export const authClientAuthMethodSchema = z.enum([
   "client_secret_basic",
   "client_secret_post",
   "private_key_jwt",
+  "none",
+]);
+export const authGrantTypeSchema = z.enum([
+  "client_credentials",
+  "authorization_code",
+  "refresh_token",
 ]);
 export const tenantIdSchema = z.string().min(1).max(128);
+export const tenantStatusSchema = z.enum(["active", "disabled"]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "expired"]);
 export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
 export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
+export const authCodeChallengeMethodSchema = z.enum(["S256"]);
 export const breakGlassStatusSchema = z.enum(["pending", "active", "denied", "expired", "revoked"]);
 export const reviewDecisionSchema = z.enum(["approved", "denied"]);
 export const rotationRunStatusSchema = z.enum([
@@ -262,12 +270,49 @@ export const authClientSeedSchema = z
     displayName: z.string().min(1),
     secretRef: z.string().min(1).optional(),
     tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+    grantTypes: z.array(authGrantTypeSchema).min(1).default(["client_credentials"]),
+    redirectUris: z.array(z.string().url()).default([]),
     jwks: z.array(publicJwkSchema).min(1).optional(),
     roles: z.array(principalRoleSchema).min(1),
     allowedScopes: z.array(accessScopeSchema).min(1),
     status: authClientStatusSchema.default("active"),
   })
   .superRefine((value, ctx) => {
+    const supportsAuthCode = value.grantTypes.includes("authorization_code");
+
+    if (supportsAuthCode && value.redirectUris.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirectUris"],
+        message: "authorization_code clients require at least one redirect URI.",
+      });
+    }
+
+    if (value.tokenEndpointAuthMethod === "none") {
+      if (!supportsAuthCode) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grantTypes"],
+          message: "Public clients must support authorization_code.",
+        });
+      }
+      if (value.grantTypes.includes("client_credentials")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grantTypes"],
+          message: "Public clients cannot use client_credentials.",
+        });
+      }
+      if (value.secretRef) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["secretRef"],
+          message: "Public clients must not define secretRef.",
+        });
+      }
+      return;
+    }
+
     if (value.tokenEndpointAuthMethod === "private_key_jwt") {
       if (!value.jwks?.length) {
         ctx.addIssue({
@@ -308,6 +353,8 @@ export const authClientRecordSchema = z.object({
   allowedScopes: z.array(accessScopeSchema).min(1),
   status: authClientStatusSchema,
   tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+  grantTypes: z.array(authGrantTypeSchema).min(1).default(["client_credentials"]),
+  redirectUris: z.array(z.string().url()).default([]),
   jwks: z.array(publicJwkSchema).default([]),
 });
 
@@ -321,9 +368,53 @@ export const authClientCreateInputSchema = z
     clientSecret: z.string().min(16).optional(),
     status: authClientStatusSchema.default("active"),
     tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+    grantTypes: z.array(authGrantTypeSchema).min(1).default(["client_credentials"]),
+    redirectUris: z.array(z.string().url()).default([]),
     jwks: z.array(publicJwkSchema).min(1).optional(),
   })
   .superRefine((value, ctx) => {
+    const supportsAuthCode = value.grantTypes.includes("authorization_code");
+
+    if (supportsAuthCode && value.redirectUris.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirectUris"],
+        message: "authorization_code clients require at least one redirect URI.",
+      });
+    }
+
+    if (value.tokenEndpointAuthMethod === "none") {
+      if (!supportsAuthCode) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grantTypes"],
+          message: "Public clients must support authorization_code.",
+        });
+      }
+      if (value.grantTypes.includes("client_credentials")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grantTypes"],
+          message: "Public clients cannot use client_credentials.",
+        });
+      }
+      if (value.clientSecret) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["clientSecret"],
+          message: "Public clients do not use shared secrets.",
+        });
+      }
+      if (value.jwks?.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["jwks"],
+          message: "Public clients do not use client assertion keys.",
+        });
+      }
+      return;
+    }
+
     if (value.tokenEndpointAuthMethod !== "private_key_jwt") {
       return;
     }
@@ -352,6 +443,8 @@ export const authClientUpdateInputSchema = z
     allowedScopes: z.array(accessScopeSchema).min(1).optional(),
     status: authClientStatusSchema.optional(),
     tokenEndpointAuthMethod: authClientAuthMethodSchema.optional(),
+    grantTypes: z.array(authGrantTypeSchema).min(1).optional(),
+    redirectUris: z.array(z.string().url()).min(1).optional(),
     jwks: z.array(publicJwkSchema).min(1).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -370,13 +463,49 @@ export const authClientSecretOutputSchema = z.object({
 export const tokenIssueInputSchema = z.object({
   clientId: z.string().min(1),
   clientSecret: z.string().min(1).optional(),
-  grantType: z.literal("client_credentials"),
+  grantType: authGrantTypeSchema,
   scope: z.array(accessScopeSchema).optional(),
   resource: z.string().url().optional(),
+  code: z.string().min(1).optional(),
+  codeVerifier: z.string().min(43).max(128).optional(),
+  redirectUri: z.string().url().optional(),
+  refreshToken: z.string().min(1).optional(),
   clientAssertionType: z
     .literal("urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
     .optional(),
   clientAssertion: z.string().min(1).optional(),
+}).superRefine((value, ctx) => {
+  if (value.grantType === "authorization_code") {
+    if (!value.code) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["code"],
+        message: "authorization_code requires code.",
+      });
+    }
+    if (!value.codeVerifier) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["codeVerifier"],
+        message: "authorization_code requires codeVerifier.",
+      });
+    }
+    if (!value.redirectUri) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirectUri"],
+        message: "authorization_code requires redirectUri.",
+      });
+    }
+  }
+
+  if (value.grantType === "refresh_token" && !value.refreshToken) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["refreshToken"],
+      message: "refresh_token requires refreshToken.",
+    });
+  }
 });
 
 export const tokenIssueOutputSchema = z.object({
@@ -384,6 +513,7 @@ export const tokenIssueOutputSchema = z.object({
   token_type: z.literal("Bearer"),
   expires_in: z.number().int().positive(),
   scope: z.string().min(1),
+  refresh_token: z.string().min(1).optional(),
 });
 
 export const authContextSchema = z.object({
@@ -514,9 +644,127 @@ export const accessTokenRevokeOutputSchema = z.object({
   token: accessTokenRecordSchema.nullable(),
 });
 
+export const refreshTokenRecordSchema = z.object({
+  refreshTokenId: z.string().uuid(),
+  clientId: z.string().min(1),
+  tenantId: tenantIdSchema.default("default"),
+  subject: z.string().min(1),
+  scopes: z.array(accessScopeSchema).min(1),
+  roles: z.array(principalRoleSchema).min(1),
+  resource: z.string().url().optional(),
+  expiresAt: z.string().datetime(),
+  status: accessTokenStatusSchema,
+  createdAt: z.string().datetime(),
+  lastUsedAt: z.string().datetime().optional(),
+});
+
+export const refreshTokenListOutputSchema = z.object({
+  tokens: z.array(refreshTokenRecordSchema),
+});
+
+export const refreshTokenRevokeOutputSchema = z.object({
+  token: refreshTokenRecordSchema.nullable(),
+});
+
 export const authTokenListQuerySchema = z.object({
   clientId: z.string().min(1).optional(),
   status: accessTokenStatusSchema.optional(),
+});
+
+export const authorizationRequestInputSchema = z.object({
+  clientId: z.string().min(1),
+  redirectUri: z.string().url(),
+  scope: z.array(accessScopeSchema).optional(),
+  resource: z.string().url().optional(),
+  codeChallenge: z.string().min(43).max(128),
+  codeChallengeMethod: authCodeChallengeMethodSchema.default("S256"),
+  state: z.string().max(512).optional(),
+});
+
+export const authorizationRequestOutputSchema = z.object({
+  code: z.string().min(1),
+  clientId: z.string().min(1),
+  tenantId: tenantIdSchema,
+  subject: z.string().min(1),
+  redirectUri: z.string().url(),
+  expiresIn: z.number().int().positive(),
+  scope: z.string().min(1),
+  state: z.string().max(512).optional(),
+});
+
+export const tenantRecordSchema = z.object({
+  tenantId: tenantIdSchema,
+  displayName: z.string().min(1),
+  description: z.string().max(2000).optional(),
+  status: tenantStatusSchema.default("active"),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const tenantCreateInputSchema = z.object({
+  tenantId: tenantIdSchema,
+  displayName: z.string().min(1),
+  description: z.string().max(2000).optional(),
+  status: tenantStatusSchema.default("active"),
+});
+
+export const tenantUpdateInputSchema = z
+  .object({
+    displayName: z.string().min(1).optional(),
+    description: z.string().max(2000).optional(),
+    status: tenantStatusSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided.",
+  });
+
+export const tenantSummarySchema = tenantRecordSchema.extend({
+  credentialCount: z.number().int().min(0),
+  authClientCount: z.number().int().min(0),
+  activeTokenCount: z.number().int().min(0),
+});
+
+export const tenantListOutputSchema = z.object({
+  tenants: z.array(tenantSummarySchema),
+});
+
+export const tenantGetOutputSchema = z.object({
+  tenant: tenantSummarySchema.nullable(),
+});
+
+export const tenantBootstrapClientInputSchema = z
+  .object({
+    clientId: z.string().min(1),
+    displayName: z.string().min(1),
+    roles: z.array(principalRoleSchema).min(1),
+    allowedScopes: z.array(accessScopeSchema).min(1),
+    clientSecret: z.string().min(16).optional(),
+    status: authClientStatusSchema.default("active"),
+    tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+    grantTypes: z.array(authGrantTypeSchema).min(1).default(["client_credentials"]),
+    redirectUris: z.array(z.string().url()).default([]),
+    jwks: z.array(publicJwkSchema).min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    authClientCreateInputSchema.safeParse({
+      ...value,
+      tenantId: "default",
+    }).error?.issues.forEach((issue) => {
+      ctx.addIssue({
+        ...issue,
+        path: issue.path.filter((segment) => segment !== "tenantId"),
+      });
+    });
+  });
+
+export const tenantBootstrapInputSchema = z.object({
+  tenant: tenantCreateInputSchema,
+  authClients: z.array(tenantBootstrapClientInputSchema).default([]),
+});
+
+export const tenantBootstrapOutputSchema = z.object({
+  tenant: tenantSummarySchema,
+  clients: z.array(authClientSecretOutputSchema),
 });
 
 export const secretInspectionSchema = z.object({
@@ -562,7 +810,9 @@ export const maintenanceTaskResultSchema = z.object({
   approvalsExpired: z.number().int().min(0),
   breakGlassExpired: z.number().int().min(0),
   accessTokensExpired: z.number().int().min(0),
+  refreshTokensExpired: z.number().int().min(0),
   rateLimitBucketsDeleted: z.number().int().min(0),
+  authorizationCodesExpired: z.number().int().min(0),
   oauthClientAssertionsExpired: z.number().int().min(0),
 });
 
@@ -664,9 +914,11 @@ export const backupSummarySchema = z.object({
   version: z.number().int().positive(),
   sourceVersion: z.string().min(1),
   createdAt: z.string().datetime(),
+  tenants: z.number().int().min(0),
   credentials: z.number().int().min(0),
   authClients: z.number().int().min(0),
   accessTokens: z.number().int().min(0),
+  refreshTokens: z.number().int().min(0),
   approvals: z.number().int().min(0),
   breakGlassRequests: z.number().int().min(0),
   rotationRuns: z.number().int().min(0),
@@ -689,6 +941,7 @@ export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type PrincipalRole = z.infer<typeof principalRoleSchema>;
 export type AccessScope = z.infer<typeof accessScopeSchema>;
 export type AuthClientAuthMethod = z.infer<typeof authClientAuthMethodSchema>;
+export type AuthGrantType = z.infer<typeof authGrantTypeSchema>;
 export type AuthClientSeed = z.infer<typeof authClientSeedSchema>;
 export type AuthClientSeedFile = z.infer<typeof authClientSeedFileSchema>;
 export type AuthClientRecord = z.infer<typeof authClientRecordSchema>;
@@ -697,10 +950,14 @@ export type AuthClientUpdateInput = z.infer<typeof authClientUpdateInputSchema>;
 export type AuthContext = z.infer<typeof authContextSchema>;
 export type TokenIssueInput = z.infer<typeof tokenIssueInputSchema>;
 export type TokenIssueOutput = z.infer<typeof tokenIssueOutputSchema>;
+export type TenantRecord = z.infer<typeof tenantRecordSchema>;
+export type TenantCreateInput = z.infer<typeof tenantCreateInputSchema>;
+export type TenantUpdateInput = z.infer<typeof tenantUpdateInputSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
 export type BreakGlassRequest = z.infer<typeof breakGlassRequestSchema>;
 export type AccessMode = z.infer<typeof accessModeSchema>;
 export type AccessTokenRecord = z.infer<typeof accessTokenRecordSchema>;
+export type RefreshTokenRecord = z.infer<typeof refreshTokenRecordSchema>;
 export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
 export type RuntimeExecutionInput = z.infer<typeof runtimeExecutionInputSchema>;
 export type RuntimeExecutionResult = z.infer<typeof runtimeExecutionResultSchema>;

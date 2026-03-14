@@ -28,6 +28,8 @@ export interface KeyLoreConfig {
   maintenanceEnabled: boolean;
   maintenanceIntervalMs: number;
   accessTokenTtlSeconds: number;
+  authorizationCodeTtlSeconds: number;
+  refreshTokenTtlSeconds: number;
   approvalTtlSeconds: number;
   approvalReviewQuorum: number;
   breakGlassMaxDurationSeconds: number;
@@ -93,6 +95,8 @@ const envSchema = z.object({
     .prefault("true"),
   KEYLORE_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
+  KEYLORE_AUTHORIZATION_CODE_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+  KEYLORE_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).default(2592000),
   KEYLORE_APPROVAL_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
   KEYLORE_APPROVAL_REVIEW_QUORUM: z.coerce.number().int().min(1).max(5).default(1),
   KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
@@ -146,7 +150,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.10.0",
+    version: "0.11.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -173,6 +177,8 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     maintenanceEnabled: env.KEYLORE_MAINTENANCE_ENABLED,
     maintenanceIntervalMs: env.KEYLORE_MAINTENANCE_INTERVAL_MS,
     accessTokenTtlSeconds: env.KEYLORE_ACCESS_TOKEN_TTL_SECONDS,
+    authorizationCodeTtlSeconds: env.KEYLORE_AUTHORIZATION_CODE_TTL_SECONDS,
+    refreshTokenTtlSeconds: env.KEYLORE_REFRESH_TOKEN_TTL_SECONDS,
     approvalTtlSeconds: env.KEYLORE_APPROVAL_TTL_SECONDS,
     approvalReviewQuorum: env.KEYLORE_APPROVAL_REVIEW_QUORUM,
     breakGlassMaxDurationSeconds: env.KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS,

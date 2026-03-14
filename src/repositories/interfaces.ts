@@ -1,6 +1,7 @@
 import {
   AccessTokenRecord,
   ApprovalRequest,
+  AuthGrantType,
   AuthClientRecord,
   AuthClientAuthMethod,
   BreakGlassRequest,
@@ -8,7 +9,9 @@ import {
   CredentialRecord,
   PolicyFile,
   PrincipalRole,
+  RefreshTokenRecord,
   RotationRun,
+  TenantRecord,
 } from "../domain/types.js";
 
 export interface CredentialRepository {
@@ -49,6 +52,8 @@ export interface AuthClientRepository {
     allowedScopes: string[];
     status: "active" | "disabled";
     tokenEndpointAuthMethod: AuthClientAuthMethod;
+    grantTypes: AuthGrantType[];
+    redirectUris: string[];
     jwks: Array<Record<string, unknown>>;
   }): Promise<void>;
 }
@@ -83,6 +88,91 @@ export interface AccessTokenRepository {
 
 export interface AccessTokenRecordWithHash extends AccessTokenRecord {
   tokenHash: string;
+}
+
+export interface RefreshTokenRepository {
+  issue(input: {
+    tokenHash: string;
+    clientId: string;
+    tenantId: string;
+    subject: string;
+    scopes: string[];
+    roles: PrincipalRole[];
+    resource?: string;
+    expiresAt: string;
+  }): Promise<void>;
+  getByHash(tokenHash: string): Promise<RefreshTokenRecordWithHash | undefined>;
+  touch(tokenHash: string): Promise<void>;
+  list(filter?: {
+    clientId?: string;
+    tenantId?: string;
+    status?: "active" | "revoked";
+  }): Promise<RefreshTokenRecord[]>;
+  expireStale(): Promise<number>;
+  revokeById(refreshTokenId: string): Promise<RefreshTokenRecord | undefined>;
+  revokeByClientId(clientId: string): Promise<number>;
+  replace(tokenHash: string, replacedByTokenId: string): Promise<RefreshTokenRecordWithHash | undefined>;
+}
+
+export interface RefreshTokenRecordWithHash extends RefreshTokenRecord {
+  tokenHash: string;
+}
+
+export interface AuthorizationCodeRepository {
+  create(input: {
+    codeId: string;
+    codeHash: string;
+    clientId: string;
+    tenantId: string;
+    subject: string;
+    scopes: string[];
+    roles: PrincipalRole[];
+    resource?: string;
+    redirectUri: string;
+    codeChallenge: string;
+    codeChallengeMethod: "S256";
+    expiresAt: string;
+  }): Promise<void>;
+  consumeByHash(codeHash: string): Promise<AuthorizationCodeRecord | undefined>;
+  cleanup(): Promise<number>;
+  revokeByClientId(clientId: string): Promise<number>;
+}
+
+export interface AuthorizationCodeRecord {
+  codeId: string;
+  clientId: string;
+  tenantId: string;
+  subject: string;
+  scopes: string[];
+  roles: PrincipalRole[];
+  resource?: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  expiresAt: string;
+  status: "active" | "consumed" | "revoked";
+  createdAt: string;
+  consumedAt?: string;
+}
+
+export interface TenantRepository {
+  ensureInitialized(): Promise<void>;
+  list(): Promise<TenantRecord[]>;
+  getById(tenantId: string): Promise<TenantRecord | undefined>;
+  create(input: {
+    tenantId: string;
+    displayName: string;
+    description?: string;
+    status: "active" | "disabled";
+  }): Promise<TenantRecord>;
+  update(
+    tenantId: string,
+    patch: {
+      displayName?: string;
+      description?: string;
+      status?: "active" | "disabled";
+    },
+  ): Promise<TenantRecord | undefined>;
 }
 
 export interface ApprovalRepository {

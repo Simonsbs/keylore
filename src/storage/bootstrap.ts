@@ -4,6 +4,7 @@ import {
   AuthClientRepository,
   CredentialRepository,
   PolicyRepository,
+  TenantRepository,
 } from "../repositories/interfaces.js";
 import { hashSecret } from "../services/auth-secrets.js";
 
@@ -11,15 +12,28 @@ export async function bootstrapFromFiles(
   credentialRepository: CredentialRepository,
   policyRepository: PolicyRepository,
   authClientRepository: AuthClientRepository,
+  tenantRepository: TenantRepository,
   catalogPath: string,
   policyPath: string,
   authClientsPath: string,
 ): Promise<void> {
+  const ensureTenant = async (tenantId: string) => {
+    const existing = await tenantRepository.getById(tenantId);
+    if (!existing) {
+      await tenantRepository.create({
+        tenantId,
+        displayName: tenantId,
+        status: "active",
+      });
+    }
+  };
+
   if ((await credentialRepository.count()) === 0) {
     const catalogText = await readTextFile(catalogPath);
     if (catalogText) {
       const catalog = catalogFileSchema.parse(JSON.parse(catalogText));
       for (const credential of catalog.credentials) {
+        await ensureTenant(credential.tenantId);
         await credentialRepository.create(credential);
       }
     }
@@ -29,6 +43,9 @@ export async function bootstrapFromFiles(
     const policyText = await readTextFile(policyPath);
     if (policyText) {
       const policyFile = policyFileSchema.parse(JSON.parse(policyText));
+      for (const rule of policyFile.rules) {
+        await ensureTenant(rule.tenantId);
+      }
       await policyRepository.replaceAll(policyFile);
     }
   }
@@ -40,12 +57,13 @@ export async function bootstrapFromFiles(
       const missingSecrets: string[] = [];
       for (const client of authClients.clients) {
         const secret = client.secretRef ? process.env[client.secretRef] : undefined;
-        if (client.tokenEndpointAuthMethod !== "private_key_jwt" && !secret) {
+        if (!["private_key_jwt", "none"].includes(client.tokenEndpointAuthMethod) && !secret) {
           missingSecrets.push(`${client.clientId}:${client.secretRef}`);
           continue;
         }
 
         const hashed = secret ? hashSecret(secret) : undefined;
+        await ensureTenant(client.tenantId);
         await authClientRepository.upsert({
           clientId: client.clientId,
           tenantId: client.tenantId,
@@ -56,6 +74,8 @@ export async function bootstrapFromFiles(
           allowedScopes: client.allowedScopes,
           status: client.status,
           tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+          grantTypes: client.grantTypes,
+          redirectUris: client.redirectUris,
           jwks: client.jwks ?? [],
         });
       }

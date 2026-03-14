@@ -13,6 +13,7 @@ import {
   backupInspectOutputSchema,
   breakGlassRequestInputSchema,
   breakGlassReviewInputSchema,
+  authorizationRequestInputSchema,
   authClientCreateInputSchema,
   authClientRotateSecretInputSchema,
   authClientUpdateInputSchema,
@@ -27,6 +28,9 @@ import {
   rotationRunListOutputSchema,
   rotationTransitionInputSchema,
   runtimeExecutionInputSchema,
+  tenantBootstrapInputSchema,
+  tenantCreateInputSchema,
+  tenantUpdateInputSchema,
   traceExportStatusOutputSchema,
   traceListOutputSchema,
   tokenIssueInputSchema,
@@ -160,6 +164,15 @@ function normalizeRoute(pathname: string): string {
   }
   if (pathname.startsWith("/v1/auth/tokens/") && pathname.endsWith("/revoke")) {
     return "/v1/auth/tokens/:id/revoke";
+  }
+  if (pathname.startsWith("/v1/auth/refresh-tokens/") && pathname.endsWith("/revoke")) {
+    return "/v1/auth/refresh-tokens/:id/revoke";
+  }
+  if (pathname === "/v1/tenants/bootstrap") {
+    return "/v1/tenants/bootstrap";
+  }
+  if (pathname.startsWith("/v1/tenants/")) {
+    return "/v1/tenants/:id";
   }
   if (pathname.startsWith("/v1/system/backups/")) {
     return "/v1/system/backups/:action";
@@ -363,6 +376,11 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
             return;
           }
 
+          if (url.pathname === "/oauth/authorize" && req.method === "POST") {
+            await handleOAuthAuthorize(app, req as RequestWithAuth, res);
+            return;
+          }
+
           if (url.pathname.startsWith("/v1/")) {
             await handleApiRequest(app, req as RequestWithAuth, res, url);
             return;
@@ -398,8 +416,17 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                   ? 401
                   : message === "Access token resource does not match this protected resource."
                     ? 401
+                : message === "Invalid authorization code." ||
+                    message === "Invalid code verifier." ||
+                    message === "Invalid redirect URI." ||
+                    message === "Invalid refresh token." ||
+                    message === "Refresh token expired." ||
+                    message === "Refresh token resource does not match this protected resource."
+                  ? 401
                 : message.startsWith("Client assertion replay detected") ||
-                    message.startsWith("An open rotation already exists")
+                    message.startsWith("An open rotation already exists") ||
+                    message.startsWith("Client already exists") ||
+                    message.startsWith("Tenant already exists")
                   ? 409
                   : message.startsWith("Invalid client assertion") ||
                       message.startsWith("Client assertion ") ||
@@ -407,8 +434,18 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                     ? 401
                     : message === "No valid scopes were granted."
                       ? 400
-                      : message.startsWith("Client already exists")
-                        ? 409
+                      : message.startsWith("private_key_jwt clients do not support") ||
+                          message.startsWith("none clients do not support") ||
+                          message === "Unknown authorization client." ||
+                          message === "Client does not support authorization_code." ||
+                          message === "Unsupported grant type for client." ||
+                          message === "Requested resource exceeds the caller resource binding." ||
+                          message === "No valid roles were granted." ||
+                          message === "Unsupported code challenge method."
+                  ? 400
+                : message.startsWith("Unknown tenant:") ||
+                    message.startsWith("Tenant is disabled:")
+                  ? 403
                 : message.startsWith("private_key_jwt clients do not support")
                   ? 400
                 : message.startsWith("Reviewer has already reviewed")
@@ -474,11 +511,37 @@ async function handleOAuthToken(
     grantType: form.get("grant_type") ?? undefined,
     scope,
     resource: form.get("resource") ?? undefined,
+    code: form.get("code") ?? undefined,
+    codeVerifier: form.get("code_verifier") ?? undefined,
+    redirectUri: form.get("redirect_uri") ?? undefined,
+    refreshToken: form.get("refresh_token") ?? undefined,
     clientAssertionType: form.get("client_assertion_type") ?? undefined,
     clientAssertion: form.get("client_assertion") ?? undefined,
   });
   const token = await app.auth.issueToken(payload);
   respondJson(res, 200, token);
+}
+
+async function handleOAuthAuthorize(
+  app: KeyLoreApp,
+  req: RequestWithAuth,
+  res: ServerResponse,
+): Promise<void> {
+  const context = await authenticateRequest(
+    app,
+    req,
+    res,
+    [],
+    "api",
+    `${app.config.publicBaseUrl}/v1`,
+  );
+  if (!context) {
+    return;
+  }
+
+  const body = authorizationRequestInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+  const authorization = await app.auth.authorize(context, body);
+  respondJson(res, 200, authorization);
 }
 
 async function handleApiRequest(
@@ -681,6 +744,88 @@ async function handleApiRequest(
       tenantId: context.tenantId,
     });
     respondJson(res, 200, { tokens });
+    return;
+  }
+
+  if (url.pathname === "/v1/auth/refresh-tokens" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["auth:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["auth:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
+    const query = authTokenListQuerySchema.parse({
+      clientId: url.searchParams.get("clientId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    });
+    const tokens = await app.auth.listRefreshTokens({
+      ...query,
+      tenantId: context.tenantId,
+    });
+    respondJson(res, 200, { tokens });
+    return;
+  }
+
+  if (url.pathname === "/v1/tenants" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const tenants = await app.tenants.list(context);
+    respondJson(res, 200, { tenants });
+    return;
+  }
+
+  if (url.pathname === "/v1/tenants" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const body = tenantCreateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const tenant = await app.tenants.create(context, body);
+    respondJson(res, 201, { tenant });
+    return;
+  }
+
+  if (url.pathname === "/v1/tenants/bootstrap" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const body = tenantBootstrapInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const result = await app.tenants.bootstrap(context, body);
+    respondJson(res, 201, result);
     return;
   }
 
@@ -1274,6 +1419,65 @@ async function handleApiRequest(
     const id = tokenId.replace(/\/revoke$/, "");
     const token = await app.auth.revokeToken(context, id);
     respondJson(res, token ? 200 : 404, { token: token ?? null });
+    return;
+  }
+
+  const refreshTokenId = routeParam(url.pathname, "/v1/auth/refresh-tokens/");
+  if (refreshTokenId && req.method === "POST" && url.pathname.endsWith("/revoke")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["auth:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["auth:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "auth_admin"]);
+    const id = refreshTokenId.replace(/\/revoke$/, "");
+    const token = await app.auth.revokeRefreshToken(context, id);
+    respondJson(res, token ? 200 : 404, { token: token ?? null });
+    return;
+  }
+
+  const tenantId = routeParam(url.pathname, "/v1/tenants/");
+  if (tenantId && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const tenant = await app.tenants.get(context, tenantId);
+    respondJson(res, tenant ? 200 : 404, { tenant: tenant ?? null });
+    return;
+  }
+
+  if (tenantId && req.method === "PATCH") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["admin:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin"]);
+    const patch = tenantUpdateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const tenant = await app.tenants.update(context, tenantId, patch);
+    respondJson(res, tenant ? 200 : 404, { tenant: tenant ?? null });
     return;
   }
 

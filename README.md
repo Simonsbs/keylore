@@ -20,6 +20,7 @@ This repository is incubating privately today, but it is structured to be publis
 - default-deny policy engine with domain and operation constraints
 - PostgreSQL-backed catalogue, policy, and audit persistence with startup migrations
 - OAuth-style client credentials token issuance for remote HTTP and MCP access
+- PKCE-bound `authorization_code` plus rotating `refresh_token` support for interactive public or confidential clients
 - protected-resource metadata for REST and MCP surfaces
 - identity-aware policy evaluation with role-aware rule matching
 - approval-required policy outcomes with review endpoints and CLI support
@@ -46,6 +47,7 @@ This repository is incubating privately today, but it is structured to be publis
 - `private_key_jwt` OAuth client authentication with assertion replay protection
 - persisted credential rotation workflows with plan, start, complete, and fail transitions
 - tenant-aware partitioning for credentials, policies, auth clients, approvals, break-glass, audit events, tokens, rotation runs, and logical backups
+- first-class tenant registry with tenant bootstrap workflows for auth-client seeding
 - Helm chart with dev, staging, and production values profiles
 - HA-oriented Helm profile with pod disruption budget and spread controls
 - tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
@@ -53,9 +55,8 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.10 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.11 delivery. This repo does not yet implement:
 
-- broader OAuth authorization flows beyond client credentials
 - admin UI
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
@@ -112,6 +113,8 @@ curl -X POST http://127.0.0.1:8787/oauth/token \
 ```
 
 Remote tokens are tenant-scoped through their OAuth client. A tenant-bound caller only sees and mutates records from its own tenant; the local CLI continues to run as a global operator.
+
+Interactive flows can mint a user-bound code with `POST /oauth/authorize`, then exchange it at `POST /oauth/token` with `grant_type=authorization_code` and PKCE.
 
 8. Verify the health endpoint:
 
@@ -213,6 +216,12 @@ curl http://127.0.0.1:8787/v1/system/trace-exporter \
   -H "authorization: Bearer ${TOKEN}"
 curl -X POST http://127.0.0.1:8787/v1/system/trace-exporter/flush \
   -H "authorization: Bearer ${TOKEN}"
+```
+
+Bootstrap a tenant and interactive client seed set:
+
+```bash
+npm run dev:cli -- tenants bootstrap --file ./tenant-bootstrap.json
 ```
 
 Plan rotation runs:

@@ -1,4 +1,10 @@
-import { createPublicKey, randomBytes, verify as verifySignature } from "node:crypto";
+import {
+  createHash,
+  createPublicKey,
+  randomBytes,
+  randomUUID,
+  verify as verifySignature,
+} from "node:crypto";
 
 import {
   AccessScope,
@@ -7,22 +13,26 @@ import {
   AuthClientAuthMethod,
   AuthClientCreateInput,
   AuthClientRecord,
-  AuthContext,
   authClientRecordSchema,
   authClientSecretOutputSchema,
   authContextSchema,
   AuthClientUpdateInput,
+  authorizationRequestOutputSchema,
   PrincipalRole,
   publicJwkSchema,
+  RefreshTokenRecord,
+  tokenIssueOutputSchema,
   TokenIssueInput,
   TokenIssueOutput,
-  tokenIssueOutputSchema,
 } from "../domain/types.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import {
   AccessTokenRepository,
+  AuthorizationCodeRepository,
   AuthClientRepository,
   OAuthClientAssertionRepository,
+  RefreshTokenRepository,
+  TenantRepository,
 } from "../repositories/interfaces.js";
 import { hashOpaqueToken, hashSecret, verifySecret } from "./auth-secrets.js";
 import { TelemetryService } from "./telemetry.js";
@@ -49,6 +59,10 @@ function uniqueScopes(scopes: string[]): AccessScope[] {
   return Array.from(new Set(scopes)).map((scope) => accessScopeSchema.parse(scope));
 }
 
+function uniqueRoles(roles: PrincipalRole[]): PrincipalRole[] {
+  return Array.from(new Set(roles));
+}
+
 function normalizeResource(resource: string): string {
   return resource.endsWith("/") ? resource.slice(0, -1) : resource;
 }
@@ -57,6 +71,14 @@ function decodeBase64Url(value: string): Buffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
   return Buffer.from(`${normalized}${padding}`, "base64");
+}
+
+function encodeBase64Url(value: Buffer): string {
+  return value
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 function parseJson<T>(value: string): T {
@@ -77,11 +99,16 @@ export class AuthService {
   public constructor(
     private readonly clients: AuthClientRepository,
     private readonly tokens: AccessTokenRepository,
+    private readonly refreshTokens: RefreshTokenRepository,
+    private readonly authorizationCodes: AuthorizationCodeRepository,
     private readonly assertions: OAuthClientAssertionRepository,
+    private readonly tenants: TenantRepository,
     private readonly audit: PgAuditLogService,
     private readonly issuerUrl: string,
     private readonly publicBaseUrl: string,
     private readonly accessTokenTtlSeconds: number,
+    private readonly authorizationCodeTtlSeconds: number,
+    private readonly refreshTokenTtlSeconds: number,
     private readonly telemetry: TelemetryService,
   ) {}
 
@@ -89,8 +116,16 @@ export class AuthService {
     return `kls_${randomBytes(24).toString("base64url")}`;
   }
 
+  private generateOpaqueToken(prefix: string): string {
+    return `${prefix}_${randomBytes(32).toString("base64url")}`;
+  }
+
   private tokenEndpointUrl(): string {
     return `${this.publicBaseUrl}/oauth/token`;
+  }
+
+  private authorizationEndpointUrl(): string {
+    return `${this.publicBaseUrl}/oauth/authorize`;
   }
 
   private buildClientRecord(client: {
@@ -101,6 +136,8 @@ export class AuthService {
     allowedScopes: AccessScope[];
     status: "active" | "disabled";
     tokenEndpointAuthMethod: AuthClientAuthMethod;
+    grantTypes: Array<"client_credentials" | "authorization_code" | "refresh_token">;
+    redirectUris: string[];
     jwks?: Array<Record<string, unknown>>;
   }): AuthClientRecord {
     return authClientRecordSchema.parse({
@@ -111,6 +148,8 @@ export class AuthService {
       allowedScopes: client.allowedScopes,
       status: client.status,
       tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+      grantTypes: client.grantTypes,
+      redirectUris: client.redirectUris,
       jwks: client.jwks ?? [],
     });
   }
@@ -122,6 +161,10 @@ export class AuthService {
     secretHash?: string;
     secretSalt?: string;
   }): void {
+    if (client.tokenEndpointAuthMethod === "none") {
+      return;
+    }
+
     if (client.tokenEndpointAuthMethod === "private_key_jwt") {
       if (!client.jwks.length) {
         throw new Error(`Client ${client.clientId} is missing public JWKs.`);
@@ -146,11 +189,12 @@ export class AuthService {
   ): Promise<void> {
     this.assertClientConfiguration(client);
 
+    if (client.tokenEndpointAuthMethod === "none") {
+      return;
+    }
+
     if (client.tokenEndpointAuthMethod === "private_key_jwt") {
-      if (
-        input.clientAssertionType !== clientAssertionType ||
-        !input.clientAssertion
-      ) {
+      if (input.clientAssertionType !== clientAssertionType || !input.clientAssertion) {
         throw new Error("Missing private_key_jwt client assertion.");
       }
       await this.verifyClientAssertion(client, input.clientAssertion);
@@ -236,18 +280,111 @@ export class AuthService {
     }
   }
 
+  private async requireActiveTenant(tenantId: string): Promise<void> {
+    const tenant = await this.tenants.getById(tenantId);
+    if (!tenant) {
+      throw new Error(`Unknown tenant: ${tenantId}`);
+    }
+    if (tenant.status !== "active") {
+      throw new Error(`Tenant is disabled: ${tenantId}`);
+    }
+  }
+
+  private codeChallengeForVerifier(verifier: string): string {
+    return encodeBase64Url(createHash("sha256").update(verifier).digest());
+  }
+
+  private async issueAccessTokenRecord(input: {
+    clientId: string;
+    tenantId: string;
+    subject: string;
+    scopes: AccessScope[];
+    roles: PrincipalRole[];
+    resource?: string;
+    grantType: "client_credentials" | "authorization_code" | "refresh_token";
+  }): Promise<string> {
+    const token = this.generateOpaqueToken("kl");
+    const expiresAt = new Date(Date.now() + this.accessTokenTtlSeconds * 1000).toISOString();
+    await this.tokens.issue({
+      tokenHash: hashOpaqueToken(token),
+      clientId: input.clientId,
+      tenantId: input.tenantId,
+      subject: input.subject,
+      scopes: input.scopes,
+      roles: input.roles,
+      resource: input.resource,
+      expiresAt,
+    });
+    await this.audit.record({
+      type: "auth.token",
+      action: "auth.token.issue",
+      outcome: "success",
+      tenantId: input.tenantId,
+      principal: input.subject,
+      metadata: {
+        clientId: input.clientId,
+        tenantId: input.tenantId,
+        scopes: input.scopes,
+        resource: input.resource ?? null,
+        expiresAt,
+        grantType: input.grantType,
+      },
+    });
+    return token;
+  }
+
+  private async issueRefreshTokenRecord(input: {
+    clientId: string;
+    tenantId: string;
+    subject: string;
+    scopes: AccessScope[];
+    roles: PrincipalRole[];
+    resource?: string;
+  }): Promise<string> {
+    const refreshToken = this.generateOpaqueToken("klr");
+    const expiresAt = new Date(Date.now() + this.refreshTokenTtlSeconds * 1000).toISOString();
+    await this.refreshTokens.issue({
+      tokenHash: hashOpaqueToken(refreshToken),
+      clientId: input.clientId,
+      tenantId: input.tenantId,
+      subject: input.subject,
+      scopes: input.scopes,
+      roles: input.roles,
+      resource: input.resource,
+      expiresAt,
+    });
+    await this.audit.record({
+      type: "auth.token",
+      action: "auth.refresh.issue",
+      outcome: "success",
+      tenantId: input.tenantId,
+      principal: input.subject,
+      metadata: {
+        clientId: input.clientId,
+        tenantId: input.tenantId,
+        scopes: input.scopes,
+        resource: input.resource ?? null,
+        expiresAt,
+      },
+    });
+    return refreshToken;
+  }
+
   public oauthMetadata() {
     return {
       issuer: this.issuerUrl,
       token_endpoint: this.tokenEndpointUrl(),
-      grant_types_supported: ["client_credentials"],
+      authorization_endpoint: this.authorizationEndpointUrl(),
+      grant_types_supported: ["client_credentials", "authorization_code", "refresh_token"],
       token_endpoint_auth_methods_supported: [
         "client_secret_post",
         "client_secret_basic",
         "private_key_jwt",
+        "none",
       ],
       token_endpoint_auth_signing_alg_values_supported: ["RS256", "ES256"],
       scopes_supported: accessScopeSchema.options,
+      code_challenge_methods_supported: ["S256"],
     };
   }
 
@@ -262,75 +399,301 @@ export class AuthService {
     };
   }
 
+  public async authorize(
+    actor: {
+      principal: string;
+      clientId: string;
+      tenantId?: string;
+      roles: PrincipalRole[];
+      scopes: AccessScope[];
+      resource?: string;
+    },
+    input: {
+      clientId: string;
+      redirectUri: string;
+      scope?: AccessScope[];
+      resource?: string;
+      codeChallenge: string;
+      codeChallengeMethod: "S256";
+      state?: string;
+    },
+  ) {
+    const client = await this.clients.getByClientId(input.clientId);
+    if (!client || client.status !== "active") {
+      throw new Error("Unknown authorization client.");
+    }
+    if (!client.grantTypes.includes("authorization_code")) {
+      throw new Error("Client does not support authorization_code.");
+    }
+    if (!client.redirectUris.includes(input.redirectUri)) {
+      throw new Error("Invalid redirect URI.");
+    }
+    if (actor.tenantId && client.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
+    if (actor.resource && input.resource && normalizeResource(actor.resource) !== normalizeResource(input.resource)) {
+      throw new Error("Requested resource exceeds the caller resource binding.");
+    }
+    await this.requireActiveTenant(client.tenantId);
+
+    const requestedScopes = input.scope?.length ? input.scope : client.allowedScopes;
+    const grantedScopes = uniqueScopes(
+      requestedScopes.filter(
+        (scope) => actor.scopes.includes(scope) && client.allowedScopes.includes(scope),
+      ),
+    );
+    if (grantedScopes.length === 0) {
+      throw new Error("No valid scopes were granted.");
+    }
+
+    const grantedRoles = uniqueRoles(
+      actor.roles.filter((role) => client.roles.includes(role)),
+    );
+    if (grantedRoles.length === 0) {
+      throw new Error("No valid roles were granted.");
+    }
+
+    const code = this.generateOpaqueToken("klc");
+    const expiresAt = new Date(Date.now() + this.authorizationCodeTtlSeconds * 1000).toISOString();
+    await this.authorizationCodes.create({
+      codeId: randomUUID(),
+      codeHash: hashOpaqueToken(code),
+      clientId: client.clientId,
+      tenantId: client.tenantId,
+      subject: actor.principal,
+      scopes: grantedScopes,
+      roles: grantedRoles,
+      resource: input.resource ?? actor.resource,
+      redirectUri: input.redirectUri,
+      codeChallenge: input.codeChallenge,
+      codeChallengeMethod: input.codeChallengeMethod,
+      expiresAt,
+    });
+
+    await this.audit.record({
+      type: "auth.token",
+      action: "auth.code.authorize",
+      outcome: "success",
+      tenantId: client.tenantId,
+      principal: actor.principal,
+      metadata: {
+        clientId: client.clientId,
+        tenantId: client.tenantId,
+        redirectUri: input.redirectUri,
+        scopes: grantedScopes,
+        resource: input.resource ?? actor.resource ?? null,
+        expiresAt,
+      },
+    });
+
+    return authorizationRequestOutputSchema.parse({
+      code,
+      clientId: client.clientId,
+      tenantId: client.tenantId,
+      subject: actor.principal,
+      redirectUri: input.redirectUri,
+      expiresIn: this.authorizationCodeTtlSeconds,
+      scope: grantedScopes.join(" "),
+      state: input.state,
+    });
+  }
+
   public async issueToken(input: TokenIssueInput): Promise<TokenIssueOutput> {
     const client = await this.clients.getByClientId(input.clientId);
     if (!client || client.status !== "active") {
       this.telemetry.recordAuthTokenIssued("error");
       throw new Error("Invalid client credentials.");
     }
+    await this.requireActiveTenant(client.tenantId);
 
     try {
+      if (input.grantType === "client_credentials") {
+        await this.authenticateClientCredentials(client, input);
+        if (!client.grantTypes.includes("client_credentials")) {
+          throw new Error("Unsupported grant type for client.");
+        }
+
+        const requestedScopes = input.scope?.length ? input.scope : client.allowedScopes;
+        const grantedScopes = uniqueScopes(
+          requestedScopes.filter((scope) => client.allowedScopes.includes(scope)),
+        );
+        if (grantedScopes.length === 0) {
+          throw new Error("No valid scopes were granted.");
+        }
+
+        const accessToken = await this.issueAccessTokenRecord({
+          clientId: client.clientId,
+          tenantId: client.tenantId,
+          subject: client.clientId,
+          scopes: grantedScopes,
+          roles: client.roles,
+          resource: input.resource,
+          grantType: "client_credentials",
+        });
+        this.telemetry.recordAuthTokenIssued("success");
+        return tokenIssueOutputSchema.parse({
+          access_token: accessToken,
+          token_type: "Bearer",
+          expires_in: this.accessTokenTtlSeconds,
+          scope: grantedScopes.join(" "),
+        });
+      }
+
+      if (input.grantType === "authorization_code") {
+        await this.authenticateClientCredentials(client, input);
+        if (!client.grantTypes.includes("authorization_code")) {
+          throw new Error("Unsupported grant type for client.");
+        }
+
+        const authorizationCode = await this.authorizationCodes.consumeByHash(hashOpaqueToken(input.code ?? ""));
+        if (!authorizationCode) {
+          throw new Error("Invalid authorization code.");
+        }
+        if (authorizationCode.clientId !== client.clientId) {
+          throw new Error("Invalid authorization code.");
+        }
+        if (authorizationCode.redirectUri !== input.redirectUri) {
+          throw new Error("Invalid redirect URI.");
+        }
+        if (authorizationCode.codeChallengeMethod !== "S256") {
+          throw new Error("Unsupported code challenge method.");
+        }
+        if (authorizationCode.codeChallenge !== this.codeChallengeForVerifier(input.codeVerifier ?? "")) {
+          throw new Error("Invalid code verifier.");
+        }
+
+        const grantedScopes = uniqueScopes(
+          (input.scope?.length ? input.scope : authorizationCode.scopes).filter((scope) =>
+            authorizationCode.scopes.includes(scope),
+          ),
+        );
+        if (grantedScopes.length === 0) {
+          throw new Error("No valid scopes were granted.");
+        }
+
+        const accessToken = await this.issueAccessTokenRecord({
+          clientId: client.clientId,
+          tenantId: authorizationCode.tenantId,
+          subject: authorizationCode.subject,
+          scopes: grantedScopes,
+          roles: authorizationCode.roles,
+          resource: authorizationCode.resource,
+          grantType: "authorization_code",
+        });
+        const refreshToken = client.grantTypes.includes("refresh_token")
+          ? await this.issueRefreshTokenRecord({
+              clientId: client.clientId,
+              tenantId: authorizationCode.tenantId,
+              subject: authorizationCode.subject,
+              scopes: grantedScopes,
+              roles: authorizationCode.roles,
+              resource: authorizationCode.resource,
+            })
+          : undefined;
+        this.telemetry.recordAuthTokenIssued("success");
+        return tokenIssueOutputSchema.parse({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          token_type: "Bearer",
+          expires_in: this.accessTokenTtlSeconds,
+          scope: grantedScopes.join(" "),
+        });
+      }
+
       await this.authenticateClientCredentials(client, input);
+      if (!client.grantTypes.includes("refresh_token")) {
+        throw new Error("Unsupported grant type for client.");
+      }
+      const refreshTokenRecord = await this.refreshTokens.getByHash(
+        hashOpaqueToken(input.refreshToken ?? ""),
+      );
+      if (!refreshTokenRecord || refreshTokenRecord.status !== "active") {
+        throw new Error("Invalid refresh token.");
+      }
+      if (refreshTokenRecord.clientId !== client.clientId) {
+        throw new Error("Invalid refresh token.");
+      }
+      if (new Date(refreshTokenRecord.expiresAt).getTime() <= Date.now()) {
+        throw new Error("Refresh token expired.");
+      }
+      if (
+        refreshTokenRecord.resource &&
+        input.resource &&
+        normalizeResource(refreshTokenRecord.resource) !== normalizeResource(input.resource)
+      ) {
+        throw new Error("Refresh token resource does not match this protected resource.");
+      }
+      await this.requireActiveTenant(refreshTokenRecord.tenantId);
+
+      const grantedScopes = uniqueScopes(
+        (input.scope?.length ? input.scope : refreshTokenRecord.scopes).filter((scope) =>
+          refreshTokenRecord.scopes.includes(scope),
+        ),
+      );
+      if (grantedScopes.length === 0) {
+        throw new Error("No valid scopes were granted.");
+      }
+
+      const accessToken = await this.issueAccessTokenRecord({
+        clientId: client.clientId,
+        tenantId: refreshTokenRecord.tenantId,
+        subject: refreshTokenRecord.subject,
+        scopes: grantedScopes,
+        roles: refreshTokenRecord.roles,
+        resource: refreshTokenRecord.resource,
+        grantType: "refresh_token",
+      });
+
+      const rotatedRefreshToken = await this.issueRefreshTokenRecord({
+        clientId: client.clientId,
+        tenantId: refreshTokenRecord.tenantId,
+        subject: refreshTokenRecord.subject,
+        scopes: grantedScopes,
+        roles: refreshTokenRecord.roles,
+        resource: refreshTokenRecord.resource,
+      });
+      const replacementRecord = await this.refreshTokens.getByHash(hashOpaqueToken(rotatedRefreshToken));
+      if (!replacementRecord) {
+        throw new Error("Failed to rotate refresh token.");
+      }
+      await this.refreshTokens.replace(
+        hashOpaqueToken(input.refreshToken ?? ""),
+        replacementRecord.refreshTokenId,
+      );
+      await this.audit.record({
+        type: "auth.token",
+        action: "auth.refresh.rotate",
+        outcome: "success",
+        tenantId: refreshTokenRecord.tenantId,
+        principal: refreshTokenRecord.subject,
+        metadata: {
+          clientId: client.clientId,
+          tenantId: refreshTokenRecord.tenantId,
+          refreshTokenId: refreshTokenRecord.refreshTokenId,
+        },
+      });
+
+      this.telemetry.recordAuthTokenIssued("success");
+      return tokenIssueOutputSchema.parse({
+        access_token: accessToken,
+        refresh_token: rotatedRefreshToken,
+        token_type: "Bearer",
+        expires_in: this.accessTokenTtlSeconds,
+        scope: grantedScopes.join(" "),
+      });
     } catch (error) {
       this.telemetry.recordAuthTokenIssued("error");
       throw error;
     }
-
-    const requestedScopes = input.scope?.length ? input.scope : client.allowedScopes;
-    const grantedScopes = uniqueScopes(
-      requestedScopes.filter((scope) => client.allowedScopes.includes(scope)),
-    );
-
-    if (grantedScopes.length === 0) {
-      this.telemetry.recordAuthTokenIssued("error");
-      throw new Error("No valid scopes were granted.");
-    }
-
-    const token = `kl_${randomBytes(32).toString("hex")}`;
-    const expiresAt = new Date(Date.now() + this.accessTokenTtlSeconds * 1000).toISOString();
-    await this.tokens.issue({
-      tokenHash: hashOpaqueToken(token),
-      clientId: client.clientId,
-      tenantId: client.tenantId,
-      subject: client.clientId,
-      scopes: grantedScopes,
-      roles: client.roles,
-      resource: input.resource,
-      expiresAt,
-    });
-
-    await this.audit.record({
-      type: "auth.token",
-      action: "auth.token.issue",
-      outcome: "success",
-      tenantId: client.tenantId,
-      principal: client.clientId,
-      metadata: {
-        clientId: client.clientId,
-        tenantId: client.tenantId,
-        scopes: grantedScopes,
-        resource: input.resource ?? null,
-        expiresAt,
-        authMethod: client.tokenEndpointAuthMethod,
-      },
-    });
-
-    this.telemetry.recordAuthTokenIssued("success");
-
-    return tokenIssueOutputSchema.parse({
-      access_token: token,
-      token_type: "Bearer",
-      expires_in: this.accessTokenTtlSeconds,
-      scope: grantedScopes.join(" "),
-    });
   }
 
-  public async authenticateBearerToken(token: string, requestedResource?: string): Promise<AuthContext> {
+  public async authenticateBearerToken(token: string, requestedResource?: string) {
     const stored = await this.tokens.getByHash(hashOpaqueToken(token));
     if (!stored || stored.status !== "active") {
       this.telemetry.recordAuthTokenValidation("error");
       throw new Error("Invalid access token.");
     }
+    await this.requireActiveTenant(stored.tenantId);
 
     if (new Date(stored.expiresAt).getTime() <= Date.now()) {
       this.telemetry.recordAuthTokenValidation("error");
@@ -359,20 +722,20 @@ export class AuthService {
     });
   }
 
-  public requireScopes(context: AuthContext, requiredScopes: AccessScope[]): void {
+  public requireScopes(context: { scopes: AccessScope[] }, requiredScopes: AccessScope[]): void {
     const missing = requiredScopes.filter((scope) => !context.scopes.includes(scope));
     if (missing.length > 0) {
       throw new Error(`Missing required scopes: ${missing.join(", ")}`);
     }
   }
 
-  public requireAnyScope(context: AuthContext, allowedScopes: AccessScope[]): void {
+  public requireAnyScope(context: { scopes: AccessScope[] }, allowedScopes: AccessScope[]): void {
     if (!allowedScopes.some((scope) => context.scopes.includes(scope))) {
       throw new Error(`Missing one of the required scopes: ${allowedScopes.join(", ")}`);
     }
   }
 
-  public requireRoles(context: AuthContext, requiredRoles: PrincipalRole[]): void {
+  public requireRoles(context: { roles: PrincipalRole[] }, requiredRoles: PrincipalRole[]): void {
     if (!requiredRoles.some((role) => context.roles.includes(role))) {
       throw new Error(`Missing required role. Need one of: ${requiredRoles.join(", ")}`);
     }
@@ -387,19 +750,23 @@ export class AuthService {
   }
 
   public async createClient(
-    actor: AuthContext,
+    actor: { principal: string; tenantId?: string },
     input: AuthClientCreateInput,
   ): Promise<ReturnType<typeof authClientSecretOutputSchema.parse>> {
     const existing = await this.clients.getByClientId(input.clientId);
     if (existing) {
       throw new Error(`Client already exists: ${input.clientId}`);
     }
-
     if (actor.tenantId && input.tenantId !== actor.tenantId) {
       throw new Error("Tenant access denied.");
     }
-    const isPrivateKey = input.tokenEndpointAuthMethod === "private_key_jwt";
-    const clientSecret = isPrivateKey ? undefined : input.clientSecret ?? this.generateClientSecret();
+    const tenant = await this.tenants.getById(input.tenantId);
+    if (!tenant) {
+      throw new Error(`Unknown tenant: ${input.tenantId}`);
+    }
+
+    const isSharedSecretClient = !["private_key_jwt", "none"].includes(input.tokenEndpointAuthMethod);
+    const clientSecret = isSharedSecretClient ? input.clientSecret ?? this.generateClientSecret() : undefined;
     const hashed = clientSecret ? hashSecret(clientSecret) : undefined;
     await this.clients.upsert({
       clientId: input.clientId,
@@ -411,6 +778,8 @@ export class AuthService {
       allowedScopes: input.allowedScopes,
       status: input.status,
       tokenEndpointAuthMethod: input.tokenEndpointAuthMethod,
+      grantTypes: input.grantTypes,
+      redirectUris: input.redirectUris,
       jwks: input.jwks ?? [],
     });
 
@@ -422,6 +791,8 @@ export class AuthService {
       allowedScopes: input.allowedScopes,
       status: input.status,
       tokenEndpointAuthMethod: input.tokenEndpointAuthMethod,
+      grantTypes: input.grantTypes,
+      redirectUris: input.redirectUris,
       jwks: input.jwks,
     });
 
@@ -438,6 +809,8 @@ export class AuthService {
         allowedScopes: client.allowedScopes,
         status: client.status,
         authMethod: client.tokenEndpointAuthMethod,
+        grantTypes: client.grantTypes,
+        redirectUris: client.redirectUris,
       },
     });
 
@@ -448,7 +821,7 @@ export class AuthService {
   }
 
   public async updateClient(
-    actor: AuthContext,
+    actor: { principal: string; tenantId?: string },
     clientId: string,
     patch: AuthClientUpdateInput,
   ): Promise<AuthClientRecord | undefined> {
@@ -468,25 +841,39 @@ export class AuthService {
       allowedScopes: patch.allowedScopes ?? existing.allowedScopes,
       status: patch.status ?? existing.status,
       tokenEndpointAuthMethod: patch.tokenEndpointAuthMethod ?? existing.tokenEndpointAuthMethod,
+      grantTypes: patch.grantTypes ?? existing.grantTypes,
+      redirectUris: patch.redirectUris ?? existing.redirectUris,
       jwks: patch.jwks ?? existing.jwks,
     });
 
-    const switchingToPrivateKey = merged.tokenEndpointAuthMethod === "private_key_jwt";
+    const sharedSecretClient = !["private_key_jwt", "none"].includes(merged.tokenEndpointAuthMethod);
     await this.clients.upsert({
       clientId,
       tenantId: merged.tenantId,
       displayName: merged.displayName,
-      secretHash: switchingToPrivateKey ? undefined : existing.secretHash,
-      secretSalt: switchingToPrivateKey ? undefined : existing.secretSalt,
+      secretHash: sharedSecretClient ? existing.secretHash : undefined,
+      secretSalt: sharedSecretClient ? existing.secretSalt : undefined,
       roles: merged.roles,
       allowedScopes: merged.allowedScopes,
       status: merged.status,
       tokenEndpointAuthMethod: merged.tokenEndpointAuthMethod,
+      grantTypes: merged.grantTypes,
+      redirectUris: merged.redirectUris,
       jwks: merged.jwks,
     });
 
-    if (patch.roles || patch.allowedScopes || patch.status || patch.tokenEndpointAuthMethod || patch.jwks) {
+    if (
+      patch.roles ||
+      patch.allowedScopes ||
+      patch.status ||
+      patch.tokenEndpointAuthMethod ||
+      patch.grantTypes ||
+      patch.redirectUris ||
+      patch.jwks
+    ) {
       await this.tokens.revokeByClientId(clientId);
+      await this.refreshTokens.revokeByClientId(clientId);
+      await this.authorizationCodes.revokeByClientId(clientId);
     }
 
     await this.audit.record({
@@ -501,6 +888,7 @@ export class AuthService {
         fields: Object.keys(patch),
         status: merged.status,
         authMethod: merged.tokenEndpointAuthMethod,
+        grantTypes: merged.grantTypes,
       },
     });
 
@@ -508,7 +896,7 @@ export class AuthService {
   }
 
   public async rotateClientSecret(
-    actor: AuthContext,
+    actor: { principal: string; tenantId?: string },
     clientId: string,
     clientSecret?: string,
   ): Promise<ReturnType<typeof authClientSecretOutputSchema.parse> | undefined> {
@@ -519,8 +907,8 @@ export class AuthService {
     if (actor.tenantId && existing.tenantId !== actor.tenantId) {
       throw new Error("Tenant access denied.");
     }
-    if (existing.tokenEndpointAuthMethod === "private_key_jwt") {
-      throw new Error("private_key_jwt clients do not support shared-secret rotation.");
+    if (["private_key_jwt", "none"].includes(existing.tokenEndpointAuthMethod)) {
+      throw new Error(`${existing.tokenEndpointAuthMethod} clients do not support shared-secret rotation.`);
     }
 
     const secret = clientSecret ?? this.generateClientSecret();
@@ -535,9 +923,13 @@ export class AuthService {
       allowedScopes: existing.allowedScopes,
       status: existing.status,
       tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
+      grantTypes: existing.grantTypes,
+      redirectUris: existing.redirectUris,
       jwks: existing.jwks,
     });
     await this.tokens.revokeByClientId(clientId);
+    await this.refreshTokens.revokeByClientId(clientId);
+    await this.authorizationCodes.revokeByClientId(clientId);
 
     const client = this.buildClientRecord(existing);
 
@@ -567,8 +959,16 @@ export class AuthService {
     return this.tokens.list(filter);
   }
 
+  public async listRefreshTokens(filter?: {
+    clientId?: string;
+    tenantId?: string;
+    status?: "active" | "revoked";
+  }): Promise<RefreshTokenRecord[]> {
+    return this.refreshTokens.list(filter);
+  }
+
   public async revokeToken(
-    actor: AuthContext,
+    actor: { principal: string; tenantId?: string },
     tokenId: string,
   ): Promise<AccessTokenRecord | undefined> {
     const token = await this.tokens.revokeById(tokenId);
@@ -590,7 +990,32 @@ export class AuthService {
         },
       });
     }
+    return token;
+  }
 
+  public async revokeRefreshToken(
+    actor: { principal: string; tenantId?: string },
+    refreshTokenId: string,
+  ): Promise<RefreshTokenRecord | undefined> {
+    const token = await this.refreshTokens.revokeById(refreshTokenId);
+    if (token) {
+      if (actor.tenantId && token.tenantId !== actor.tenantId) {
+        throw new Error("Tenant access denied.");
+      }
+      await this.audit.record({
+        type: "auth.token",
+        action: "auth.refresh.revoke",
+        outcome: "success",
+        tenantId: token.tenantId,
+        principal: actor.principal,
+        metadata: {
+          refreshTokenId: token.refreshTokenId,
+          tenantId: token.tenantId,
+          clientId: token.clientId,
+          subject: token.subject,
+        },
+      });
+    }
     return token;
   }
 }
