@@ -144,9 +144,12 @@ The active follow-on plan after `v1.0.0-rc4` is documented in [docs/core-mode-pl
 
 - active:
 - refocus the product around `core` mode:
-  - zero-config local startup
-  - secret onboarding
-  - LLM-friendly context authoring
-  - brokered test flow
-  - Codex/Gemini MCP connection flow
-- move the broader platform behind `advanced` mode
+  - completed:
+    - zero-config local startup
+    - secret onboarding
+    - brokered test flow
+    - Codex/Gemini MCP connection flow
+    - hide the broader platform behind `advanced` mode by default
+  - next:
+    - LLM-friendly context authoring
+    - production handoff guidance between local core mode and advanced self-hosted mode

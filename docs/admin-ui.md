@@ -11,13 +11,14 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 - generate Codex and Gemini CLI MCP connection snippets
 - mint and verify a remote HTTP MCP token from the UI
 - open an operator session with `client_credentials` or a pasted bearer token
-- inspect readiness and recent operator responses
-- create and toggle tenants
-- create, enable, disable, and rotate OAuth clients
-- review approval and break-glass queues
-- inspect recent audit events
-- export, inspect, and restore logical backups
-- inspect maintenance, adapters, traces, trace exporter status, and rotation runs
+- keep the broader operator controls behind an explicit `Advanced` toggle:
+  - inspect readiness and recent operator responses
+  - create and toggle tenants
+  - create, enable, disable, and rotate OAuth clients
+  - review approval and break-glass queues
+  - inspect recent audit events
+  - export, inspect, and restore logical backups
+  - inspect maintenance, adapters, traces, trace exporter status, and rotation runs
 
 ## Non-goals
 
@@ -37,8 +38,8 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - `Environment reference`
 5. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
 6. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
-7. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
-8. Work through the tenant, auth, review, backup, audit, and system panels.
+7. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+8. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Validation
 

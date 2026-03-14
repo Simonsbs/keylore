@@ -106,6 +106,8 @@ The result shows the broker decision and a redacted response preview so you can 
 
 7. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
 
+Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
+
 ## Optional local overrides
 
 If you want to override the local defaults, create `.env` from [.env.example](/home/simon/keylore/.env.example). KeyLore now auto-loads `.env` on startup, so you do not need to `source` it manually.

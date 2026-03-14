@@ -208,6 +208,12 @@ Acceptance criteria:
 
 - a new user can ignore advanced features entirely and still succeed with the core workflow
 
+Status:
+- complete:
+  - the admin UI now exposes `Credentials` and `Connect MCP` as the default core navigation
+  - the broader operator surface stays behind an explicit `Show advanced controls` toggle
+  - session status remains visible in core mode without forcing the user into tenant, backup, audit, or system panels
+
 ## Core-8
 
 Production handoff.

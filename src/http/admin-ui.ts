@@ -106,6 +106,15 @@ textarea {
   margin: 28px 0;
 }
 
+.sidebar-section-label {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .nav-button,
 .button,
 .button-secondary,
@@ -287,6 +296,15 @@ textarea {
   display: grid;
   gap: 24px;
   margin-top: 24px;
+}
+
+.advanced-shell[hidden],
+.advanced-nav[hidden] {
+  display: none;
+}
+
+.advanced-summary {
+  margin-top: 12px;
 }
 
 .section-heading {
@@ -644,7 +662,8 @@ const state = {
   lastResponse: null,
   lastCredentialTest: null,
   lastMcpConnection: null,
-  mcpToken: ''
+  mcpToken: '',
+  advancedVisible: false
 };
 
 const storageKey = 'keylore-admin-session';
@@ -787,7 +806,8 @@ function persistSession() {
     token: state.token,
     sessionClientId: state.sessionClientId,
     sessionScopes: state.sessionScopes,
-    sessionTenantId: state.sessionTenantId
+    sessionTenantId: state.sessionTenantId,
+    advancedVisible: state.advancedVisible
   };
   localStorage.setItem(storageKey, JSON.stringify(payload));
 }
@@ -806,6 +826,7 @@ function loadPersistedSession() {
     state.sessionClientId = parsed.sessionClientId || '';
     state.sessionScopes = parsed.sessionScopes || '';
     state.sessionTenantId = parsed.sessionTenantId || '';
+    state.advancedVisible = parsed.advancedVisible === true;
   } catch (_error) {
     localStorage.removeItem(storageKey);
   }
@@ -823,6 +844,7 @@ function clearSession() {
   state.lastCredentialTest = null;
   state.lastMcpConnection = null;
   state.mcpToken = '';
+  state.advancedVisible = false;
   localStorage.removeItem(storageKey);
   syncSessionFields();
   renderAll();
@@ -839,6 +861,24 @@ function syncSessionFields() {
   byId('session-status').className = state.token ? 'state-active' : 'state-warning';
   byId('login-panel').hidden = !!state.token;
   byId('dashboard').hidden = !state.token;
+}
+
+function renderAdvancedMode() {
+  const advancedNav = byId('advanced-nav');
+  const advancedShell = byId('advanced-shell');
+  const toggle = byId('advanced-toggle');
+  const summary = byId('advanced-summary');
+
+  if (!advancedNav || !advancedShell || !toggle || !summary) {
+    return;
+  }
+
+  advancedNav.hidden = !state.advancedVisible;
+  advancedShell.hidden = !state.advancedVisible;
+  toggle.textContent = state.advancedVisible ? 'Hide advanced controls' : 'Show advanced controls';
+  summary.innerHTML = state.advancedVisible
+    ? '<div class="panel-footnote">Advanced mode is open. Tenant management, OAuth clients, approvals, backups, audit, and system internals are available below.</div>'
+    : '<div class="panel-footnote">Advanced mode is optional. You can ignore tenants, approvals, backups, audit, and system internals until you move beyond the local core workflow.</div>';
 }
 
 function populateLoginDefaults(force) {
@@ -1179,6 +1219,7 @@ function renderBackups() {
 
 function renderAll() {
   syncSessionFields();
+  renderAdvancedMode();
   renderCredentials();
   renderConnect();
   renderOverview();
@@ -1735,6 +1776,14 @@ async function initialize() {
   byId('backup-inspect').addEventListener('click', handleBackupInspect);
   byId('backup-restore').addEventListener('click', handleBackupRestore);
   byId('backup-download').addEventListener('click', downloadBackup);
+  byId('advanced-toggle').addEventListener('click', function() {
+    state.advancedVisible = !state.advancedVisible;
+    persistSession();
+    renderAdvancedMode();
+    if (state.advancedVisible) {
+      byId('overview-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
   byId('run-maintenance').addEventListener('click', function() {
     withAction('Maintenance run completed.', function() {
       return fetchJson('/v1/system/maintenance/run', { method: 'POST' });
@@ -1788,10 +1837,17 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
       <aside class="sidebar">
         <p class="eyebrow">KeyLore Control Plane</p>
         <h1 class="brand">KeyLore<br />Admin</h1>
-        <p class="brand-subtitle">A thin operator interface over the frozen REST contract. It stays inside the existing deployment path and never surfaces secret values.</p>
+        <p class="brand-subtitle">The default path is now core mode: add a secret, add LLM-facing context, test it, and connect your MCP client without surfacing the raw token.</p>
+        <p class="sidebar-section-label">Core</p>
         <nav class="nav-group">
           <button class="nav-button is-active" data-section="credentials-section" type="button">Credentials</button>
           <button class="nav-button" data-section="connect-section" type="button">Connect MCP</button>
+        </nav>
+        <p class="sidebar-section-label">Advanced</p>
+        <div class="nav-group" style="margin-top: 0;">
+          <button class="button-secondary" id="advanced-toggle" type="button">Show advanced controls</button>
+        </div>
+        <nav id="advanced-nav" class="nav-group advanced-nav" hidden>
           <button class="nav-button" data-section="overview-section" type="button">Overview</button>
           <button class="nav-button" data-section="tenants-section" type="button">Tenants</button>
           <button class="nav-button" data-section="clients-section" type="button">OAuth Clients</button>
@@ -1801,7 +1857,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
           <button class="nav-button" data-section="audit-section" type="button">Audit</button>
           <button class="nav-button" data-section="system-section" type="button">System</button>
         </nav>
-        <p class="helper-copy">Use an existing operator OAuth client with the client credentials flow, or paste an already minted bearer token. The UI reuses the current REST scopes and role checks as-is.</p>
+        <p class="helper-copy">Use local quickstart for the shortest path. Advanced mode keeps the existing operator controls available later without crowding first-run setup.</p>
       </aside>
       <main class="content">
         <section class="hero">
@@ -1871,6 +1927,26 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         </section>
 
         <div id="dashboard" class="dashboard" hidden>
+          <section id="session-section" class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Session</h2>
+                <p>The core workflow only needs a live operator session plus credential onboarding and MCP connection.</p>
+              </div>
+              <div class="toolbar">
+                <button class="button-secondary" id="refresh-dashboard" type="button" data-busy-label="Refreshing..." data-idle-label="Refresh everything">Refresh everything</button>
+                <button class="button-danger" id="logout" type="button">Clear session</button>
+              </div>
+            </div>
+            <div class="session-line">
+              <span id="session-status" class="state-warning">Not connected</span>
+              <span class="pill"><strong>Client</strong> <span id="session-client-id">anonymous token</span></span>
+              <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
+              <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
+            </div>
+            <div id="advanced-summary" class="advanced-summary"></div>
+          </section>
+
           <section id="credentials-section" class="panel">
             <div class="section-heading">
               <div>
@@ -1969,153 +2045,145 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             </div>
           </section>
 
-          <section id="overview-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Overview</h2>
-                <p>Current session status, health, and last operator response.</p>
-              </div>
-              <div class="toolbar">
-                <button class="button-secondary" id="refresh-dashboard" type="button" data-busy-label="Refreshing..." data-idle-label="Refresh everything">Refresh everything</button>
-                <button class="button-danger" id="logout" type="button">Clear session</button>
-              </div>
-            </div>
-            <div class="session-line">
-              <span id="session-status" class="state-warning">Not connected</span>
-              <span class="pill"><strong>Client</strong> <span id="session-client-id">anonymous token</span></span>
-              <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
-              <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
-            </div>
-            <div id="overview-metrics" class="metric-grid" style="margin-top: 18px;"></div>
-            <div class="panel-grid" style="margin-top: 18px;">
-              <div class="panel span-6"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Ready</h2></div></div><div id="overview-ready"></div></div>
-              <div class="panel span-6"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Last Response</h2></div></div><div id="overview-last-response"></div></div>
-            </div>
-          </section>
-
-          <section id="tenants-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Tenants</h2>
-                <p>Create tenants and toggle their status inside the existing admin contract.</p>
-              </div>
-            </div>
-            <div class="panel-grid">
-              <div class="span-5 panel">
-                <form id="tenant-form" class="form-grid">
-                  <div class="field"><label for="new-tenant-id">Tenant ID</label><input id="new-tenant-id" type="text" required /></div>
-                  <div class="field"><label for="new-tenant-name">Display Name</label><input id="new-tenant-name" type="text" required /></div>
-                  <div class="field-wide"><label for="new-tenant-description">Description</label><textarea id="new-tenant-description"></textarea></div>
-                  <div class="field"><label for="new-tenant-status">Status</label><select id="new-tenant-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
-                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating tenant..." data-idle-label="Create tenant">Create tenant</button></div>
-                </form>
-              </div>
-              <div class="span-7 panel"><div id="tenant-list"></div></div>
-            </div>
-          </section>
-
-          <section id="clients-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>OAuth Clients</h2>
-                <p>Create, toggle, and rotate operator or tenant clients without exposing secrets twice.</p>
-              </div>
-            </div>
-            <div class="panel-grid">
-              <div class="span-5 panel">
-                <form id="auth-client-form" class="form-grid">
-                  <div class="field"><label for="new-client-id">Client ID</label><input id="new-client-id" type="text" required /></div>
-                  <div class="field"><label for="new-client-name">Display Name</label><input id="new-client-name" type="text" required /></div>
-                  <div class="field"><label for="new-client-tenant">Tenant ID</label><input id="new-client-tenant" type="text" value="default" /></div>
-                  <div class="field"><label for="new-client-auth-method">Auth Method</label><select id="new-client-auth-method"><option value="client_secret_basic">client_secret_basic</option><option value="client_secret_post">client_secret_post</option><option value="none">none</option></select></div>
-                  <div class="field-wide"><label for="new-client-roles">Roles</label><textarea id="new-client-roles">consumer</textarea></div>
-                  <div class="field-wide"><label for="new-client-scopes">Allowed Scopes</label><textarea id="new-client-scopes">catalog:read</textarea></div>
-                  <div class="field-wide"><label for="new-client-grants">Grant Types</label><textarea id="new-client-grants">client_credentials</textarea></div>
-                  <div class="field-wide"><label for="new-client-redirects">Redirect URIs</label><textarea id="new-client-redirects" placeholder="Needed for authorization_code clients."></textarea></div>
-                  <div class="field-wide"><label for="new-client-secret">Optional Fixed Secret</label><input id="new-client-secret" type="password" placeholder="Leave empty to generate one automatically." /></div>
-                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating client..." data-idle-label="Create OAuth client">Create OAuth client</button></div>
-                </form>
-              </div>
-              <div class="span-7 code-stack">
-                <div class="panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Client Inventory</h2></div></div><div id="auth-client-list"></div></div>
-                <div class="panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">One-Time Secret Output</h2></div></div><div id="issued-secret"></div></div>
-              </div>
-            </div>
-          </section>
-
-          <section id="approvals-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Approvals</h2>
-                <p>Work the review queue without dropping back to the CLI.</p>
-              </div>
-            </div>
-            <div id="approval-list" class="list-stack"></div>
-          </section>
-
-          <section id="breakglass-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Break Glass</h2>
-                <p>Monitor and review emergency-access requests with the same quorum rules enforced by the API.</p>
-              </div>
-            </div>
-            <div id="breakglass-list" class="list-stack"></div>
-          </section>
-
-          <section id="backups-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Backups</h2>
-                <p>Export, inspect, and restore logical backups inside the current tenant or global operator scope.</p>
-              </div>
-            </div>
-            <div class="panel-grid">
-              <div class="span-5 panel">
-                <div class="panel-actions">
-                  <button class="button" id="backup-export" type="button" data-busy-label="Exporting..." data-idle-label="Export backup">Export backup</button>
-                  <button class="button-secondary" id="backup-download" type="button">Download last export</button>
+          <div id="advanced-shell" class="advanced-shell" hidden>
+            <section id="overview-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Overview</h2>
+                  <p>Current session status, health, and last operator response.</p>
                 </div>
-                <div class="panel-actions">
-                  <button class="button-secondary" id="backup-inspect" type="button" data-busy-label="Inspecting..." data-idle-label="Inspect pasted backup">Inspect pasted backup</button>
-                  <button class="button-danger" id="backup-restore" type="button" data-busy-label="Restoring..." data-idle-label="Restore pasted backup">Restore pasted backup</button>
+              </div>
+              <div id="overview-metrics" class="metric-grid" style="margin-top: 18px;"></div>
+              <div class="panel-grid" style="margin-top: 18px;">
+                <div class="panel span-6"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Ready</h2></div></div><div id="overview-ready"></div></div>
+                <div class="panel span-6"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Last Response</h2></div></div><div id="overview-last-response"></div></div>
+              </div>
+            </section>
+
+            <section id="tenants-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Tenants</h2>
+                  <p>Create tenants and toggle their status inside the existing admin contract.</p>
                 </div>
-                <p class="panel-footnote">Tenant-scoped operators still get tenant-scoped export and restore behavior. Foreign-tenant restore payloads are rejected server-side.</p>
               </div>
-              <div class="span-7 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Backup Summary</h2></div></div><div id="backup-summary"></div></div>
-              <div class="span-12 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Backup JSON</h2></div></div><textarea id="backup-json" style="width:100%; min-height: 260px;"></textarea></div>
-            </div>
-          </section>
+              <div class="panel-grid">
+                <div class="span-5 panel">
+                  <form id="tenant-form" class="form-grid">
+                    <div class="field"><label for="new-tenant-id">Tenant ID</label><input id="new-tenant-id" type="text" required /></div>
+                    <div class="field"><label for="new-tenant-name">Display Name</label><input id="new-tenant-name" type="text" required /></div>
+                    <div class="field-wide"><label for="new-tenant-description">Description</label><textarea id="new-tenant-description"></textarea></div>
+                    <div class="field"><label for="new-tenant-status">Status</label><select id="new-tenant-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
+                    <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating tenant..." data-idle-label="Create tenant">Create tenant</button></div>
+                  </form>
+                </div>
+                <div class="span-7 panel"><div id="tenant-list"></div></div>
+              </div>
+            </section>
 
-          <section id="audit-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>Audit</h2>
-                <p>Recent broker, auth, and operator events in reverse chronological order.</p>
+            <section id="clients-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>OAuth Clients</h2>
+                  <p>Create, toggle, and rotate operator or tenant clients without exposing secrets twice.</p>
+                </div>
               </div>
-            </div>
-            <div id="audit-list"></div>
-          </section>
+              <div class="panel-grid">
+                <div class="span-5 panel">
+                  <form id="auth-client-form" class="form-grid">
+                    <div class="field"><label for="new-client-id">Client ID</label><input id="new-client-id" type="text" required /></div>
+                    <div class="field"><label for="new-client-name">Display Name</label><input id="new-client-name" type="text" required /></div>
+                    <div class="field"><label for="new-client-tenant">Tenant ID</label><input id="new-client-tenant" type="text" value="default" /></div>
+                    <div class="field"><label for="new-client-auth-method">Auth Method</label><select id="new-client-auth-method"><option value="client_secret_basic">client_secret_basic</option><option value="client_secret_post">client_secret_post</option><option value="none">none</option></select></div>
+                    <div class="field-wide"><label for="new-client-roles">Roles</label><textarea id="new-client-roles">consumer</textarea></div>
+                    <div class="field-wide"><label for="new-client-scopes">Allowed Scopes</label><textarea id="new-client-scopes">catalog:read</textarea></div>
+                    <div class="field-wide"><label for="new-client-grants">Grant Types</label><textarea id="new-client-grants">client_credentials</textarea></div>
+                    <div class="field-wide"><label for="new-client-redirects">Redirect URIs</label><textarea id="new-client-redirects" placeholder="Needed for authorization_code clients."></textarea></div>
+                    <div class="field-wide"><label for="new-client-secret">Optional Fixed Secret</label><input id="new-client-secret" type="password" placeholder="Leave empty to generate one automatically." /></div>
+                    <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating client..." data-idle-label="Create OAuth client">Create OAuth client</button></div>
+                  </form>
+                </div>
+                <div class="span-7 code-stack">
+                  <div class="panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Client Inventory</h2></div></div><div id="auth-client-list"></div></div>
+                  <div class="panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">One-Time Secret Output</h2></div></div><div id="issued-secret"></div></div>
+                </div>
+              </div>
+            </section>
 
-          <section id="system-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>System</h2>
-                <p>Maintenance state, adapters, trace exporter status, traces, and rotation runs.</p>
+            <section id="approvals-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Approvals</h2>
+                  <p>Work the review queue without dropping back to the CLI.</p>
+                </div>
               </div>
-              <div class="toolbar">
-                <button class="button-secondary" id="run-maintenance" type="button" data-busy-label="Running maintenance..." data-idle-label="Run maintenance">Run maintenance</button>
-                <button class="button-secondary" id="flush-traces" type="button" data-busy-label="Flushing..." data-idle-label="Flush trace exporter">Flush trace exporter</button>
+              <div id="approval-list" class="list-stack"></div>
+            </section>
+
+            <section id="breakglass-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Break Glass</h2>
+                  <p>Monitor and review emergency-access requests with the same quorum rules enforced by the API.</p>
+                </div>
               </div>
-            </div>
-            <div class="panel-grid">
-              <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Maintenance</h2></div></div><div id="maintenance-status"></div></div>
-              <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Trace Exporter</h2></div></div><div id="trace-exporter-status"></div></div>
-              <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Adapters</h2></div></div><div id="adapter-health"></div></div>
-              <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Recent Traces</h2></div></div><div id="recent-traces"></div></div>
-              <div class="span-12 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Rotation Runs</h2></div></div><div id="rotation-list"></div></div>
-            </div>
-          </section>
+              <div id="breakglass-list" class="list-stack"></div>
+            </section>
+
+            <section id="backups-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Backups</h2>
+                  <p>Export, inspect, and restore logical backups inside the current tenant or global operator scope.</p>
+                </div>
+              </div>
+              <div class="panel-grid">
+                <div class="span-5 panel">
+                  <div class="panel-actions">
+                    <button class="button" id="backup-export" type="button" data-busy-label="Exporting..." data-idle-label="Export backup">Export backup</button>
+                    <button class="button-secondary" id="backup-download" type="button">Download last export</button>
+                  </div>
+                  <div class="panel-actions">
+                    <button class="button-secondary" id="backup-inspect" type="button" data-busy-label="Inspecting..." data-idle-label="Inspect pasted backup">Inspect pasted backup</button>
+                    <button class="button-danger" id="backup-restore" type="button" data-busy-label="Restoring..." data-idle-label="Restore pasted backup">Restore pasted backup</button>
+                  </div>
+                  <p class="panel-footnote">Tenant-scoped operators still get tenant-scoped export and restore behavior. Foreign-tenant restore payloads are rejected server-side.</p>
+                </div>
+                <div class="span-7 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Backup Summary</h2></div></div><div id="backup-summary"></div></div>
+                <div class="span-12 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Backup JSON</h2></div></div><textarea id="backup-json" style="width:100%; min-height: 260px;"></textarea></div>
+              </div>
+            </section>
+
+            <section id="audit-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>Audit</h2>
+                  <p>Recent broker, auth, and operator events in reverse chronological order.</p>
+                </div>
+              </div>
+              <div id="audit-list"></div>
+            </section>
+
+            <section id="system-section" class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>System</h2>
+                  <p>Maintenance state, adapters, trace exporter status, traces, and rotation runs.</p>
+                </div>
+                <div class="toolbar">
+                  <button class="button-secondary" id="run-maintenance" type="button" data-busy-label="Running maintenance..." data-idle-label="Run maintenance">Run maintenance</button>
+                  <button class="button-secondary" id="flush-traces" type="button" data-busy-label="Flushing..." data-idle-label="Flush trace exporter">Flush trace exporter</button>
+                </div>
+              </div>
+              <div class="panel-grid">
+                <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Maintenance</h2></div></div><div id="maintenance-status"></div></div>
+                <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Trace Exporter</h2></div></div><div id="trace-exporter-status"></div></div>
+                <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Adapters</h2></div></div><div id="adapter-health"></div></div>
+                <div class="span-6 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Recent Traces</h2></div></div><div id="recent-traces"></div></div>
+                <div class="span-12 panel"><div class="section-heading"><div><h2 style="font-size:1.4rem;">Rotation Runs</h2></div></div><div id="rotation-list"></div></div>
+              </div>
+            </section>
+          </div>
         </div>
       </main>
     </div>
