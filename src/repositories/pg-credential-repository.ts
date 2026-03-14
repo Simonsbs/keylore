@@ -10,6 +10,7 @@ import { CredentialRepository } from "./interfaces.js";
 
 interface CredentialRow {
   id: string;
+  tenant_id: string;
   display_name: string;
   service: string;
   owner: string;
@@ -29,6 +30,7 @@ interface CredentialRow {
 function mapRow(row: CredentialRow): CredentialRecord {
   return credentialRecordSchema.parse({
     id: row.id,
+    tenantId: row.tenant_id,
     displayName: row.display_name,
     service: row.service,
     owner: row.owner,
@@ -140,16 +142,17 @@ export class PgCredentialRepository implements CredentialRepository {
     const parsed = createCredentialInputSchema.parse(record);
     await this.database.query(
       `INSERT INTO credentials (
-        id, display_name, service, owner, scope_tier, sensitivity,
+        id, tenant_id, display_name, service, owner, scope_tier, sensitivity,
         allowed_domains, permitted_operations, expires_at, rotation_policy,
         last_validated_at, selection_notes, binding, tags, status
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10,
-        $11, $12, $13::jsonb, $14, $15
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11,
+        $12, $13, $14::jsonb, $15, $16
       )`,
       [
         parsed.id,
+        parsed.tenantId,
         parsed.displayName,
         parsed.service,
         parsed.owner,

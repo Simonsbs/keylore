@@ -21,10 +21,12 @@ export class ApprovalService {
     context: AuthContext,
     input: AccessRequestInput,
     decision: { reason: string; ruleId?: string; correlationId: string },
+    tenantId: string,
   ): Promise<ApprovalRequest> {
     return this.traces.withSpan("approval.create_pending", { credentialId: input.credentialId }, async () => {
       const request = approvalRequestSchema.parse({
         id: randomUUID(),
+        tenantId,
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + this.approvalTtlSeconds * 1000).toISOString(),
         status: "pending",
@@ -48,10 +50,12 @@ export class ApprovalService {
         type: "approval.request",
         action: "approval.request",
         outcome: "success",
+        tenantId,
         principal: context.principal,
         correlationId: decision.correlationId,
         metadata: {
           approvalId: created.id,
+          tenantId,
           credentialId: created.credentialId,
           operation: created.operation,
           targetHost: created.targetHost,
@@ -83,6 +87,9 @@ export class ApprovalService {
     if (!approval || approval.status !== "approved") {
       return undefined;
     }
+    if (context.tenantId && approval.tenantId !== context.tenantId) {
+      return undefined;
+    }
 
     if (new Date(approval.expiresAt).getTime() <= Date.now()) {
       return undefined;
@@ -91,9 +98,9 @@ export class ApprovalService {
     return approval.fingerprint === accessFingerprint(context, input) ? approval : undefined;
   }
 
-  public async list(status?: ApprovalRequest["status"]) {
+  public async list(context: AuthContext, status?: ApprovalRequest["status"]) {
     await this.approvals.expireStale();
-    return this.approvals.list(status);
+    return this.approvals.list(status, context.tenantId);
   }
 
   public async review(
@@ -104,6 +111,10 @@ export class ApprovalService {
   ) {
     return this.traces.withSpan("approval.review", { approvalId: id, decision: status }, async () => {
       await this.approvals.expireStale();
+      const existing = await this.approvals.getById(id);
+      if (existing && context.tenantId && existing.tenantId !== context.tenantId) {
+        throw new Error("Tenant access denied.");
+      }
       const reviewed = await this.approvals.review(id, {
         status,
         reviewedBy: context.principal,
@@ -114,10 +125,12 @@ export class ApprovalService {
           type: "approval.review",
           action: `approval.${status}`,
           outcome: status === "approved" ? "allowed" : "denied",
+          tenantId: reviewed.tenantId,
           principal: context.principal,
           correlationId: reviewed.correlationId,
           metadata: {
             approvalId: reviewed.id,
+            tenantId: reviewed.tenantId,
             credentialId: reviewed.credentialId,
             requestedBy: reviewed.requestedBy,
             reviewNote: reviewed.reviewNote ?? null,

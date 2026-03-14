@@ -47,8 +47,10 @@ export async function makeTestApp(options?: {
   catalog?: CatalogFile;
   policies?: PolicyFile;
   authClients?: Array<
-    Omit<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks"> &
-      Partial<Pick<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks">> & { clientSecret?: string }
+    Omit<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks" | "tenantId"> &
+      Partial<Pick<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks" | "tenantId">> & {
+        clientSecret?: string;
+      }
   >;
   configOverrides?: Partial<KeyLoreConfig>;
   database?: SqlDatabase;
@@ -60,6 +62,7 @@ export async function makeTestApp(options?: {
     credentials: [
       {
         id: "demo",
+        tenantId: "default",
         displayName: "Demo",
         service: "github",
         owner: "platform",
@@ -89,6 +92,7 @@ export async function makeTestApp(options?: {
     rules: [
       {
         id: "allow-demo",
+        tenantId: "default",
         effect: "allow",
         description: "Allow local reads",
         principals: ["local-operator"],
@@ -108,7 +112,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.9.0",
+    version: "0.10.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -268,6 +272,7 @@ export async function makeTestApp(options?: {
     ];
 
   for (const client of authClients.map((client) => ({
+    tenantId: "default",
     tokenEndpointAuthMethod: "client_secret_basic" as const,
     jwks: [],
     ...client,
@@ -275,6 +280,7 @@ export async function makeTestApp(options?: {
     const hashed = client.clientSecret ? hashSecret(client.clientSecret) : undefined;
     await authClientRepository.upsert({
       clientId: client.clientId,
+      tenantId: client.tenantId,
       displayName: client.displayName,
       secretHash: hashed?.hash,
       secretSalt: hashed?.salt,

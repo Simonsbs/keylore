@@ -42,6 +42,7 @@ This file maps the current repository state to the local `KeyLore.md` production
 - `private_key_jwt` OAuth client authentication with persisted replay protection
 - rotation orchestration with persisted runs and operator lifecycle controls
 - HA-oriented Helm values with pod disruption budget and spread constraints
+- tenant-aware partitioning across catalog, policy, auth, approval, break-glass, audit, token, rotation, and backup data
 
 ## Partially implemented
 
@@ -49,10 +50,10 @@ This file maps the current repository state to the local `KeyLore.md` production
 - Remote MCP auth: client credentials and protected-resource metadata exist, but no broader OAuth authorization flows
 - Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
 - Observability: metrics, recent traces, trace export, dashboards, and alert rules are present, but no vendor-specific tracing stack is bundled yet
+- Multi-tenant operations: tenant-aware boundaries exist in the data plane, but there is no tenant admin UI or tenant bootstrap automation yet
 
 ## Deferred
 
-- multi-tenant isolation
 - admin UI and CLI richness
 - managed gateway profiles beyond static examples
 

@@ -95,6 +95,7 @@ export class AuthService {
 
   private buildClientRecord(client: {
     clientId: string;
+    tenantId: string;
     displayName: string;
     roles: PrincipalRole[];
     allowedScopes: AccessScope[];
@@ -104,6 +105,7 @@ export class AuthService {
   }): AuthClientRecord {
     return authClientRecordSchema.parse({
       clientId: client.clientId,
+      tenantId: client.tenantId,
       displayName: client.displayName,
       roles: client.roles,
       allowedScopes: client.allowedScopes,
@@ -289,6 +291,7 @@ export class AuthService {
     await this.tokens.issue({
       tokenHash: hashOpaqueToken(token),
       clientId: client.clientId,
+      tenantId: client.tenantId,
       subject: client.clientId,
       scopes: grantedScopes,
       roles: client.roles,
@@ -300,9 +303,11 @@ export class AuthService {
       type: "auth.token",
       action: "auth.token.issue",
       outcome: "success",
+      tenantId: client.tenantId,
       principal: client.clientId,
       metadata: {
         clientId: client.clientId,
+        tenantId: client.tenantId,
         scopes: grantedScopes,
         resource: input.resource ?? null,
         expiresAt,
@@ -347,6 +352,7 @@ export class AuthService {
     return authContextSchema.parse({
       principal: stored.subject,
       clientId: stored.clientId,
+      tenantId: stored.tenantId,
       roles: stored.roles,
       scopes: stored.scopes,
       resource: stored.resource,
@@ -389,11 +395,15 @@ export class AuthService {
       throw new Error(`Client already exists: ${input.clientId}`);
     }
 
+    if (actor.tenantId && input.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
     const isPrivateKey = input.tokenEndpointAuthMethod === "private_key_jwt";
     const clientSecret = isPrivateKey ? undefined : input.clientSecret ?? this.generateClientSecret();
     const hashed = clientSecret ? hashSecret(clientSecret) : undefined;
     await this.clients.upsert({
       clientId: input.clientId,
+      tenantId: input.tenantId,
       displayName: input.displayName,
       secretHash: hashed?.hash,
       secretSalt: hashed?.salt,
@@ -406,6 +416,7 @@ export class AuthService {
 
     const client = this.buildClientRecord({
       clientId: input.clientId,
+      tenantId: input.tenantId,
       displayName: input.displayName,
       roles: input.roles,
       allowedScopes: input.allowedScopes,
@@ -418,9 +429,11 @@ export class AuthService {
       type: "auth.client",
       action: "auth.client.create",
       outcome: "success",
+      tenantId: client.tenantId,
       principal: actor.principal,
       metadata: {
         clientId: client.clientId,
+        tenantId: client.tenantId,
         roles: client.roles,
         allowedScopes: client.allowedScopes,
         status: client.status,
@@ -443,9 +456,13 @@ export class AuthService {
     if (!existing) {
       return undefined;
     }
+    if (actor.tenantId && existing.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
 
     const merged = this.buildClientRecord({
       clientId,
+      tenantId: existing.tenantId,
       displayName: patch.displayName ?? existing.displayName,
       roles: patch.roles ?? existing.roles,
       allowedScopes: patch.allowedScopes ?? existing.allowedScopes,
@@ -457,6 +474,7 @@ export class AuthService {
     const switchingToPrivateKey = merged.tokenEndpointAuthMethod === "private_key_jwt";
     await this.clients.upsert({
       clientId,
+      tenantId: merged.tenantId,
       displayName: merged.displayName,
       secretHash: switchingToPrivateKey ? undefined : existing.secretHash,
       secretSalt: switchingToPrivateKey ? undefined : existing.secretSalt,
@@ -475,9 +493,11 @@ export class AuthService {
       type: "auth.client",
       action: "auth.client.update",
       outcome: "success",
+      tenantId: merged.tenantId,
       principal: actor.principal,
       metadata: {
         clientId,
+        tenantId: merged.tenantId,
         fields: Object.keys(patch),
         status: merged.status,
         authMethod: merged.tokenEndpointAuthMethod,
@@ -496,6 +516,9 @@ export class AuthService {
     if (!existing) {
       return undefined;
     }
+    if (actor.tenantId && existing.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
     if (existing.tokenEndpointAuthMethod === "private_key_jwt") {
       throw new Error("private_key_jwt clients do not support shared-secret rotation.");
     }
@@ -504,6 +527,7 @@ export class AuthService {
     const hashed = hashSecret(secret);
     await this.clients.upsert({
       clientId,
+      tenantId: existing.tenantId,
       displayName: existing.displayName,
       secretHash: hashed.hash,
       secretSalt: hashed.salt,
@@ -521,9 +545,11 @@ export class AuthService {
       type: "auth.client",
       action: "auth.client.rotate_secret",
       outcome: "success",
+      tenantId: client.tenantId,
       principal: actor.principal,
       metadata: {
         clientId,
+        tenantId: client.tenantId,
       },
     });
 
@@ -535,6 +561,7 @@ export class AuthService {
 
   public async listTokens(filter?: {
     clientId?: string;
+    tenantId?: string;
     status?: "active" | "revoked";
   }): Promise<AccessTokenRecord[]> {
     return this.tokens.list(filter);
@@ -546,13 +573,18 @@ export class AuthService {
   ): Promise<AccessTokenRecord | undefined> {
     const token = await this.tokens.revokeById(tokenId);
     if (token) {
+      if (actor.tenantId && token.tenantId !== actor.tenantId) {
+        throw new Error("Tenant access denied.");
+      }
       await this.audit.record({
         type: "auth.token",
         action: "auth.token.revoke",
         outcome: "success",
+        tenantId: token.tenantId,
         principal: actor.principal,
         metadata: {
           tokenId: token.tokenId,
+          tenantId: token.tenantId,
           clientId: token.clientId,
           subject: token.subject,
         },

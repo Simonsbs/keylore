@@ -48,6 +48,7 @@ export async function bootstrapFromFiles(
         const hashed = secret ? hashSecret(secret) : undefined;
         await authClientRepository.upsert({
           clientId: client.clientId,
+          tenantId: client.tenantId,
           displayName: client.displayName,
           secretHash: hashed?.hash,
           secretSalt: hashed?.salt,

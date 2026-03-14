@@ -10,6 +10,7 @@ import { AuthClientRepository, StoredAuthClient } from "./interfaces.js";
 
 interface AuthClientRow {
   client_id: string;
+  tenant_id: string;
   display_name: string;
   secret_hash: string | null;
   secret_salt: string | null;
@@ -33,6 +34,7 @@ function normalizeJwks(value: unknown): Array<Record<string, unknown>> {
 function mapRow(row: AuthClientRow): StoredAuthClient {
   const base = authClientRecordSchema.parse({
     clientId: row.client_id,
+    tenantId: row.tenant_id,
     displayName: row.display_name,
     roles: row.roles,
     allowedScopes: row.allowed_scopes,
@@ -51,6 +53,7 @@ function mapRow(row: AuthClientRow): StoredAuthClient {
 function stripSecrets(client: StoredAuthClient): AuthClientRecord {
   return authClientRecordSchema.parse({
     clientId: client.clientId,
+    tenantId: client.tenantId,
     displayName: client.displayName,
     roles: client.roles,
     allowedScopes: client.allowedScopes,
@@ -91,6 +94,7 @@ export class PgAuthClientRepository implements AuthClientRepository {
 
   public async upsert(client: {
     clientId: string;
+    tenantId: string;
     displayName: string;
     secretHash?: string;
     secretSalt?: string;
@@ -102,12 +106,13 @@ export class PgAuthClientRepository implements AuthClientRepository {
   }): Promise<void> {
     await this.database.query(
       `INSERT INTO oauth_clients (
-        client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
+        client_id, tenant_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
         token_endpoint_auth_method, jwks
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
       )
       ON CONFLICT (client_id) DO UPDATE SET
+        tenant_id = EXCLUDED.tenant_id,
         display_name = EXCLUDED.display_name,
         secret_hash = EXCLUDED.secret_hash,
         secret_salt = EXCLUDED.secret_salt,
@@ -119,6 +124,7 @@ export class PgAuthClientRepository implements AuthClientRepository {
         updated_at = NOW()`,
       [
         client.clientId,
+        client.tenantId,
         client.displayName,
         client.secretHash ?? null,
         client.secretSalt ?? null,

@@ -51,6 +51,7 @@ export const authClientAuthMethodSchema = z.enum([
   "client_secret_post",
   "private_key_jwt",
 ]);
+export const tenantIdSchema = z.string().min(1).max(128);
 export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "expired"]);
 export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
 export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
@@ -95,6 +96,7 @@ export const credentialBindingSchema = z.object({
 
 export const credentialRecordSchema = z.object({
   id: z.string().min(1),
+  tenantId: tenantIdSchema.default("default"),
   displayName: z.string().min(1),
   service: z.string().min(1),
   owner: z.string().min(1),
@@ -122,6 +124,7 @@ export const catalogFileSchema = z.object({
 
 export const policyRuleSchema = z.object({
   id: z.string().min(1),
+  tenantId: tenantIdSchema.default("default"),
   effect: z.enum(["allow", "deny", "approval"]),
   description: z.string().min(1),
   principals: z.array(z.string().min(1)).min(1),
@@ -141,6 +144,7 @@ export const policyFileSchema = z.object({
 export const auditEventSchema = z.object({
   eventId: z.string().uuid(),
   occurredAt: z.string().datetime(),
+  tenantId: tenantIdSchema.default("default"),
   type: z.enum([
     "catalog.search",
     "catalog.read",
@@ -213,7 +217,7 @@ export const catalogSearchInputSchema = z.object({
 export const createCredentialInputSchema = credentialRecordSchema;
 
 export const updateCredentialInputSchema = credentialRecordSchema
-  .omit({ id: true })
+  .omit({ id: true, tenantId: true })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided.",
@@ -254,6 +258,7 @@ export const runtimeExecutionResultSchema = z.object({
 export const authClientSeedSchema = z
   .object({
     clientId: z.string().min(1),
+    tenantId: tenantIdSchema.default("default"),
     displayName: z.string().min(1),
     secretRef: z.string().min(1).optional(),
     tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
@@ -297,6 +302,7 @@ export const authClientSeedFileSchema = z.object({
 
 export const authClientRecordSchema = z.object({
   clientId: z.string().min(1),
+  tenantId: tenantIdSchema.default("default"),
   displayName: z.string().min(1),
   roles: z.array(principalRoleSchema).min(1),
   allowedScopes: z.array(accessScopeSchema).min(1),
@@ -308,6 +314,7 @@ export const authClientRecordSchema = z.object({
 export const authClientCreateInputSchema = z
   .object({
     clientId: z.string().min(1),
+    tenantId: tenantIdSchema.default("default"),
     displayName: z.string().min(1),
     roles: z.array(principalRoleSchema).min(1),
     allowedScopes: z.array(accessScopeSchema).min(1),
@@ -382,6 +389,7 @@ export const tokenIssueOutputSchema = z.object({
 export const authContextSchema = z.object({
   principal: z.string().min(1),
   clientId: z.string().min(1),
+  tenantId: tenantIdSchema.optional(),
   roles: z.array(principalRoleSchema).min(1),
   scopes: z.array(accessScopeSchema).min(1),
   resource: z.string().url().optional(),
@@ -389,6 +397,7 @@ export const authContextSchema = z.object({
 
 export const approvalRequestSchema = z.object({
   id: z.string().uuid(),
+  tenantId: tenantIdSchema.default("default"),
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   status: approvalStatusSchema,
@@ -429,6 +438,7 @@ export const approvalListOutputSchema = z.object({
 
 export const breakGlassRequestSchema = z.object({
   id: z.string().uuid(),
+  tenantId: tenantIdSchema.default("default"),
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   status: breakGlassStatusSchema,
@@ -485,6 +495,7 @@ export const authClientListOutputSchema = z.object({
 export const accessTokenRecordSchema = z.object({
   tokenId: z.string().uuid(),
   clientId: z.string().min(1),
+  tenantId: tenantIdSchema.default("default"),
   subject: z.string().min(1),
   scopes: z.array(accessScopeSchema).min(1),
   roles: z.array(principalRoleSchema).min(1),
@@ -605,6 +616,7 @@ export const traceExportStatusOutputSchema = z.object({
 
 export const rotationRunSchema = z.object({
   id: z.string().uuid(),
+  tenantId: tenantIdSchema.default("default"),
   credentialId: z.string().min(1),
   status: rotationRunStatusSchema,
   source: rotationRunSourceSchema,

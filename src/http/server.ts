@@ -223,6 +223,7 @@ async function authenticateRequest(
       extra: {
         principal: context.principal,
         roles: context.roles,
+        tenantId: context.tenantId,
       },
     };
     return context;
@@ -261,9 +262,11 @@ function parseBasicAuthHeader(req: IncomingMessage): { clientId: string; clientS
 function parseAuthContextFromRequest(req: RequestWithAuth): AuthContext {
   const principal = typeof req.auth?.extra?.principal === "string" ? req.auth.extra.principal : req.auth?.clientId;
   const roles = Array.isArray(req.auth?.extra?.roles) ? req.auth?.extra?.roles : [];
+  const tenantId = typeof req.auth?.extra?.tenantId === "string" ? req.auth.extra.tenantId : undefined;
   return authContextFromToken({
     principal: principal ?? "unknown",
     clientId: req.auth?.clientId ?? "unknown",
+    tenantId,
     scopes: (req.auth?.scopes ?? []) as AccessScope[],
     roles: roles as AuthContext["roles"],
     resource: req.auth?.resource?.href,
@@ -412,6 +415,8 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                   ? 409
                 : message.startsWith("Missing required role")
                   ? 403
+                  : message === "Tenant access denied."
+                    ? 403
                   : message.startsWith("Missing required scopes") ||
                       message.startsWith("Missing one of the required scopes")
                     ? 403
@@ -607,7 +612,7 @@ async function handleApiRequest(
     }
     app.auth.requireRoles(context, ["admin", "auditor"]);
     const limit = Number.parseInt(url.searchParams.get("limit") ?? "20", 10);
-    const events = await app.broker.listRecentAuditEvents(limit);
+    const events = await app.broker.listRecentAuditEvents(context, limit);
     respondJson(res, 200, { events });
     return;
   }
@@ -626,7 +631,9 @@ async function handleApiRequest(
     }
     app.auth.requireAnyScope(context, ["auth:read", "admin:read"]);
     app.auth.requireRoles(context, ["admin", "auth_admin"]);
-    const clients = await app.auth.listClients();
+    const clients = (await app.auth.listClients()).filter(
+      (client) => !context.tenantId || client.tenantId === context.tenantId,
+    );
     respondJson(res, 200, { clients });
     return;
   }
@@ -669,7 +676,10 @@ async function handleApiRequest(
       clientId: url.searchParams.get("clientId") ?? undefined,
       status: url.searchParams.get("status") ?? undefined,
     });
-    const tokens = await app.auth.listTokens(query);
+    const tokens = await app.auth.listTokens({
+      ...query,
+      tenantId: context.tenantId,
+    });
     respondJson(res, 200, { tokens });
     return;
   }
@@ -807,6 +817,7 @@ async function handleApiRequest(
     app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
     app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator", "auditor"]);
     const rotations = await app.rotations.list({
+      tenantId: context.tenantId,
       status: (url.searchParams.get("status") ?? undefined) as
         | "pending"
         | "in_progress"
@@ -1002,8 +1013,13 @@ async function handleApiRequest(
       return;
     }
     app.auth.requireRoles(context, ["admin", "approver"]);
-    const status = url.searchParams.get("status") as Parameters<typeof app.broker.listApprovalRequests>[0];
-    const approvals = await app.broker.listApprovalRequests(status);
+    const status = (url.searchParams.get("status") ?? undefined) as
+      | "pending"
+      | "approved"
+      | "denied"
+      | "expired"
+      | undefined;
+    const approvals = await app.broker.listApprovalRequests(context, status);
     respondJson(res, 200, { approvals });
     return;
   }
@@ -1062,7 +1078,7 @@ async function handleApiRequest(
       return;
     }
     app.auth.requireRoles(context, ["admin", "approver", "auditor", "breakglass_operator"]);
-    const requests = await app.broker.listBreakGlassRequests({
+    const requests = await app.broker.listBreakGlassRequests(context, {
       status: (url.searchParams.get("status") ?? undefined) as
         | "pending"
         | "active"

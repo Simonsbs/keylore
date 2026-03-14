@@ -6,6 +6,7 @@ import { ApprovalRepository } from "./interfaces.js";
 
 interface ApprovalRow {
   id: string;
+  tenant_id: string;
   created_at: string | Date;
   expires_at: string | Date;
   status: ApprovalRequest["status"];
@@ -39,6 +40,7 @@ function toIso(value: string | Date | null): string | undefined {
 function mapRow(row: ApprovalRow): ApprovalRequest {
   return approvalRequestSchema.parse({
     id: row.id,
+    tenantId: row.tenant_id,
     createdAt: toIso(row.created_at),
     expiresAt: toIso(row.expires_at),
     status: row.status,
@@ -69,18 +71,19 @@ export class PgApprovalRepository implements ApprovalRepository {
     const parsed = approvalRequestSchema.parse(input);
     await this.database.query(
       `INSERT INTO approval_requests (
-        id, created_at, expires_at, status, requested_by, requested_roles,
+        id, tenant_id, created_at, expires_at, status, requested_by, requested_roles,
         credential_id, operation, target_url, target_host, reason, rule_id,
         correlation_id, fingerprint, required_approvals, approval_count, denial_count, reviews,
         reviewed_by, reviewed_at, review_note
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18,
-        $19, $20, $21
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19,
+        $20, $21, $22
       )`,
       [
         parsed.id,
+        parsed.tenantId,
         parsed.createdAt,
         parsed.expiresAt,
         parsed.status,
@@ -127,15 +130,25 @@ export class PgApprovalRepository implements ApprovalRepository {
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   }
 
-  public async list(status?: ApprovalRequest["status"]): Promise<ApprovalRequest[]> {
-    const result = status
-      ? await this.database.query<ApprovalRow>(
-          "SELECT * FROM approval_requests WHERE status = $1 ORDER BY created_at DESC",
-          [status],
-        )
-      : await this.database.query<ApprovalRow>(
-          "SELECT * FROM approval_requests ORDER BY created_at DESC",
-        );
+  public async list(
+    status?: ApprovalRequest["status"],
+    tenantId?: string,
+  ): Promise<ApprovalRequest[]> {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (status) {
+      params.push(status);
+      clauses.push(`status = $${params.length}`);
+    }
+    if (tenantId) {
+      params.push(tenantId);
+      clauses.push(`tenant_id = $${params.length}`);
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const result = await this.database.query<ApprovalRow>(
+      `SELECT * FROM approval_requests ${where} ORDER BY created_at DESC`,
+      params,
+    );
     return result.rows.map(mapRow);
   }
 

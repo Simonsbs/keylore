@@ -41,6 +41,7 @@ export interface AuthClientRepository {
   getByClientId(clientId: string): Promise<StoredAuthClient | undefined>;
   upsert(client: {
     clientId: string;
+    tenantId: string;
     displayName: string;
     secretHash?: string;
     secretSalt?: string;
@@ -61,6 +62,7 @@ export interface AccessTokenRepository {
   issue(input: {
     tokenHash: string;
     clientId: string;
+    tenantId: string;
     subject: string;
     scopes: string[];
     roles: PrincipalRole[];
@@ -71,6 +73,7 @@ export interface AccessTokenRepository {
   touch(tokenHash: string): Promise<void>;
   list(filter?: {
     clientId?: string;
+    tenantId?: string;
     status?: "active" | "revoked";
   }): Promise<AccessTokenRecord[]>;
   expireStale(): Promise<number>;
@@ -87,6 +90,7 @@ export interface ApprovalRepository {
   expireStale(): Promise<number>;
   getById(id: string): Promise<ApprovalRequest | undefined>;
   list(status?: ApprovalRequest["status"]): Promise<ApprovalRequest[]>;
+  list(status: ApprovalRequest["status"] | undefined, tenantId?: string): Promise<ApprovalRequest[]>;
   review(
     id: string,
     update: {
@@ -104,6 +108,7 @@ export interface BreakGlassRepository {
   list(filter?: {
     status?: BreakGlassRequest["status"];
     requestedBy?: string;
+    tenantId?: string;
   }): Promise<BreakGlassRequest[]>;
   review(
     id: string,
@@ -128,6 +133,7 @@ export interface RotationRunRepository {
   list(filter?: {
     status?: RotationRun["status"];
     credentialId?: string;
+    tenantId?: string;
   }): Promise<RotationRun[]>;
   findOpenByCredentialId(credentialId: string): Promise<RotationRun | undefined>;
   transition(

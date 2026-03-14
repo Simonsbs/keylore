@@ -5,6 +5,7 @@ import { AccessRequestInput, AuthContext } from "../domain/types.js";
 export function accessFingerprint(context: AuthContext, input: AccessRequestInput): string {
   const serialized = JSON.stringify({
     principal: context.principal,
+    tenantId: context.tenantId ?? null,
     credentialId: input.credentialId,
     operation: input.operation,
     targetUrl: input.targetUrl,

@@ -48,6 +48,8 @@ export class NotificationService {
     }
 
     await this.traces.withSpan("notification.delivery", { eventType: type }, async () => {
+      const tenantId =
+        typeof payload.tenantId === "string" && payload.tenantId.length > 0 ? payload.tenantId : undefined;
       try {
         const response = await fetch(webhookUrl, {
           method: "POST",
@@ -64,8 +66,10 @@ export class NotificationService {
           type: "notification.delivery",
           action: `notification.${type}`,
           outcome: "success",
+          tenantId,
           principal: "keylore-system",
           metadata: {
+            tenantId: tenantId ?? null,
             eventType: type,
             webhookUrl,
           },
@@ -76,8 +80,10 @@ export class NotificationService {
           type: "notification.delivery",
           action: `notification.${type}`,
           outcome: "error",
+          tenantId,
           principal: "keylore-system",
           metadata: {
+            tenantId: tenantId ?? null,
             eventType: type,
             webhookUrl,
             error: error instanceof Error ? error.message : "Notification delivery failed.",

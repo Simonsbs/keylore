@@ -196,7 +196,9 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
   }
 
   if (resource === "auth" && action === "clients" && subject === "list") {
-    const clients = await app.auth.listClients();
+    const clients = (await app.auth.listClients()).filter(
+      (client) => !context.tenantId || client.tenantId === context.tenantId,
+    );
     return output({ clients });
   }
 
@@ -255,6 +257,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
   if (resource === "auth" && action === "tokens" && subject === "list") {
     const tokens = await app.auth.listTokens({
       clientId: readStringFlag(parsed.flags, "client-id"),
+      tenantId: context.tenantId,
       status: readStringFlag(parsed.flags, "status") as "active" | "revoked" | undefined,
     });
     return output({ tokens });
@@ -311,6 +314,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
   if (resource === "system" && action === "rotations" && subject === "list") {
     const rotations = await app.rotations.list({
+      tenantId: context.tenantId,
       status: readStringFlag(parsed.flags, "status") as
         | "pending"
         | "in_progress"
@@ -439,12 +443,12 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
 
   if (resource === "audit" && action === "recent") {
     const limit = readNumberFlag(parsed.flags, "limit") ?? 20;
-    const events = await app.broker.listRecentAuditEvents(limit);
+    const events = await app.broker.listRecentAuditEvents(context, limit);
     return output({ events });
   }
 
   if (resource === "breakglass" && action === "list") {
-    const requests = await app.broker.listBreakGlassRequests({
+    const requests = await app.broker.listBreakGlassRequests(context, {
       status: readStringFlag(parsed.flags, "status") as
         | "pending"
         | "active"
@@ -492,7 +496,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       | "denied"
       | "expired"
       | undefined;
-    const approvals = await app.broker.listApprovalRequests(status);
+    const approvals = await app.broker.listApprovalRequests(context, status);
     return output({ approvals });
   }
 

@@ -155,6 +155,7 @@ test("oauth token endpoint and approval workflow operate over HTTP", async () =>
       rules: [
         {
           id: "approval-demo",
+          tenantId: "default",
           effect: "approval",
           description: "Needs approval",
           principals: ["consumer-client"],
@@ -271,6 +272,7 @@ test("approval review quorum requires distinct approvers before access is grante
       rules: [
         {
           id: "approval-quorum-demo",
+          tenantId: "default",
           effect: "approval",
           description: "Needs quorum approval",
           principals: ["consumer-client"],
@@ -472,6 +474,7 @@ test("simulation and dry-run evaluate policy without executing the outbound requ
       rules: [
         {
           id: "allow-admin-demo",
+          tenantId: "default",
           effect: "allow",
           description: "Allow admin demo reads",
           principals: ["admin-client"],
@@ -909,6 +912,232 @@ test("oauth token endpoint supports private_key_jwt clients and blocks assertion
   await close();
 });
 
+test("tenant-scoped tokens are isolated across auth, catalog, and write operations", async () => {
+  const { app, close } = await makeTestApp({
+    catalog: {
+      version: 1,
+      credentials: [
+        {
+          id: "tenant-a-demo",
+          tenantId: "tenant-a",
+          displayName: "Tenant A Demo",
+          service: "github",
+          owner: "platform",
+          scopeTier: "read_only",
+          sensitivity: "high",
+          allowedDomains: ["localhost"],
+          permittedOperations: ["http.get"],
+          expiresAt: null,
+          rotationPolicy: "30 days",
+          lastValidatedAt: null,
+          selectionNotes: "Tenant A credential",
+          binding: {
+            adapter: "env",
+            ref: "KEYLORE_TEST_SECRET",
+            authType: "bearer",
+            headerName: "Authorization",
+            headerPrefix: "Bearer ",
+          },
+          tags: ["tenant-a"],
+          status: "active",
+        },
+        {
+          id: "tenant-b-demo",
+          tenantId: "tenant-b",
+          displayName: "Tenant B Demo",
+          service: "github",
+          owner: "platform",
+          scopeTier: "read_only",
+          sensitivity: "high",
+          allowedDomains: ["localhost"],
+          permittedOperations: ["http.get"],
+          expiresAt: null,
+          rotationPolicy: "30 days",
+          lastValidatedAt: null,
+          selectionNotes: "Tenant B credential",
+          binding: {
+            adapter: "env",
+            ref: "KEYLORE_TEST_SECRET",
+            authType: "bearer",
+            headerName: "Authorization",
+            headerPrefix: "Bearer ",
+          },
+          tags: ["tenant-b"],
+          status: "active",
+        },
+      ],
+    },
+    policies: {
+      version: 1,
+      rules: [],
+    },
+    authClients: [
+      {
+        clientId: "tenant-a-admin",
+        tenantId: "tenant-a",
+        displayName: "Tenant A Admin",
+        roles: ["admin", "auth_admin"],
+        allowedScopes: ["auth:read", "auth:write", "catalog:read", "catalog:write", "broker:use"],
+        status: "active",
+        clientSecret: "tenant-a-admin-secret",
+      },
+      {
+        clientId: "tenant-a-consumer",
+        tenantId: "tenant-a",
+        displayName: "Tenant A Consumer",
+        roles: ["consumer"],
+        allowedScopes: ["catalog:read", "broker:use"],
+        status: "active",
+        clientSecret: "tenant-a-consumer-secret",
+      },
+      {
+        clientId: "tenant-b-admin",
+        tenantId: "tenant-b",
+        displayName: "Tenant B Admin",
+        roles: ["admin", "auth_admin"],
+        allowedScopes: ["auth:read", "auth:write", "catalog:read", "catalog:write", "broker:use"],
+        status: "active",
+        clientSecret: "tenant-b-admin-secret",
+      },
+    ],
+    configOverrides: {
+      httpPort: 8898,
+      publicBaseUrl: "http://127.0.0.1:8898",
+      oauthIssuerUrl: "http://127.0.0.1:8898/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tenantAAdminTokenResponse = await fetch("http://127.0.0.1:8898/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "tenant-a-admin",
+      client_secret: "tenant-a-admin-secret",
+      scope: "auth:read auth:write catalog:read catalog:write broker:use",
+      resource: "http://127.0.0.1:8898/v1",
+    }),
+  });
+  assert.equal(tenantAAdminTokenResponse.status, 200);
+  const tenantAAdminToken = (await tenantAAdminTokenResponse.json()) as { access_token: string };
+
+  const tenantAConsumerTokenResponse = await fetch("http://127.0.0.1:8898/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "tenant-a-consumer",
+      client_secret: "tenant-a-consumer-secret",
+      scope: "catalog:read broker:use",
+      resource: "http://127.0.0.1:8898/v1",
+    }),
+  });
+  assert.equal(tenantAConsumerTokenResponse.status, 200);
+  const tenantAConsumerToken = (await tenantAConsumerTokenResponse.json()) as { access_token: string };
+
+  const clientListResponse = await fetch("http://127.0.0.1:8898/v1/auth/clients", {
+    headers: {
+      authorization: `Bearer ${tenantAAdminToken.access_token}`,
+    },
+  });
+  assert.equal(clientListResponse.status, 200);
+  const clientListPayload = (await clientListResponse.json()) as {
+    clients: Array<{ clientId: string; tenantId: string }>;
+  };
+  assert.deepEqual(
+    clientListPayload.clients.map((client) => client.clientId).sort(),
+    ["tenant-a-admin", "tenant-a-consumer"],
+  );
+  assert.equal(clientListPayload.clients.every((client) => client.tenantId === "tenant-a"), true);
+
+  const catalogListResponse = await fetch("http://127.0.0.1:8898/v1/catalog/credentials", {
+    headers: {
+      authorization: `Bearer ${tenantAConsumerToken.access_token}`,
+    },
+  });
+  assert.equal(catalogListResponse.status, 200);
+  const catalogListPayload = (await catalogListResponse.json()) as {
+    credentials: Array<{ id: string; tenantId: string }>;
+  };
+  assert.deepEqual(catalogListPayload.credentials.map((credential) => credential.id), ["tenant-a-demo"]);
+  assert.equal(catalogListPayload.credentials[0]?.tenantId, "tenant-a");
+
+  const allowedReadResponse = await fetch("http://127.0.0.1:8898/v1/catalog/credentials/tenant-a-demo", {
+    headers: {
+      authorization: `Bearer ${tenantAConsumerToken.access_token}`,
+    },
+  });
+  assert.equal(allowedReadResponse.status, 200);
+
+  const hiddenReadResponse = await fetch("http://127.0.0.1:8898/v1/catalog/credentials/tenant-b-demo", {
+    headers: {
+      authorization: `Bearer ${tenantAConsumerToken.access_token}`,
+    },
+  });
+  assert.equal(hiddenReadResponse.status, 404);
+
+  const deniedCreateResponse = await fetch("http://127.0.0.1:8898/v1/catalog/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tenantAAdminToken.access_token}`,
+    },
+    body: JSON.stringify({
+      id: "cross-tenant-write",
+      tenantId: "tenant-b",
+      displayName: "Cross Tenant Write",
+      service: "github",
+      owner: "platform",
+      scopeTier: "read_only",
+      sensitivity: "high",
+      allowedDomains: ["localhost"],
+      permittedOperations: ["http.get"],
+      expiresAt: null,
+      rotationPolicy: "30 days",
+      lastValidatedAt: null,
+      selectionNotes: "Should be blocked",
+      binding: {
+        adapter: "env",
+        ref: "KEYLORE_TEST_SECRET",
+        authType: "bearer",
+        headerName: "Authorization",
+        headerPrefix: "Bearer ",
+      },
+      tags: ["blocked"],
+      status: "active",
+    }),
+  });
+  assert.equal(deniedCreateResponse.status, 403);
+
+  const hiddenAccessResponse = await fetch("http://127.0.0.1:8898/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tenantAConsumerToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "tenant-b-demo",
+      operation: "http.get",
+      targetUrl: "http://localhost/hidden",
+    }),
+  });
+  assert.equal(hiddenAccessResponse.status, 200);
+  const hiddenAccessDecision = (await hiddenAccessResponse.json()) as {
+    decision: string;
+    reason: string;
+  };
+  assert.equal(hiddenAccessDecision.decision, "denied");
+  assert.match(hiddenAccessDecision.reason, /Credential not found/i);
+
+  await server.close();
+  await close();
+});
+
 test("rotation workflow plans due credentials and completes with updated binding state", async () => {
   const { app, close } = await makeTestApp({
     catalog: {
@@ -916,6 +1145,7 @@ test("rotation workflow plans due credentials and completes with updated binding
       credentials: [
         {
           id: "rotation-demo",
+          tenantId: "default",
           displayName: "Rotation Demo",
           service: "github",
           owner: "platform",
@@ -1032,6 +1262,7 @@ test("catalog reports and adapter health expose rotation metadata without secret
       credentials: [
         {
           id: "demo",
+          tenantId: "default",
           displayName: "Demo",
           service: "github",
           owner: "platform",
@@ -1121,6 +1352,7 @@ test("sandbox runtime injects a secret without exposing it in the result", async
       credentials: [
         {
           id: "sandbox-demo",
+          tenantId: "default",
           displayName: "Sandbox Demo",
           service: "github",
           owner: "platform",
@@ -1630,6 +1862,7 @@ test("notification webhooks are signed and traces can be queried by propagated t
       rules: [
         {
           id: "approval-notify-demo",
+          tenantId: "default",
           effect: "approval",
           description: "Needs approval",
           principals: ["consumer-client"],
@@ -1761,6 +1994,7 @@ test("egress policy blocks private address literals even when policy and credent
       credentials: [
         {
           id: "metadata-demo",
+          tenantId: "default",
           displayName: "Metadata Demo",
           service: "cloud",
           owner: "platform",
@@ -1789,6 +2023,7 @@ test("egress policy blocks private address literals even when policy and credent
       rules: [
         {
           id: "allow-private-ip",
+          tenantId: "default",
           effect: "allow",
           description: "Allow demo metadata read",
           principals: ["admin-client"],
@@ -1853,6 +2088,7 @@ test("sandbox runtime rejects reserved environment overrides", async () => {
       credentials: [
         {
           id: "sandbox-guarded",
+          tenantId: "default",
           displayName: "Sandbox Guarded",
           service: "github",
           owner: "platform",

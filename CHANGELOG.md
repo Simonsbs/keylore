@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-14
+
+### Added
+
+- Tenant-aware partitioning for credentials, policies, auth clients, approvals, break-glass requests, audit events, access tokens, rotation runs, and logical backups.
+- Tenant-bound token enforcement across REST, CLI, and MCP read and write paths.
+- End-to-end tenant isolation coverage for auth-client visibility, catalog visibility, cross-tenant write rejection, and hidden access requests.
+
 ## [0.9.0] - 2026-03-14
 
 ### Added

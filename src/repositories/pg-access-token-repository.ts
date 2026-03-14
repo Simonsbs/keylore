@@ -13,6 +13,7 @@ interface AccessTokenRow {
   token_id: string;
   token_hash: string;
   client_id: string;
+  tenant_id: string;
   subject: string;
   scopes: AccessScope[];
   roles: PrincipalRole[];
@@ -34,6 +35,7 @@ function mapRow(row: AccessTokenRow): AccessTokenRecordWithHash {
   const record = accessTokenRecordSchema.parse({
     tokenId: row.token_id,
     clientId: row.client_id,
+    tenantId: row.tenant_id,
     subject: row.subject,
     scopes: row.scopes,
     roles: row.roles,
@@ -56,6 +58,7 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
   public async issue(input: {
     tokenHash: string;
     clientId: string;
+    tenantId: string;
     subject: string;
     scopes: AccessScope[];
     roles: PrincipalRole[];
@@ -64,14 +67,15 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
   }): Promise<void> {
     await this.database.query(
       `INSERT INTO access_tokens (
-        token_id, token_hash, client_id, subject, scopes, roles, resource, expires_at, status
+        token_id, token_hash, client_id, tenant_id, subject, scopes, roles, resource, expires_at, status
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, 'active'
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, 'active'
       )`,
       [
         randomUUID(),
         input.tokenHash,
         input.clientId,
+        input.tenantId,
         input.subject,
         input.scopes,
         input.roles,
@@ -98,6 +102,7 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
 
   public async list(filter?: {
     clientId?: string;
+    tenantId?: string;
     status?: "active" | "revoked";
   }): Promise<AccessTokenRecord[]> {
     const clauses: string[] = [];
@@ -111,6 +116,11 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
     if (filter?.status) {
       values.push(filter.status);
       clauses.push(`status = $${values.length}`);
+    }
+
+    if (filter?.tenantId) {
+      values.push(filter.tenantId);
+      clauses.push(`tenant_id = $${values.length}`);
     }
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";

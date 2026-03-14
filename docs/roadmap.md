@@ -69,8 +69,17 @@
 - add HA-oriented Helm profile with pod disruption budget and topology spread controls
 - expand backup coverage and tests for auth-client and rotation state
 
+## v0.10
+
+- completed:
+- add tenant-aware partitioning for credentials, policies, auth clients, approvals, break-glass, audit events, access tokens, and rotation runs
+- bind remote bearer tokens to a tenant and enforce tenant boundaries across REST, CLI, and MCP reads
+- block cross-tenant credential and auth-client writes for tenant-scoped remote actors
+- preserve tenant identity in logical backup export and restore flows
+- add end-to-end tenant-isolation coverage for auth-client visibility, catalog reads, and write rejection paths
+
 ## v1.0
 
-- add multi-tenant RBAC and audit partitioning
+- broaden OAuth authorization flows beyond client credentials where interactive users need them
 - add admin UI
 - add formal conformance and security hardening suites

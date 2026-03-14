@@ -37,7 +37,7 @@ test("access request is denied when the target domain is not allowlisted", async
 test("audit log records credential search events", async () => {
   const { broker, close } = await makeTestApp();
   await broker.searchCatalog(localOperatorContext("local-operator"), { limit: 10 });
-  const events = await broker.listRecentAuditEvents(5);
+  const events = await broker.listRecentAuditEvents(localOperatorContext("local-operator"), 5);
 
   assert.equal(events[0]?.type, "catalog.search");
 

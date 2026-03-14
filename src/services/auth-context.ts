@@ -45,6 +45,7 @@ export function localOperatorContext(principal: string): AuthContext {
 export function authContextFromToken(auth: {
   principal: string;
   clientId: string;
+  tenantId?: string;
   roles: PrincipalRole[];
   scopes: AccessScope[];
   resource?: string;

@@ -42,6 +42,10 @@ function dueSource(
   return undefined;
 }
 
+function tenantAllowed(context: AuthContext, tenantId: string): boolean {
+  return !context.tenantId || context.tenantId === tenantId;
+}
+
 export class RotationService {
   public constructor(
     private readonly runs: RotationRunRepository,
@@ -59,9 +63,11 @@ export class RotationService {
       type: "rotation.run",
       action: "rotation.create",
       outcome: "success",
+      tenantId: created.tenantId,
       principal: actor.principal,
       metadata: {
         rotationId: created.id,
+        tenantId: created.tenantId,
         credentialId: created.credentialId,
         source: created.source,
         dueAt: created.dueAt ?? null,
@@ -77,6 +83,7 @@ export class RotationService {
   }
 
   public async list(filter?: {
+    tenantId?: string;
     status?: RotationRun["status"];
     credentialId?: string;
   }): Promise<RotationRun[]> {
@@ -90,6 +97,9 @@ export class RotationService {
       if (!credential) {
         throw new Error("Credential not found.");
       }
+      if (!tenantAllowed(context, credential.tenantId)) {
+        throw new Error("Tenant access denied.");
+      }
       const existing = await this.runs.findOpenByCredentialId(parsed.credentialId);
       if (existing) {
         throw new Error("An open rotation already exists for this credential.");
@@ -97,6 +107,7 @@ export class RotationService {
       return this.createRun(
         {
           id: randomUUID(),
+          tenantId: credential.tenantId,
           credentialId: parsed.credentialId,
           status: "pending",
           source: "manual",
@@ -121,6 +132,9 @@ export class RotationService {
 
       for (const credential of credentials) {
         if (credential.status !== "active") {
+          continue;
+        }
+        if (!tenantAllowed(context, credential.tenantId)) {
           continue;
         }
         if (parsed.credentialIds?.length && !parsed.credentialIds.includes(credential.id)) {
@@ -149,6 +163,7 @@ export class RotationService {
           await this.createRun(
             {
               id: randomUUID(),
+              tenantId: credential.tenantId,
               credentialId: credential.id,
               status: "pending",
               source,
@@ -174,6 +189,10 @@ export class RotationService {
 
   public async start(id: string, context: AuthContext, note?: string): Promise<RotationRun | undefined> {
     return this.traces.withSpan("rotation.start", { rotationId: id }, async () => {
+      const existing = await this.runs.getById(id);
+      if (existing && !tenantAllowed(context, existing.tenantId)) {
+        throw new Error("Tenant access denied.");
+      }
       const updated = await this.runs.transition(id, {
         fromStatuses: ["pending"],
         status: "in_progress",
@@ -185,9 +204,11 @@ export class RotationService {
           type: "rotation.run",
           action: "rotation.start",
           outcome: "success",
+          tenantId: updated.tenantId,
           principal: context.principal,
           metadata: {
             rotationId: updated.id,
+            tenantId: updated.tenantId,
             credentialId: updated.credentialId,
           },
         });
@@ -214,6 +235,9 @@ export class RotationService {
       const run = await this.runs.getById(id);
       if (!run) {
         return undefined;
+      }
+      if (!tenantAllowed(context, run.tenantId)) {
+        throw new Error("Tenant access denied.");
       }
       const credential = await this.credentials.getById(run.credentialId);
       if (!credential) {
@@ -244,9 +268,11 @@ export class RotationService {
           type: "rotation.run",
           action: "rotation.complete",
           outcome: "success",
+          tenantId: updated.tenantId,
           principal: context.principal,
           metadata: {
             rotationId: updated.id,
+            tenantId: updated.tenantId,
             credentialId: updated.credentialId,
             targetRef: updated.targetRef ?? null,
           },
@@ -263,6 +289,10 @@ export class RotationService {
 
   public async fail(id: string, context: AuthContext, note?: string): Promise<RotationRun | undefined> {
     return this.traces.withSpan("rotation.fail", { rotationId: id }, async () => {
+      const existing = await this.runs.getById(id);
+      if (existing && !tenantAllowed(context, existing.tenantId)) {
+        throw new Error("Tenant access denied.");
+      }
       const updated = await this.runs.transition(id, {
         fromStatuses: ["pending", "in_progress"],
         status: "failed",
@@ -275,9 +305,11 @@ export class RotationService {
           type: "rotation.run",
           action: "rotation.fail",
           outcome: "error",
+          tenantId: updated.tenantId,
           principal: context.principal,
           metadata: {
             rotationId: updated.id,
+            tenantId: updated.tenantId,
             credentialId: updated.credentialId,
           },
         });

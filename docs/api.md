@@ -6,6 +6,8 @@ All `/v1/*` endpoints require a bearer token minted by `POST /oauth/token`. Most
 
 KeyLore echoes an `x-trace-id` response header on HTTP requests. Callers may supply their own `x-trace-id` header to correlate approval, break-glass, and notification activity.
 
+Remote bearer tokens inherit the tenant of the OAuth client that minted them. Tenant-scoped callers only see and mutate records from their own tenant. Cross-tenant reads are hidden as not found; cross-tenant writes are rejected with `403`.
+
 ### `GET /.well-known/oauth-authorization-server`
 
 Returns OAuth-style token metadata for the `client_credentials` grant.
@@ -54,6 +56,7 @@ Required scope: `catalog:read`
 ### `POST /v1/catalog/credentials`
 
 Creates a credential metadata record. Secret material is still external and referenced by binding only.
+`tenantId` may be supplied by a global operator. Tenant-scoped remote callers may only create credentials inside their own tenant.
 Required scope: `catalog:write`
 Required role: `admin` or `operator`
 
@@ -157,6 +160,7 @@ Required role: `admin` or `auth_admin`
 ### `POST /v1/auth/clients`
 
 Creates an OAuth client and returns the generated or supplied secret exactly once.
+`tenantId` may be supplied by a global operator. Tenant-scoped remote callers may only create clients inside their own tenant.
 Required scope: `auth:write`
 Required role: `admin` or `auth_admin`
 
@@ -186,7 +190,7 @@ Required role: `admin` or `auth_admin`
 
 ### `GET /v1/auth/tokens`
 
-Lists issued access tokens without exposing token material.
+Lists issued access tokens without exposing token material. Tenant-scoped callers only see tokens from their own tenant.
 Required scope: `auth:read`
 Required role: `admin` or `auth_admin`
 

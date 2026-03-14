@@ -41,6 +41,7 @@ const backupEnvelopeSchema = z.object({
 
 interface BackupCredentialRow {
   id: string;
+  tenant_id: string;
   display_name: string;
   service: string;
   owner: string;
@@ -59,6 +60,7 @@ interface BackupCredentialRow {
 
 interface BackupPolicyRow {
   id: string;
+  tenant_id: string;
   effect: "allow" | "deny" | "approval";
   description: string;
   principals: string[];
@@ -72,6 +74,7 @@ interface BackupPolicyRow {
 
 interface BackupAuthClientRow {
   client_id: string;
+  tenant_id: string;
   display_name: string;
   secret_hash: string | null;
   secret_salt: string | null;
@@ -86,6 +89,7 @@ interface BackupAccessTokenRow {
   token_id: string;
   token_hash: string;
   client_id: string;
+  tenant_id: string;
   subject: string;
   scopes: string[];
   roles: string[];
@@ -98,6 +102,7 @@ interface BackupAccessTokenRow {
 
 interface BackupApprovalRow {
   id: string;
+  tenant_id: string;
   created_at: string | Date;
   expires_at: string | Date;
   status: "pending" | "approved" | "denied" | "expired";
@@ -123,6 +128,7 @@ interface BackupApprovalRow {
 interface BackupAuditRow {
   event_id: string;
   occurred_at: string | Date;
+  tenant_id: string;
   type: string;
   action: string;
   outcome: "allowed" | "denied" | "success" | "error";
@@ -133,6 +139,7 @@ interface BackupAuditRow {
 
 interface BackupRotationRunRow {
   id: string;
+  tenant_id: string;
   credential_id: string;
   status: "pending" | "in_progress" | "completed" | "failed" | "cancelled";
   source: "manual" | "catalog_expiry" | "secret_expiry" | "secret_rotation_window";
@@ -150,6 +157,7 @@ interface BackupRotationRunRow {
 
 interface BackupBreakGlassRow {
   id: string;
+  tenant_id: string;
   created_at: string | Date;
   expires_at: string | Date;
   status: BreakGlassRequest["status"];
@@ -240,6 +248,7 @@ export class BackupService {
       sourceVersion: this.sourceVersion,
       credentials: credentials.rows.map((row) => ({
         id: row.id,
+        tenantId: row.tenant_id,
         displayName: row.display_name,
         service: row.service,
         owner: row.owner,
@@ -259,6 +268,7 @@ export class BackupService {
         version: 1,
         rules: policies.rows.map((row) => ({
           id: row.id,
+          tenantId: row.tenant_id,
           effect: row.effect,
           description: row.description,
           principals: row.principals,
@@ -272,6 +282,7 @@ export class BackupService {
       },
       authClients: authClients.rows.map((row) => storedAuthClientSchema.parse({
         clientId: row.client_id,
+        tenantId: row.tenant_id,
         displayName: row.display_name,
         roles: row.roles,
         allowedScopes: row.allowed_scopes,
@@ -285,6 +296,7 @@ export class BackupService {
         tokenId: row.token_id,
         tokenHash: row.token_hash,
         clientId: row.client_id,
+        tenantId: row.tenant_id,
         subject: row.subject,
         scopes: row.scopes,
         roles: row.roles,
@@ -296,6 +308,7 @@ export class BackupService {
       })),
       approvals: approvals.rows.map((row) => ({
         id: row.id,
+        tenantId: row.tenant_id,
         createdAt: toIso(row.created_at),
         expiresAt: toIso(row.expires_at),
         status: row.status,
@@ -319,6 +332,7 @@ export class BackupService {
       })),
       breakGlassRequests: breakGlassRequests.rows.map((row) => ({
         id: row.id,
+        tenantId: row.tenant_id,
         createdAt: toIso(row.created_at),
         expiresAt: toIso(row.expires_at),
         status: row.status,
@@ -345,6 +359,7 @@ export class BackupService {
       })),
       rotationRuns: rotationRuns.rows.map((row) => ({
         id: row.id,
+        tenantId: row.tenant_id,
         credentialId: row.credential_id,
         status: row.status,
         source: row.source,
@@ -362,6 +377,7 @@ export class BackupService {
       auditEvents: auditEvents.rows.map((row) => ({
         eventId: row.event_id,
         occurredAt: toIso(row.occurred_at),
+        tenantId: row.tenant_id,
         type: row.type,
         action: row.action,
         outcome: row.outcome,
@@ -376,6 +392,7 @@ export class BackupService {
         type: "system.backup",
         action: "system.backup.export",
         outcome: "success",
+        tenantId: actor.tenantId,
         principal: actor.principal,
         metadata: this.summarizeBackup(backup),
       });
@@ -410,16 +427,17 @@ export class BackupService {
       for (const credential of backup.credentials) {
         await client.query(
           `INSERT INTO credentials (
-             id, display_name, service, owner, scope_tier, sensitivity,
+             id, tenant_id, display_name, service, owner, scope_tier, sensitivity,
              allowed_domains, permitted_operations, expires_at, rotation_policy,
              last_validated_at, selection_notes, binding, tags, status
            ) VALUES (
-             $1, $2, $3, $4, $5, $6,
-             $7, $8, $9, $10,
-             $11, $12, $13, $14, $15
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11,
+             $12, $13, $14, $15, $16
            )`,
           [
             credential.id,
+            credential.tenantId,
             credential.displayName,
             credential.service,
             credential.owner,
@@ -441,14 +459,15 @@ export class BackupService {
       for (const rule of backup.policies.rules) {
         await client.query(
           `INSERT INTO policy_rules (
-             id, effect, description, principals, principal_roles, credential_ids,
+             id, tenant_id, effect, description, principals, principal_roles, credential_ids,
              services, operations, domain_patterns, environments
            ) VALUES (
-             $1, $2, $3, $4, $5, $6,
-             $7, $8, $9, $10
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11
            )`,
           [
             rule.id,
+            rule.tenantId,
             rule.effect,
             rule.description,
             rule.principals,
@@ -465,11 +484,12 @@ export class BackupService {
       for (const clientRecord of backup.authClients as StoredAuthClient[]) {
         await client.query(
           `INSERT INTO oauth_clients (
-             client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
+             client_id, tenant_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
              token_endpoint_auth_method, jwks
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             clientRecord.clientId,
+            clientRecord.tenantId,
             clientRecord.displayName,
             clientRecord.secretHash ?? null,
             clientRecord.secretSalt ?? null,
@@ -485,16 +505,17 @@ export class BackupService {
       for (const token of backup.accessTokens) {
         await client.query(
           `INSERT INTO access_tokens (
-             token_id, token_hash, client_id, subject, scopes, roles,
+             token_id, token_hash, client_id, tenant_id, subject, scopes, roles,
              resource, expires_at, status, created_at, last_used_at
            ) VALUES (
-             $1, $2, $3, $4, $5, $6,
-             $7, $8, $9, $10, $11
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11, $12
            )`,
           [
             token.tokenId,
             token.tokenHash,
             token.clientId,
+            token.tenantId,
             token.subject,
             token.scopes,
             token.roles,
@@ -510,18 +531,19 @@ export class BackupService {
       for (const approval of backup.approvals) {
         await client.query(
           `INSERT INTO approval_requests (
-             id, created_at, expires_at, status, requested_by, requested_roles,
+             id, tenant_id, created_at, expires_at, status, requested_by, requested_roles,
              credential_id, operation, target_url, target_host, reason, rule_id,
              correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
              required_approvals, approval_count, denial_count, reviews
            ) VALUES (
-             $1, $2, $3, $4, $5, $6,
-             $7, $8, $9, $10, $11, $12,
-             $13, $14, $15, $16, $17,
-             $18, $19, $20, $21
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11, $12, $13,
+             $14, $15, $16, $17, $18,
+             $19, $20, $21, $22
            )`,
           [
             approval.id,
+            approval.tenantId,
             approval.createdAt,
             approval.expiresAt,
             approval.status,
@@ -549,20 +571,21 @@ export class BackupService {
       for (const request of backup.breakGlassRequests) {
         await client.query(
           `INSERT INTO break_glass_requests (
-             id, created_at, expires_at, status, requested_by, requested_roles,
+             id, tenant_id, created_at, expires_at, status, requested_by, requested_roles,
              credential_id, operation, target_url, target_host, justification, requested_duration_seconds,
              correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
              required_approvals, approval_count, denial_count, reviews,
              revoked_by, revoked_at, revoke_note
            ) VALUES (
-             $1, $2, $3, $4, $5, $6,
-             $7, $8, $9, $10, $11, $12,
-             $13, $14, $15, $16, $17,
-             $18, $19, $20, $21,
-             $22, $23, $24
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11, $12, $13,
+             $14, $15, $16, $17, $18,
+             $19, $20, $21, $22,
+             $23, $24, $25
            )`,
           [
             request.id,
+            request.tenantId,
             request.createdAt,
             request.expiresAt,
             request.status,
@@ -593,14 +616,15 @@ export class BackupService {
       for (const rotation of backup.rotationRuns) {
         await client.query(
           `INSERT INTO rotation_runs (
-             id, credential_id, status, source, reason, due_at, planned_at, started_at,
+             id, tenant_id, credential_id, status, source, reason, due_at, planned_at, started_at,
              completed_at, planned_by, updated_by, note, target_ref, result_note
            ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8,
-             $9, $10, $11, $12, $13, $14
+             $1, $2, $3, $4, $5, $6, $7, $8, $9,
+             $10, $11, $12, $13, $14, $15
            )`,
           [
             rotation.id,
+            rotation.tenantId,
             rotation.credentialId,
             rotation.status,
             rotation.source,
@@ -621,11 +645,12 @@ export class BackupService {
       for (const event of backup.auditEvents) {
         await client.query(
           `INSERT INTO audit_events (
-             event_id, occurred_at, type, action, outcome, principal, correlation_id, metadata
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             event_id, occurred_at, tenant_id, type, action, outcome, principal, correlation_id, metadata
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             event.eventId,
             event.occurredAt,
+            event.tenantId,
             event.type,
             event.action,
             event.outcome,
@@ -642,6 +667,7 @@ export class BackupService {
         type: "system.backup",
         action: "system.backup.restore",
         outcome: "success",
+        tenantId: actor.tenantId,
         principal: actor.principal,
         metadata: this.summarizeBackup(backup),
       });

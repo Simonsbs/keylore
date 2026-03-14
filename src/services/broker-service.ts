@@ -70,6 +70,16 @@ function methodForOperation(operation: AccessRequestInput["operation"]): "GET" |
   return operation === "http.post" ? "POST" : "GET";
 }
 
+function tenantAllowed(context: AuthContext, tenantId: string): boolean {
+  return !context.tenantId || context.tenantId === tenantId;
+}
+
+function requireTenantAccess(context: AuthContext, tenantId: string): void {
+  if (!tenantAllowed(context, tenantId)) {
+    throw new Error("Tenant access denied.");
+  }
+}
+
 async function readLimitedResponseBody(
   response: Response,
   maxBytes: number,
@@ -130,7 +140,9 @@ export class BrokerService {
     input: CatalogSearchInput,
   ): Promise<CredentialSummary[]> {
     const correlationId = randomUUID();
-    const results = (await this.credentials.search(input)).map(summarizeCredential);
+    const results = (await this.credentials.search(input))
+      .filter((credential) => tenantAllowed(context, credential.tenantId))
+      .map(summarizeCredential);
 
     await this.audit.record({
       type: "catalog.search",
@@ -139,6 +151,7 @@ export class BrokerService {
       principal: context.principal,
       correlationId,
       metadata: {
+        tenantId: context.tenantId ?? null,
         query: input.query ?? null,
         filters: input,
         resultCount: results.length,
@@ -162,31 +175,42 @@ export class BrokerService {
   ): Promise<CredentialSummary | undefined> {
     const correlationId = randomUUID();
     const credential = await this.credentials.getById(id);
+    const visibleCredential = credential && tenantAllowed(context, credential.tenantId) ? credential : undefined;
 
     await this.audit.record({
       type: "catalog.read",
       action: "catalog.get",
-      outcome: credential ? "success" : "error",
+      outcome: visibleCredential ? "success" : "error",
+      tenantId: credential?.tenantId ?? context.tenantId,
       principal: context.principal,
       correlationId,
       metadata: {
+        tenantId: credential?.tenantId ?? context.tenantId ?? null,
         credentialId: id,
-        found: Boolean(credential),
+        found: Boolean(visibleCredential),
       },
     });
 
-    return credential ? summarizeCredential(credential) : undefined;
+    return visibleCredential ? summarizeCredential(visibleCredential) : undefined;
   }
 
   public async createCredential(context: AuthContext, credential: CredentialRecord): Promise<CredentialRecord> {
-    const created = await this.credentials.create(credential);
+    if (context.tenantId && credential.tenantId !== context.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
+    const created = await this.credentials.create({
+      ...credential,
+      tenantId: context.tenantId ?? credential.tenantId,
+    });
 
     await this.audit.record({
       type: "catalog.write",
       action: "catalog.create",
       outcome: "success",
+      tenantId: created.tenantId,
       principal: context.principal,
       metadata: {
+        tenantId: created.tenantId,
         credentialId: created.id,
         service: created.service,
       },
@@ -200,14 +224,21 @@ export class BrokerService {
     id: string,
     patch: Partial<Omit<CredentialRecord, "id">>,
   ): Promise<CredentialRecord> {
+    const current = await this.credentials.getById(id);
+    if (!current) {
+      throw new Error(`Credential ${id} was not found.`);
+    }
+    requireTenantAccess(context, current.tenantId);
     const updated = await this.credentials.update(id, patch);
 
     await this.audit.record({
       type: "catalog.write",
       action: "catalog.update",
       outcome: "success",
+      tenantId: updated.tenantId,
       principal: context.principal,
       metadata: {
+        tenantId: updated.tenantId,
         credentialId: id,
         fields: Object.keys(patch),
       },
@@ -217,14 +248,20 @@ export class BrokerService {
   }
 
   public async deleteCredential(context: AuthContext, id: string): Promise<boolean> {
+    const current = await this.credentials.getById(id);
+    if (current) {
+      requireTenantAccess(context, current.tenantId);
+    }
     const deleted = await this.credentials.delete(id);
 
     await this.audit.record({
       type: "catalog.write",
       action: "catalog.delete",
       outcome: deleted ? "success" : "error",
+      tenantId: current?.tenantId ?? context.tenantId,
       principal: context.principal,
       metadata: {
+        tenantId: current?.tenantId ?? context.tenantId ?? null,
         credentialId: id,
       },
     });
@@ -293,7 +330,7 @@ export class BrokerService {
         reason: policyDecision.reason,
         ruleId: policyDecision.ruleId,
         correlationId,
-      });
+      }, credential.tenantId);
       return this.toApprovalRequiredDecision("live", correlationId, credential, policyDecision, approval);
     }
 
@@ -371,14 +408,16 @@ export class BrokerService {
           ? "access.dry_run"
           : "access.request";
 
-    if (!credential) {
+    if (!credential || !tenantAllowed(context, credential.tenantId)) {
       await this.audit.record({
         type: "authz.decision",
         action,
         outcome: "denied",
+        tenantId: credential?.tenantId ?? context.tenantId,
         principal: context.principal,
         correlationId,
         metadata: {
+          tenantId: credential?.tenantId ?? context.tenantId ?? null,
           credentialId: input.credentialId,
           reason: "Credential not found.",
           mode,
@@ -405,9 +444,11 @@ export class BrokerService {
         type: "authz.decision",
         action,
         outcome: "denied",
+        tenantId: credential.tenantId,
         principal: context.principal,
         correlationId,
         metadata: {
+          tenantId: credential.tenantId,
           credentialId: credential.id,
           operation: input.operation,
           targetUrl: input.targetUrl,
@@ -432,7 +473,10 @@ export class BrokerService {
 
     const policies = await this.policies.read();
     const decision = this.policyEngine.evaluate(
-      policies,
+      {
+        ...policies,
+        rules: policies.rules.filter((rule) => rule.tenantId === credential.tenantId),
+      },
       context.principal,
       context.roles,
       credential,
@@ -445,9 +489,11 @@ export class BrokerService {
       type: "authz.decision",
       action,
       outcome: decision.decision === "allow" ? "allowed" : "denied",
+      tenantId: credential.tenantId,
       principal: context.principal,
       correlationId,
       metadata: {
+        tenantId: credential.tenantId,
         credentialId: credential.id,
         operation: input.operation,
         targetHost: targetUrl.hostname,
@@ -467,8 +513,8 @@ export class BrokerService {
     };
   }
 
-  public async listRecentAuditEvents(limit = 20) {
-    return this.audit.listRecent(limit);
+  public async listRecentAuditEvents(context: AuthContext, limit = 20) {
+    return this.audit.listRecent(limit, context.tenantId);
   }
 
   public async listCredentialReports(
@@ -480,14 +526,18 @@ export class BrokerService {
       : await this.credentials.list();
 
     return Promise.all(
-      credentials.filter(Boolean).map(async (credential) => ({
-        credential: summarizeCredential(credential as CredentialRecord),
-        runtimeMode:
-          (credential as CredentialRecord).binding.injectionEnvName ? "sandbox_injection" : "proxy",
-        catalogExpiresAt: (credential as CredentialRecord).expiresAt,
-        daysUntilCatalogExpiry: daysUntil((credential as CredentialRecord).expiresAt),
-        inspection: await this.adapters.inspectCredential(credential as CredentialRecord),
-      })),
+      credentials
+        .filter(
+          (credential): credential is CredentialRecord =>
+            Boolean(credential) && tenantAllowed(context, (credential as CredentialRecord).tenantId),
+        )
+        .map(async (credential) => ({
+          credential: summarizeCredential(credential),
+          runtimeMode: credential.binding.injectionEnvName ? "sandbox_injection" : "proxy",
+          catalogExpiresAt: credential.expiresAt,
+          daysUntilCatalogExpiry: daysUntil(credential.expiresAt),
+          inspection: await this.adapters.inspectCredential(credential),
+        })),
     );
   }
 
@@ -495,8 +545,8 @@ export class BrokerService {
     return this.adapters.healthchecks();
   }
 
-  public async listApprovalRequests(status?: ApprovalRequest["status"]) {
-    return this.approvals.list(status);
+  public async listApprovalRequests(context: AuthContext, status?: ApprovalRequest["status"]) {
+    return this.approvals.list(context, status);
   }
 
   public async reviewApprovalRequest(
@@ -517,16 +567,19 @@ export class BrokerService {
     if (!credential) {
       throw new Error("Credential not found.");
     }
+    requireTenantAccess(context, credential.tenantId);
 
     await this.validateTarget(parsed.targetUrl, this.config);
-    return this.breakGlass.createRequest(context, parsed);
+    return this.breakGlass.createRequest(context, parsed, credential.tenantId);
   }
 
-  public async listBreakGlassRequests(filter?: {
+  public async listBreakGlassRequests(
+    context: AuthContext,
+    filter?: {
     status?: BreakGlassRequest["status"];
     requestedBy?: string;
   }) {
-    return this.breakGlass.list(filter);
+    return this.breakGlass.list(context, filter);
   }
 
   public async reviewBreakGlassRequest(
@@ -554,6 +607,7 @@ export class BrokerService {
     if (!credential) {
       throw new Error("Credential not found.");
     }
+    requireTenantAccess(context, credential.tenantId);
 
     const resolved = await this.adapters.resolve(credential);
     const secretEnvName = input.secretEnvName ?? credential.binding.injectionEnvName;
@@ -566,8 +620,10 @@ export class BrokerService {
       type: "runtime.exec",
       action: "runtime.exec",
       outcome: result.exitCode === 0 ? "success" : "error",
+      tenantId: credential.tenantId,
       principal: context.principal,
       metadata: {
+        tenantId: credential.tenantId,
         credentialId: credential.id,
         command: input.command,
         args: input.args,
@@ -598,9 +654,11 @@ export class BrokerService {
       type: "credential.use",
       action: "proxy.http",
       outcome: "success",
+      tenantId: credential.tenantId,
       principal: context.principal,
       correlationId,
       metadata: {
+        tenantId: credential.tenantId,
         credentialId: credential.id,
         operation: input.operation,
         targetHost: targetUrl.hostname,

@@ -54,6 +54,8 @@ function contextFromExtra(
         ? extra.authInfo.extra.principal
         : extra.authInfo.clientId,
     clientId: extra.authInfo.clientId,
+    tenantId:
+      typeof extra.authInfo.extra?.tenantId === "string" ? extra.authInfo.extra.tenantId : undefined,
     scopes: extra.authInfo.scopes as Parameters<typeof authContextFromToken>[0]["scopes"],
     roles: (Array.isArray(extra.authInfo.extra?.roles)
       ? extra.authInfo.extra.roles
@@ -221,7 +223,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       const context = contextFromExtra(app, extra);
       app.auth.requireScopes(context, ["audit:read"]);
       app.auth.requireRoles(context, ["admin", "auditor"]);
-      const events = await app.broker.listRecentAuditEvents(limit);
+      const events = await app.broker.listRecentAuditEvents(context, limit);
 
       return {
         content: [{ type: "text", text: makeText(events) }],
@@ -334,7 +336,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       const context = contextFromExtra(app, extra);
       app.auth.requireScopes(context, ["system:read"]);
       app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator", "auditor"]);
-      const rotations = await app.rotations.list({ status, credentialId });
+      const rotations = await app.rotations.list({ tenantId: context.tenantId, status, credentialId });
 
       return {
         content: [{ type: "text", text: makeText(rotations) }],
@@ -469,7 +471,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
       const context = contextFromExtra(app, extra);
       app.auth.requireScopes(context, ["breakglass:read"]);
       app.auth.requireRoles(context, ["admin", "approver", "auditor", "breakglass_operator"]);
-      const requests = await app.broker.listBreakGlassRequests({ status, requestedBy });
+      const requests = await app.broker.listBreakGlassRequests(context, { status, requestedBy });
 
       return {
         content: [{ type: "text", text: makeText(requests) }],

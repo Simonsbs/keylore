@@ -2,6 +2,8 @@
 
 KeyLore includes a local operator CLI for managing the catalogue, inspecting audit events, reviewing approvals, handling break-glass requests, and working with logical backups without editing JSON files by hand.
 
+The local CLI runs as a global operator and can work across tenants. When input files contain `tenantId`, the CLI preserves it. Tenant-scoped remote HTTP and MCP callers do not get that cross-tenant visibility.
+
 ## Usage
 
 ```bash
@@ -60,6 +62,7 @@ npm run dev:cli -- catalog create --file ./credential.json
 ```
 
 The file must contain a full credential metadata object matching the repository schema.
+Include `tenantId` when creating a non-default tenant record.
 
 ### `catalog update`
 
@@ -108,6 +111,7 @@ npm run dev:cli -- auth clients create --file ./client.json
 ```
 
 Shared-secret clients use `tokenEndpointAuthMethod: "client_secret_basic"` or `"client_secret_post"`. `private_key_jwt` clients omit `clientSecret` and provide `jwks`.
+Include `tenantId` when creating a tenant-scoped client.
 
 ### `auth clients update`
 

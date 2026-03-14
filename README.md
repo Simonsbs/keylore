@@ -45,6 +45,7 @@ This repository is incubating privately today, but it is structured to be publis
 - optional external trace export with operator status and manual flush controls
 - `private_key_jwt` OAuth client authentication with assertion replay protection
 - persisted credential rotation workflows with plan, start, complete, and fail transitions
+- tenant-aware partitioning for credentials, policies, auth clients, approvals, break-glass, audit events, tokens, rotation runs, and logical backups
 - Helm chart with dev, staging, and production values profiles
 - HA-oriented Helm profile with pod disruption budget and spread controls
 - tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
@@ -52,9 +53,8 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.9 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.10 delivery. This repo does not yet implement:
 
-- multi-tenant isolation
 - broader OAuth authorization flows beyond client credentials
 - admin UI
 
@@ -110,6 +110,8 @@ curl -X POST http://127.0.0.1:8787/oauth/token \
   -H 'content-type: application/x-www-form-urlencoded' \
   -d 'grant_type=client_credentials&client_id=keylore-admin-local&client_secret=REPLACE_ME&scope=catalog:read%20broker:use%20approval:read%20approval:review%20audit:read%20auth:read%20auth:write%20system:read%20system:write%20backup:read%20backup:write%20breakglass:request%20breakglass:read%20breakglass:review%20sandbox:run&resource=http://127.0.0.1:8787/v1'
 ```
+
+Remote tokens are tenant-scoped through their OAuth client. A tenant-bound caller only sees and mutates records from its own tenant; the local CLI continues to run as a global operator.
 
 8. Verify the health endpoint:
 

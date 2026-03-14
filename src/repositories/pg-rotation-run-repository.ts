@@ -4,6 +4,7 @@ import { RotationRunRepository } from "./interfaces.js";
 
 interface RotationRunRow {
   id: string;
+  tenant_id: string;
   credential_id: string;
   status: RotationRun["status"];
   source: RotationRun["source"];
@@ -29,6 +30,7 @@ function toIso(value: string | Date | null): string | undefined {
 function mapRow(row: RotationRunRow): RotationRun {
   return rotationRunSchema.parse({
     id: row.id,
+    tenantId: row.tenant_id,
     credentialId: row.credential_id,
     status: row.status,
     source: row.source,
@@ -52,15 +54,16 @@ export class PgRotationRunRepository implements RotationRunRepository {
     const parsed = rotationRunSchema.parse(input);
     const result = await this.database.query<RotationRunRow>(
       `INSERT INTO rotation_runs (
-         id, credential_id, status, source, reason, due_at, planned_at, started_at,
+         id, tenant_id, credential_id, status, source, reason, due_at, planned_at, started_at,
          completed_at, planned_by, updated_by, note, target_ref, result_note
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8,
-         $9, $10, $11, $12, $13, $14
+         $1, $2, $3, $4, $5, $6, $7, $8, $9,
+         $10, $11, $12, $13, $14, $15
        )
        RETURNING *`,
       [
         parsed.id,
+        parsed.tenantId,
         parsed.credentialId,
         parsed.status,
         parsed.source,
@@ -90,6 +93,7 @@ export class PgRotationRunRepository implements RotationRunRepository {
   public async list(filter?: {
     status?: RotationRun["status"];
     credentialId?: string;
+    tenantId?: string;
   }): Promise<RotationRun[]> {
     const clauses: string[] = [];
     const params: unknown[] = [];
@@ -102,6 +106,11 @@ export class PgRotationRunRepository implements RotationRunRepository {
     if (filter?.credentialId) {
       params.push(filter.credentialId);
       clauses.push(`credential_id = $${params.length}`);
+    }
+
+    if (filter?.tenantId) {
+      params.push(filter.tenantId);
+      clauses.push(`tenant_id = $${params.length}`);
     }
 
     const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";

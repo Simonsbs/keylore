@@ -121,6 +121,12 @@ Supported client authentication methods are:
 
 `private_key_jwt` clients must be configured with at least one public JWK and do not use shared secrets.
 
+## Multi-tenant model
+
+KeyLore stores `tenantId` on credentials, policy rules, OAuth clients, approvals, break-glass requests, audit events, access tokens, and rotation runs. Bootstrapped records may omit it and fall back to `default`.
+
+Remote HTTP and MCP callers inherit their tenant from the OAuth client used at `POST /oauth/token`. Tenant-scoped callers are restricted to that tenant. The local CLI continues to run as a global operator context and may work across tenants.
+
 ## Approvals and break-glass quorum
 
 Approval and break-glass requests are persisted with:
@@ -227,4 +233,4 @@ Auth client bootstrap is strict for shared-secret clients: missing `secretRef` e
 
 ## Local operator context
 
-The local CLI uses `KEYLORE_DEFAULT_PRINCIPAL` and a built-in operator context with all current scopes plus the privileged admin/operator roles. Remote HTTP and MCP requests always use issued bearer tokens instead.
+The local CLI uses `KEYLORE_DEFAULT_PRINCIPAL` and a built-in operator context with all current scopes plus the privileged admin/operator roles. That local context is not tenant-scoped, which is intentional for self-hosted administration. Remote HTTP and MCP requests always use issued bearer tokens instead.

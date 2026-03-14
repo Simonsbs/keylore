@@ -4,6 +4,7 @@ import { AuditEvent, auditEventSchema } from "../domain/types.js";
 import { SqlDatabase } from "../storage/database.js";
 
 export interface RecordAuditInput {
+  tenantId?: string;
   type: AuditEvent["type"];
   action: string;
   outcome: AuditEvent["outcome"];
@@ -15,6 +16,7 @@ export interface RecordAuditInput {
 interface AuditRow {
   event_id: string;
   occurred_at: string | Date;
+  tenant_id: string;
   type: AuditEvent["type"];
   action: string;
   outcome: AuditEvent["outcome"];
@@ -30,6 +32,7 @@ function mapRow(row: AuditRow): AuditEvent {
       row.occurred_at instanceof Date
         ? row.occurred_at.toISOString()
         : row.occurred_at,
+    tenantId: row.tenant_id,
     type: row.type,
     action: row.action,
     outcome: row.outcome,
@@ -46,6 +49,7 @@ export class PgAuditLogService {
     const event = auditEventSchema.parse({
       eventId: randomUUID(),
       occurredAt: new Date().toISOString(),
+      tenantId: input.tenantId ?? "default",
       type: input.type,
       action: input.action,
       outcome: input.outcome,
@@ -56,13 +60,14 @@ export class PgAuditLogService {
 
     await this.database.query(
       `INSERT INTO audit_events (
-        event_id, occurred_at, type, action, outcome, principal, correlation_id, metadata
+        event_id, occurred_at, tenant_id, type, action, outcome, principal, correlation_id, metadata
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8::jsonb
+        $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb
       )`,
       [
         event.eventId,
         event.occurredAt,
+        event.tenantId,
         event.type,
         event.action,
         event.outcome,
@@ -75,11 +80,16 @@ export class PgAuditLogService {
     return event;
   }
 
-  public async listRecent(limit = 20): Promise<AuditEvent[]> {
-    const result = await this.database.query<AuditRow>(
-      `SELECT * FROM audit_events ORDER BY occurred_at DESC LIMIT $1`,
-      [limit],
-    );
+  public async listRecent(limit = 20, tenantId?: string): Promise<AuditEvent[]> {
+    const result = tenantId
+      ? await this.database.query<AuditRow>(
+          `SELECT * FROM audit_events WHERE tenant_id = $2 ORDER BY occurred_at DESC LIMIT $1`,
+          [limit, tenantId],
+        )
+      : await this.database.query<AuditRow>(
+          `SELECT * FROM audit_events ORDER BY occurred_at DESC LIMIT $1`,
+          [limit],
+        );
     return result.rows.map(mapRow);
   }
 

@@ -1,6 +1,6 @@
 # Deployment
 
-`v0.9` keeps the Helm-based deployment path for self-hosted Kubernetes environments and adds an HA-oriented profile for replicated API pods, pod disruption budgets, and spread controls.
+`v0.10` keeps the Helm-based deployment path for self-hosted Kubernetes environments, adds HA-oriented profiles for replicated API pods, and now carries tenant-aware partitioning in the application data model.
 
 ## Helm chart
 
@@ -86,3 +86,4 @@ For production rollouts:
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
 - for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings
+- treat tenant bootstrap data as application data, not Helm values; tenant-bound records now live in PostgreSQL and are preserved by logical backups

@@ -26,6 +26,7 @@ export class BreakGlassService {
   public async createRequest(
     context: AuthContext,
     input: unknown,
+    tenantId: string,
   ): Promise<BreakGlassRequest> {
     const parsedInput = breakGlassRequestInputSchema.parse(input);
     return this.traces.withSpan("breakglass.create_request", { credentialId: parsedInput.credentialId }, async () => {
@@ -36,6 +37,7 @@ export class BreakGlassService {
       const created = await this.requests.create(
         breakGlassRequestSchema.parse({
           id: randomUUID(),
+          tenantId,
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + requestedDurationSeconds * 1000).toISOString(),
           status: "pending",
@@ -60,10 +62,12 @@ export class BreakGlassService {
         type: "breakglass.request",
         action: "breakglass.request",
         outcome: "success",
+        tenantId,
         principal: context.principal,
         correlationId: created.correlationId,
         metadata: {
           breakGlassId: created.id,
+          tenantId,
           credentialId: created.credentialId,
           operation: created.operation,
           targetHost: created.targetHost,
@@ -96,6 +100,9 @@ export class BreakGlassService {
     if (!request || request.status !== "active") {
       return undefined;
     }
+    if (context.tenantId && request.tenantId !== context.tenantId) {
+      return undefined;
+    }
 
     if (new Date(request.expiresAt).getTime() <= Date.now()) {
       return undefined;
@@ -104,12 +111,15 @@ export class BreakGlassService {
     return request.fingerprint === accessFingerprint(context, input) ? request : undefined;
   }
 
-  public async list(filter?: {
+  public async list(context: AuthContext, filter?: {
     status?: BreakGlassRequest["status"];
     requestedBy?: string;
   }): Promise<BreakGlassRequest[]> {
     await this.requests.expireStale();
-    return this.requests.list(filter);
+    return this.requests.list({
+      ...filter,
+      tenantId: context.tenantId,
+    });
   }
 
   public async review(
@@ -120,6 +130,10 @@ export class BreakGlassService {
   ): Promise<BreakGlassRequest | undefined> {
     return this.traces.withSpan("breakglass.review", { breakGlassId: id, decision: status }, async () => {
       await this.requests.expireStale();
+      const existing = await this.requests.getById(id);
+      if (existing && context.tenantId && existing.tenantId !== context.tenantId) {
+        throw new Error("Tenant access denied.");
+      }
       const reviewed = await this.requests.review(id, {
         status,
         reviewedBy: context.principal,
@@ -131,10 +145,12 @@ export class BreakGlassService {
           type: "breakglass.review",
           action: `breakglass.${status === "active" ? "approve" : "deny"}`,
           outcome: status === "active" ? "allowed" : "denied",
+          tenantId: reviewed.tenantId,
           principal: context.principal,
           correlationId: reviewed.correlationId,
           metadata: {
             breakGlassId: reviewed.id,
+            tenantId: reviewed.tenantId,
             credentialId: reviewed.credentialId,
             requestedBy: reviewed.requestedBy,
             reviewNote: reviewed.reviewNote ?? null,
@@ -178,6 +194,10 @@ export class BreakGlassService {
   ): Promise<BreakGlassRequest | undefined> {
     return this.traces.withSpan("breakglass.revoke", { breakGlassId: id }, async () => {
       await this.requests.expireStale();
+      const existing = await this.requests.getById(id);
+      if (existing && context.tenantId && existing.tenantId !== context.tenantId) {
+        throw new Error("Tenant access denied.");
+      }
       const revoked = await this.requests.revoke(id, {
         revokedBy: context.principal,
         revokeNote: note,
@@ -188,10 +208,12 @@ export class BreakGlassService {
           type: "breakglass.review",
           action: "breakglass.revoke",
           outcome: "denied",
+          tenantId: revoked.tenantId,
           principal: context.principal,
           correlationId: revoked.correlationId,
           metadata: {
             breakGlassId: revoked.id,
+            tenantId: revoked.tenantId,
             credentialId: revoked.credentialId,
             requestedBy: revoked.requestedBy,
             revokeNote: revoked.revokeNote ?? null,
@@ -218,10 +240,12 @@ export class BreakGlassService {
         type: "breakglass.use",
         action: "breakglass.use",
         outcome: "allowed",
+        tenantId: request.tenantId,
         principal: context.principal,
         correlationId: request.correlationId,
         metadata: {
           breakGlassId: request.id,
+          tenantId: request.tenantId,
           credentialId: request.credentialId,
           targetHost: request.targetHost,
         },

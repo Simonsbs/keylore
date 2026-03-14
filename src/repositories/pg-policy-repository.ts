@@ -4,6 +4,7 @@ import { PolicyRepository } from "./interfaces.js";
 
 interface PolicyRow {
   id: string;
+  tenant_id: string;
   effect: PolicyRule["effect"];
   description: string;
   principals: string[];
@@ -18,6 +19,7 @@ interface PolicyRow {
 function mapRow(row: PolicyRow): PolicyRule {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     effect: row.effect,
     description: row.description,
     principals: row.principals,
@@ -54,13 +56,14 @@ export class PgPolicyRepository implements PolicyRepository {
       for (const rule of parsed.rules) {
         await client.query(
           `INSERT INTO policy_rules (
-            id, effect, description, principals, principal_roles, credential_ids, services,
+            id, tenant_id, effect, description, principals, principal_roles, credential_ids, services,
             operations, domain_patterns, environments
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
           )`,
           [
             rule.id,
+            rule.tenantId,
             rule.effect,
             rule.description,
             rule.principals,

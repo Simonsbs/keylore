@@ -6,6 +6,7 @@ import { BreakGlassRepository } from "./interfaces.js";
 
 interface BreakGlassRow {
   id: string;
+  tenant_id: string;
   created_at: string | Date;
   expires_at: string | Date;
   status: BreakGlassRequest["status"];
@@ -42,6 +43,7 @@ function toIso(value: string | Date | null): string | undefined {
 function mapRow(row: BreakGlassRow): BreakGlassRequest {
   return breakGlassRequestSchema.parse({
     id: row.id,
+    tenantId: row.tenant_id,
     createdAt: toIso(row.created_at),
     expiresAt: toIso(row.expires_at),
     status: row.status,
@@ -75,18 +77,19 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
     const parsed = breakGlassRequestSchema.parse(input);
     await this.database.query(
       `INSERT INTO break_glass_requests (
-         id, created_at, expires_at, status, requested_by, requested_roles,
+         id, tenant_id, created_at, expires_at, status, requested_by, requested_roles,
          credential_id, operation, target_url, target_host, justification, requested_duration_seconds,
          correlation_id, fingerprint, required_approvals, approval_count, denial_count, reviews, reviewed_by, reviewed_at, review_note,
          revoked_by, revoked_at, revoke_note
        ) VALUES (
-         $1, $2, $3, $4, $5, $6,
-         $7, $8, $9, $10, $11, $12,
-         $13, $14, $15, $16, $17, $18, $19, $20, $21,
-         $22, $23, $24
+         $1, $2, $3, $4, $5, $6, $7,
+         $8, $9, $10, $11, $12, $13,
+         $14, $15, $16, $17, $18, $19, $20, $21, $22,
+         $23, $24, $25
        )`,
       [
         parsed.id,
+        parsed.tenantId,
         parsed.createdAt,
         parsed.expiresAt,
         parsed.status,
@@ -139,6 +142,7 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
   public async list(filter?: {
     status?: BreakGlassRequest["status"];
     requestedBy?: string;
+    tenantId?: string;
   }): Promise<BreakGlassRequest[]> {
     const clauses: string[] = [];
     const params: unknown[] = [];
@@ -151,6 +155,11 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
     if (filter?.requestedBy) {
       params.push(filter.requestedBy);
       clauses.push(`requested_by = $${params.length}`);
+    }
+
+    if (filter?.tenantId) {
+      params.push(filter.tenantId);
+      clauses.push(`tenant_id = $${params.length}`);
     }
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";

@@ -155,6 +155,7 @@ test("logical backups can be created and restored", async () => {
 
   await broker.createCredential(context, {
     id: "backup-demo",
+    tenantId: "default",
     displayName: "Backup Demo",
     service: "npm",
     owner: "platform",

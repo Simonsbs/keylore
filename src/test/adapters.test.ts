@@ -26,6 +26,7 @@ class FakeCommandRunner implements CommandRunner {
 
 const baseCredential = {
   id: "demo",
+  tenantId: "default",
   displayName: "Demo",
   service: "svc",
   owner: "platform",
