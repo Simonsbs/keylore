@@ -70,6 +70,10 @@ Returns readiness status, the current credential count, and maintenance-loop sta
 
 Returns Prometheus-style process and application metrics.
 
+### `GET /admin`
+
+Serves the minimal operator SPA. The page itself does not require a bearer token, but every data request and mutation from the UI still goes through the existing authenticated REST endpoints.
+
 ### `GET /v1/catalog/credentials`
 
 Returns safe credential summaries.
@@ -513,6 +517,8 @@ Requires `audit:read` and `admin` or `auditor`.
 
 ## Local CLI
 
-KeyLore also exposes a local operator CLI documented in [docs/cli.md](/home/simon/keylore/docs/cli.md). This is the preferred local administration surface until a dedicated admin UI exists.
+KeyLore also exposes a local operator CLI documented in [docs/cli.md](/home/simon/keylore/docs/cli.md). The CLI remains the preferred automation surface; the admin UI is the lightweight interactive surface.
+
+For the operator UI itself, see [docs/admin-ui.md](/home/simon/keylore/docs/admin-ui.md).
 
 For deployment and release packaging, see [docs/deployment.md](/home/simon/keylore/docs/deployment.md).

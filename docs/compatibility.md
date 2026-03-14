@@ -1,6 +1,6 @@
 # Compatibility
 
-`v1.0.0-rc1` freezes the current public contract so the remaining path to `v1.0` is hardening and operator UI work, not backend churn.
+`v1.0.0-rc1` froze the current public contract. `v1.0.0-rc2` adds the operator UI on top of that surface without changing the underlying REST, OAuth, or MCP compatibility guarantees.
 
 ## Frozen surface
 

@@ -104,7 +104,14 @@
 - reject authorization-code replay and rotated refresh-token replay in release-blocking coverage
 - harden delegated auth administration so tenant-scoped token revocation checks happen before mutation
 
+## v1.0-beta
+
+- completed:
+- add a server-hosted minimal admin UI at `/admin`
+- keep the UI on top of the frozen REST contract without adding backend surface area
+- cover the UI route with focused HTTP regression coverage
+- expose tenant, auth-client, approval, break-glass, backup, audit, and system panels for operators
+
 ## v1.0
 
-- add admin UI
 - finalize public release polish and operator-facing documentation

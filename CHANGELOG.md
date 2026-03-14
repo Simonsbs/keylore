@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc2] - 2026-03-14
+
+### Added
+
+- Server-hosted admin UI at `/admin` for operator login, tenant management, auth-client management, review queues, backups, audit, and system status.
+- Focused HTTP coverage for the admin UI route.
+- Operator documentation for the minimal admin UI.
+
 ## [1.0.0-rc1] - 2026-03-14
 
 ### Added

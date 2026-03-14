@@ -1,6 +1,6 @@
 # Deployment
 
-`v1.0.0-rc1` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, and adds explicit contract and hardening gates for release promotion.
+`v1.0.0-rc2` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, and now serves the minimal admin UI from the same HTTP service.
 
 ## Helm chart
 
@@ -16,6 +16,8 @@ Environment profiles:
 - [charts/keylore/values-ha.yaml](/home/simon/keylore/charts/keylore/values-ha.yaml)
 
 ## Example install
+
+After deployment, the operator UI is available at `/admin` on the same origin as the REST API.
 
 Development-style install:
 

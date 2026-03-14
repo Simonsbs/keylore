@@ -36,6 +36,7 @@ import {
   tokenIssueInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
+import { renderAdminPage } from "./admin-ui.js";
 import { createKeyLoreMcpServer } from "../mcp/create-server.js";
 import { authContextFromToken } from "../services/auth-context.js";
 
@@ -64,6 +65,11 @@ function respondJson(
 
 function respondText(res: ServerResponse, statusCode: number, body: string): void {
   res.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
+  res.end(body);
+}
+
+function respondHtml(res: ServerResponse, statusCode: number, body: string): void {
+  res.writeHead(statusCode, { "content-type": "text/html; charset=utf-8" });
   res.end(body);
 }
 
@@ -347,6 +353,11 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
               "content-type": "text/plain; version=0.0.4; charset=utf-8",
             });
             res.end(app.telemetry.renderPrometheus());
+            return;
+          }
+
+          if ((url.pathname === "/admin" || url.pathname === "/admin/") && req.method === "GET") {
+            respondHtml(res, 200, renderAdminPage(app));
             return;
           }
 

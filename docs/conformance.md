@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc1` formalizes three release-candidate gates for KeyLore: contract, conformance, and hardening.
+`v1.0.0-rc2` continues the three release-candidate gates for KeyLore: contract, conformance, and hardening.
 
 ## Purpose
 

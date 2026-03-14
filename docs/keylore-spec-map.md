@@ -51,17 +51,18 @@ This file maps the current repository state to the local `KeyLore.md` production
 - frozen `v1.0.0-rc1` compatibility contract for OAuth metadata, protected resources, and MCP tool identifiers
 - dedicated hardening suite for replay, delegated-admin, and tenant-safe recovery abuse paths
 - tenant-scoped token revocation checks that reject foreign-tenant requests before state mutation
+- minimal admin UI for session bootstrap, tenant administration, auth-client administration, review queues, backups, audit, and system status
 
 ## Partially implemented
 
 - Catalogue CRUD: REST and CLI implemented, no UI yet
 - Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
 - Observability: metrics, recent traces, trace export, dashboards, and alert rules are present, but no vendor-specific tracing stack is bundled yet
-- Multi-tenant operations: tenant registry and bootstrap automation now exist, but there is still no tenant admin UI
+- Multi-tenant operations: tenant registry, bootstrap automation, and a tenant admin UI now exist, but there is still no tenant self-service portal
 
 ## Deferred
 
-- admin UI and CLI richness
+- CLI richness
 - managed gateway profiles beyond static examples
 
 ## Rationale

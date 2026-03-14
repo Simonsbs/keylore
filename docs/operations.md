@@ -79,6 +79,7 @@ With `.env` populated, a minimal smoke test is:
 16. run `npm run test:contracts`
 17. run `npm run test:conformance`
 18. run `npm run test:hardening`
+19. open `http://127.0.0.1:8787/admin` for the interactive operator UI
 
 ## Migration policy
 

@@ -14,6 +14,7 @@ This repository is incubating privately today, but it is structured to be publis
 - architecture, API, threat model, and roadmap docs
 - conformance and tenant-operations guides
 - compatibility contract and release-hardening guides
+- admin UI guide
 
 ## What is implemented now
 
@@ -54,6 +55,7 @@ This repository is incubating privately today, but it is structured to be publis
 - explicit conformance suite for auth, tenancy, and backup boundary regressions
 - frozen `v1.0.0-rc1` compatibility contract for OAuth, REST, and MCP tool names
 - dedicated hardening suite for replay, tenant-isolation, and delegated-admin abuse paths
+- minimal admin UI for operator login, tenants, auth clients, reviews, backups, audit, and system status
 - Helm chart with dev, staging, and production values profiles
 - HA-oriented Helm profile with pod disruption budget and spread controls
 - tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
@@ -61,9 +63,9 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc1` delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc2` delivery. The main remaining work before `v1.0.0` is:
 
-- admin UI
+- public release polish and final operator documentation cleanup
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
 
@@ -151,6 +153,8 @@ npm run test:contracts
 npm run test:conformance
 npm run test:hardening
 ```
+
+12. Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.
 
 ## Example API usage
 
