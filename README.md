@@ -112,6 +112,8 @@ The result shows the broker decision and a redacted response preview so you can 
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
+After creation, use `Inspect / edit context` inside `Credentials` if you need to refine the MCP-visible metadata without re-entering or exposing the stored secret.
+
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 
 ## Optional local overrides

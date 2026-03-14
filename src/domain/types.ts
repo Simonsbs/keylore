@@ -314,6 +314,62 @@ export const coreCredentialCreateOutputSchema = z.object({
   credential: credentialSummarySchema,
 });
 
+export const coreCredentialContextUpdateInputSchema = z
+  .object({
+    displayName: z.string().min(1).optional(),
+    service: z.string().min(1).optional(),
+    scopeTier: scopeTierSchema.optional(),
+    sensitivity: sensitivitySchema.optional(),
+    allowedDomains: z.array(z.string().min(1)).min(1).optional(),
+    permittedOperations: z.array(operationSchema).min(1).optional(),
+    selectionNotes: z.string().min(1).optional(),
+    tags: z.array(z.string().min(1)).optional(),
+    status: credentialStatusSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one context field must be provided.",
+  })
+  .superRefine((value, ctx) => {
+    if (value.selectionNotes !== undefined) {
+      const selectionNotes = value.selectionNotes.trim();
+      if (selectionNotes.length < 16) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["selectionNotes"],
+          message:
+            "Selection notes must explain when the agent should use this credential in more detail.",
+        });
+      }
+
+      if (vagueSelectionNotesPattern.test(selectionNotes)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["selectionNotes"],
+          message:
+            "Selection notes are too vague. Describe the target service, intended use, and what the agent should avoid.",
+        });
+      }
+
+      if (secretLikeSelectionNotesPattern.test(selectionNotes)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["selectionNotes"],
+          message: "Selection notes must not contain token-like secret material.",
+        });
+      }
+    }
+
+    const scopeTier = value.scopeTier;
+    const permittedOperations = value.permittedOperations;
+    if (scopeTier === "read_only" && permittedOperations?.includes("http.post")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scopeTier"],
+        message: "Credentials that allow http.post cannot use the read_only scope tier.",
+      });
+    }
+  });
+
 export const updateCredentialInputSchema = credentialRecordSchema
   .omit({ id: true, tenantId: true })
   .partial()

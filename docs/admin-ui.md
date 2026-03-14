@@ -9,6 +9,7 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 - create credentials through the new core onboarding flow
 - preview the exact MCP-visible credential metadata before saving
 - get template-specific context guidance and inline validation before saving
+- inspect and update MCP-visible context after creation without touching the stored secret
 - test credentials through brokered access from the UI
 - generate Codex and Gemini CLI MCP connection snippets
 - mint and verify a remote HTTP MCP token from the UI
@@ -51,6 +52,16 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 10. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
 11. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
 12. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+
+## Context editing
+
+Inside `Credentials`, use `Inspect / edit context` to:
+
+- inspect the current MCP-visible record for a saved credential
+- update display name, service, sensitivity, domains, tags, operations, and `selectionNotes`
+- keep secret storage and binding details out of the edit path entirely
+
+This flow is intentionally metadata-only. It does not display or mutate the stored secret.
 
 ## Validation
 

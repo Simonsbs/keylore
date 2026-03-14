@@ -22,6 +22,7 @@ import {
   AuthContext,
   catalogSearchInputSchema,
   coreCredentialCreateInputSchema,
+  coreCredentialContextUpdateInputSchema,
   createCredentialInputSchema,
   rotationCompleteInputSchema,
   rotationCreateInputSchema,
@@ -660,6 +661,52 @@ async function handleApiRequest(
     );
     const credential = await app.coreMode.createCredential(context, body);
     respondJson(res, 201, { credential });
+    return;
+  }
+
+  const coreCredentialContextId = routeParam(url.pathname, "/v1/core/credentials/");
+  if (coreCredentialContextId && url.pathname.endsWith("/context") && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const credentialId = coreCredentialContextId.replace(/\/context$/, "");
+    const credential = await app.broker.getCredential(context, credentialId);
+    if (!credential) {
+      respondJson(res, 404, { error: "Credential not found" });
+      return;
+    }
+    respondJson(res, 200, { credential });
+    return;
+  }
+
+  if (coreCredentialContextId && url.pathname.endsWith("/context") && req.method === "PATCH") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const credentialId = coreCredentialContextId.replace(/\/context$/, "");
+    const patch = coreCredentialContextUpdateInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
+    const credential = await app.broker.updateCredential(context, credentialId, patch);
+    respondJson(res, 200, { credential });
     return;
   }
 

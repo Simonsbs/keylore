@@ -661,6 +661,8 @@ const state = {
   lastClientSecret: null,
   lastResponse: null,
   lastCredentialTest: null,
+  selectedCredentialId: '',
+  currentCredentialContext: null,
   lastMcpConnection: null,
   mcpToken: '',
   advancedVisible: false
@@ -842,6 +844,8 @@ function clearSession() {
   state.lastClientSecret = null;
   state.lastResponse = null;
   state.lastCredentialTest = null;
+  state.selectedCredentialId = '';
+  state.currentCredentialContext = null;
   state.lastMcpConnection = null;
   state.mcpToken = '';
   state.advancedVisible = false;
@@ -1020,6 +1024,7 @@ function renderCredentials() {
         '</div>',
         '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
+        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Inspect / edit context</button></div>',
         '</article>'
       ].join('');
     }).join('');
@@ -1038,6 +1043,21 @@ function renderCredentials() {
   byId('credential-test-result').innerHTML = state.lastCredentialTest
     ? '<pre>' + escapeHtml(prettyJson(state.lastCredentialTest)) + '</pre>'
     : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
+
+  renderCredentialContextManager();
+}
+
+function visibleCredentials() {
+  return state.data.credentials && state.data.credentials.ok
+    ? state.data.credentials.data.credentials
+    : [];
+}
+
+function selectedCredentialSummary() {
+  const credentials = visibleCredentials();
+  return credentials.find(function(credential) {
+    return credential.id === state.selectedCredentialId;
+  });
 }
 
 function credentialContextAssessment(payload) {
@@ -1159,6 +1179,109 @@ function renderCredentialPreview() {
   }
   warningNode.innerHTML = messages.join('');
   renderCredentialGuidance();
+}
+
+function renderContextPreview(previewNodeId, warningNodeId, payload, currentId) {
+  const previewNode = byId(previewNodeId);
+  const warningNode = byId(warningNodeId);
+  if (!previewNode || !warningNode) {
+    return;
+  }
+
+  const preview = {
+    credential: {
+      id: currentId || state.selectedCredentialId || 'credential-id-preview',
+      tenantId: 'default',
+      displayName: payload.displayName || 'Credential Context',
+      service: payload.service || 'service',
+      owner: 'local',
+      scopeTier: payload.scopeTier,
+      sensitivity: payload.sensitivity,
+      allowedDomains: payload.allowedDomains,
+      permittedOperations: payload.permittedOperations,
+      expiresAt: null,
+      rotationPolicy: 'Managed separately',
+      lastValidatedAt: null,
+      selectionNotes: payload.selectionNotes || '',
+      tags: payload.tags,
+      status: payload.status || 'active',
+    },
+  };
+
+  previewNode.innerHTML = '<pre>' + escapeHtml(prettyJson(preview)) + '</pre>';
+  const assessment = credentialContextAssessment(payload);
+  const messages = [];
+  assessment.errors.forEach(function(message) {
+    messages.push('<div class="error-state">' + escapeHtml(message) + '</div>');
+  });
+  assessment.warnings.forEach(function(message) {
+    messages.push('<div class="panel-footnote">' + escapeHtml(message) + '</div>');
+  });
+  if (!messages.length) {
+    messages.push('<div class="panel-footnote">This preview is agent-facing metadata only. Secret bindings and raw tokens stay separate and are not editable here.</div>');
+  }
+  warningNode.innerHTML = messages.join('');
+}
+
+function populateCredentialContextForm(credential) {
+  byId('credential-context-id').value = credential.id;
+  byId('credential-context-display-name').value = credential.displayName;
+  byId('credential-context-service').value = credential.service;
+  byId('credential-context-sensitivity').value = credential.sensitivity;
+  byId('credential-context-operations').value = credential.permittedOperations.includes('http.post')
+    ? 'http.get,http.post'
+    : 'http.get';
+  byId('credential-context-domains').value = credential.allowedDomains.join(', ');
+  byId('credential-context-notes').value = credential.selectionNotes;
+  byId('credential-context-tags').value = credential.tags.join(', ');
+}
+
+function serializeCredentialContextForm() {
+  const operations = splitList(byId('credential-context-operations').value);
+  return {
+    displayName: byId('credential-context-display-name').value.trim(),
+    service: byId('credential-context-service').value.trim(),
+    scopeTier: operations.includes('http.post') ? 'read_write' : 'read_only',
+    sensitivity: byId('credential-context-sensitivity').value,
+    allowedDomains: splitList(byId('credential-context-domains').value),
+    permittedOperations: operations.length ? operations : ['http.get'],
+    selectionNotes: byId('credential-context-notes').value.trim(),
+    tags: splitList(byId('credential-context-tags').value),
+  };
+}
+
+function renderCredentialContextManager() {
+  const currentNode = byId('credential-context-current');
+  const formNode = byId('credential-context-form');
+  if (!currentNode || !formNode) {
+    return;
+  }
+
+  const selected = state.currentCredentialContext || selectedCredentialSummary();
+  if (!selected) {
+    currentNode.innerHTML = '<div class="empty-state">Select a credential from the list to inspect or edit its MCP-visible context.</div>';
+    formNode.hidden = true;
+    return;
+  }
+
+  state.selectedCredentialId = selected.id;
+  state.currentCredentialContext = selected;
+  currentNode.innerHTML = '<pre>' + escapeHtml(prettyJson({ credential: selected })) + '</pre>';
+  formNode.hidden = false;
+  populateCredentialContextForm(selected);
+  renderContextPreview(
+    'credential-context-preview',
+    'credential-context-preview-warnings',
+    serializeCredentialContextForm(),
+    selected.id,
+  );
+}
+
+async function openCredentialContext(credentialId) {
+  const result = await fetchJson('/v1/core/credentials/' + encodeURIComponent(credentialId) + '/context');
+  state.selectedCredentialId = credentialId;
+  state.currentCredentialContext = result.credential;
+  renderCredentialContextManager();
 }
 
 function renderConnect() {
@@ -1381,6 +1504,16 @@ async function refreshDashboard() {
       persistSession();
     }
   }
+  const credentials = visibleCredentials();
+  if (state.selectedCredentialId) {
+    state.currentCredentialContext = credentials.find(function(credential) {
+      return credential.id === state.selectedCredentialId;
+    }) || state.currentCredentialContext;
+  }
+  if (!state.selectedCredentialId && credentials.length > 0) {
+    state.selectedCredentialId = credentials[0].id;
+    state.currentCredentialContext = credentials[0];
+  }
   renderAll();
   syncCredentialTestDefaults(false);
   setBusy(false);
@@ -1585,7 +1718,7 @@ async function handleCreateCredential(event) {
     setNotice('error', assessment.errors[0]);
     return;
   }
-  await withAction('Credential created.', async function() {
+  const result = await withAction('Credential created.', async function() {
     return fetchJson('/v1/core/credentials', {
       method: 'POST',
       headers: {
@@ -1594,6 +1727,8 @@ async function handleCreateCredential(event) {
       body: JSON.stringify(payload)
     });
   });
+  state.selectedCredentialId = result.credential.id;
+  state.currentCredentialContext = result.credential;
   byId('credential-form').reset();
   byId('credential-template').value = 'github-readonly';
   byId('credential-storage').value = 'local';
@@ -1622,6 +1757,59 @@ async function handleCredentialTest(event) {
   });
   state.lastCredentialTest = result;
   renderCredentials();
+}
+
+async function handleCredentialContextAction(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const button = event.target.closest('[data-credential-context-action]');
+  if (!button) {
+    return;
+  }
+
+  try {
+    setBusy(true);
+    clearNotice();
+    await openCredentialContext(button.dataset.credentialContextId);
+    setNotice('info', 'Loaded the current MCP-visible context. Secret storage remains separate.');
+    setBusy(false);
+  } catch (error) {
+    setBusy(false);
+    setNotice('error', error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function handleCredentialContextSave(event) {
+  event.preventDefault();
+  if (!state.selectedCredentialId) {
+    setNotice('error', 'Select a credential before updating its context.');
+    return;
+  }
+  const payload = serializeCredentialContextForm();
+  const assessment = credentialContextAssessment(payload);
+  if (assessment.errors.length) {
+    renderContextPreview(
+      'credential-context-preview',
+      'credential-context-preview-warnings',
+      payload,
+      state.selectedCredentialId,
+    );
+    setNotice('error', assessment.errors[0]);
+    return;
+  }
+
+  const result = await withAction('Credential context updated.', async function() {
+    return fetchJson('/v1/core/credentials/' + encodeURIComponent(state.selectedCredentialId) + '/context', {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+  });
+  state.currentCredentialContext = result.credential;
+  renderCredentialContextManager();
 }
 
 async function handleMcpConnectionCheck(event) {
@@ -1928,6 +2116,7 @@ async function initialize() {
   }
   byId('credential-form').addEventListener('submit', handleCreateCredential);
   byId('credential-test-form').addEventListener('submit', handleCredentialTest);
+  byId('credential-context-form').addEventListener('submit', handleCredentialContextSave);
   byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
@@ -1945,12 +2134,24 @@ async function initialize() {
   });
   byId('tenant-list').addEventListener('click', handleTenantAction);
   byId('auth-client-list').addEventListener('click', handleClientAction);
+  byId('credential-list').addEventListener('click', handleCredentialContextAction);
   byId('approval-list').addEventListener('click', handleApprovalAction);
   byId('breakglass-list').addEventListener('click', handleBreakGlassAction);
   byId('backup-export').addEventListener('click', handleBackupExport);
   byId('backup-inspect').addEventListener('click', handleBackupInspect);
   byId('backup-restore').addEventListener('click', handleBackupRestore);
   byId('backup-download').addEventListener('click', downloadBackup);
+  byId('credential-context-form').addEventListener('input', function() {
+    if (!state.selectedCredentialId) {
+      return;
+    }
+    renderContextPreview(
+      'credential-context-preview',
+      'credential-context-preview-warnings',
+      serializeCredentialContextForm(),
+      state.selectedCredentialId,
+    );
+  });
   byId('advanced-toggle').addEventListener('click', function() {
     state.advancedVisible = !state.advancedVisible;
     persistSession();
@@ -2159,6 +2360,39 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               </div>
               <div class="span-7 code-stack">
                 <div class="panel"><div id="credential-list"></div></div>
+                <div class="panel">
+                  <div class="section-heading">
+                    <div>
+                      <h2 style="font-size:1.4rem;">Inspect / edit context</h2>
+                      <p>Manage agent-facing metadata only. Secret storage and raw token values stay separate and are not shown here.</p>
+                    </div>
+                  </div>
+                  <div class="panel-grid">
+                    <div class="span-6 panel">
+                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current MCP-visible record</h2></div></div>
+                      <div id="credential-context-current"></div>
+                    </div>
+                    <div class="span-6 panel">
+                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Context editor</h2></div></div>
+                      <form id="credential-context-form" class="form-grid" hidden>
+                        <div class="field"><label for="credential-context-id">Credential ID</label><input id="credential-context-id" type="text" readonly /></div>
+                        <div class="field"><label for="credential-context-display-name">Display Name</label><input id="credential-context-display-name" type="text" required /></div>
+                        <div class="field"><label for="credential-context-service">Service</label><input id="credential-context-service" type="text" required /></div>
+                        <div class="field"><label for="credential-context-sensitivity">Sensitivity</label><select id="credential-context-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                        <div class="field"><label for="credential-context-operations">Permitted Operations</label><select id="credential-context-operations"><option value="http.get">Read only (http.get)</option><option value="http.get,http.post">Read and write (http.get, http.post)</option></select></div>
+                        <div class="field-wide"><label for="credential-context-domains">Allowed Domains</label><textarea id="credential-context-domains"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-notes">LLM Usage Notes</label><textarea id="credential-context-notes"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-tags">Tags</label><input id="credential-context-tags" type="text" /></div>
+                        <div class="field-wide">
+                          <label for="credential-context-preview">Updated MCP-visible preview</label>
+                          <div id="credential-context-preview-warnings" style="margin-bottom: 12px;"></div>
+                          <div id="credential-context-preview"></div>
+                        </div>
+                        <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Saving context..." data-idle-label="Save context changes">Save context changes</button></div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
                 <div class="panel">
                   <div class="section-heading">
                     <div>

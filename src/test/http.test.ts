@@ -843,6 +843,98 @@ test("core credential onboarding rejects vague or secret-like selection notes", 
   }
 });
 
+test("core credential context endpoints inspect and update metadata without exposing bindings", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8914,
+      publicBaseUrl: "http://127.0.0.1:8914",
+      oauthIssuerUrl: "http://127.0.0.1:8914/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  try {
+    const tokenResponse = await fetch("http://127.0.0.1:8914/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: "admin-client",
+        client_secret: "admin-secret",
+        scope: "catalog:read catalog:write broker:use",
+        resource: "http://127.0.0.1:8914/v1",
+      }),
+    });
+    assert.equal(tokenResponse.status, 200);
+    const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+    const createResponse = await fetch("http://127.0.0.1:8914/v1/core/credentials", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokenPayload.access_token}`,
+      },
+      body: JSON.stringify({
+        credentialId: "context-demo",
+        displayName: "Context Demo",
+        service: "github",
+        allowedDomains: ["api.github.com"],
+        selectionNotes: "Use for GitHub repository metadata reads only.",
+        secretSource: {
+          adapter: "local",
+          secretValue: "ghp-local-test-token",
+        },
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+
+    const getResponse = await fetch(
+      "http://127.0.0.1:8914/v1/core/credentials/context-demo/context",
+      {
+        headers: {
+          authorization: `Bearer ${tokenPayload.access_token}`,
+        },
+      },
+    );
+    assert.equal(getResponse.status, 200);
+    const getPayload = (await getResponse.json()) as {
+      credential: Record<string, unknown> & { selectionNotes: string };
+    };
+    assert.equal(getPayload.credential.selectionNotes, "Use for GitHub repository metadata reads only.");
+    assert.equal("binding" in getPayload.credential, false);
+
+    const patchResponse = await fetch(
+      "http://127.0.0.1:8914/v1/core/credentials/context-demo/context",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${tokenPayload.access_token}`,
+        },
+        body: JSON.stringify({
+          selectionNotes:
+            "Use for GitHub repository metadata, issue lookup, and pull request reads. Avoid write actions.",
+          tags: ["github", "readonly", "managed"],
+          permittedOperations: ["http.get"],
+          allowedDomains: ["api.github.com"],
+          scopeTier: "read_only",
+        }),
+      },
+    );
+    assert.equal(patchResponse.status, 200);
+    const patchPayload = (await patchResponse.json()) as {
+      credential: { selectionNotes: string; tags: string[] };
+    };
+    assert.match(patchPayload.credential.selectionNotes, /Avoid write actions/);
+    assert.deepEqual(patchPayload.credential.tags, ["github", "readonly", "managed"]);
+  } finally {
+    await server.close();
+    await close();
+  }
+});
+
 test("auth client lifecycle and token revocation APIs operate over HTTP", async () => {
   const { app, close } = await makeTestApp({
     configOverrides: {
