@@ -444,7 +444,9 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                           message === "Unsupported code challenge method."
                   ? 400
                 : message.startsWith("Unknown tenant:") ||
-                    message.startsWith("Tenant is disabled:")
+                    message.startsWith("Tenant is disabled:") ||
+                    message.startsWith("Tenant-scoped restore payload is missing tenant metadata:") ||
+                    message.startsWith("Tenant-scoped restore payload includes foreign tenant data:")
                   ? 403
                 : message.startsWith("private_key_jwt clients do not support")
                   ? 400

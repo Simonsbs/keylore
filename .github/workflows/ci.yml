@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:conformance
       - run: npm run build
       - name: Validate Helm chart
         run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 sh ./scripts/helm-validate.sh

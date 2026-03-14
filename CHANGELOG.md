@@ -6,6 +6,15 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-14
+
+### Added
+
+- Explicit conformance suite and CI/release gate for OAuth, tenancy, and backup-boundary regressions.
+- Tenant-scoped backup export and restore isolation for delegated tenant backup operators.
+- Additional regression coverage for disabled tenants and public-client grant misuse.
+- Operator documentation for conformance, tenant lifecycle, interactive auth setup, and tenant-safe recovery.
+
 ## [0.11.0] - 2026-03-14
 
 ### Added

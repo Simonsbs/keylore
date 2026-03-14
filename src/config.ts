@@ -150,7 +150,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.11.0",
+    version: "0.12.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),

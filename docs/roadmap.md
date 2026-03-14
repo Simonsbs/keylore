@@ -88,6 +88,14 @@
 - add bootstrap import support for tenant records derived from seeded catalog, policy, and auth-client data
 - expand integration coverage for interactive OAuth flows and tenant bootstrap operations
 
+## v0.12
+
+- completed:
+- add explicit conformance suite and CI gate for auth, tenancy, and backup-boundary regressions
+- harden tenant-scoped backup export and restore so tenant operators cannot read or overwrite foreign tenant data
+- add regression coverage for disabled tenants, public-client grant misuse, and tenant-scoped backup restore rejection
+- add operator docs for tenant lifecycle, interactive auth setup, conformance, and tenant-safe recovery
+
 ## v1.0
 
 - add admin UI

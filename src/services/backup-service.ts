@@ -230,6 +230,10 @@ function normalizeJwks(value: unknown): Array<Record<string, unknown>> {
   return [];
 }
 
+function tenantOnly<T extends { tenantId: string }>(records: T[], tenantId?: string): T[] {
+  return tenantId ? records.filter((record) => record.tenantId === tenantId) : records;
+}
+
 export type KeyLoreBackup = z.infer<typeof backupEnvelopeSchema>;
 
 export class BackupService {
@@ -261,6 +265,61 @@ export class BackupService {
     return backupEnvelopeSchema.parse(payload);
   }
 
+  private filterBackupForTenant(backup: KeyLoreBackup, tenantId?: string): KeyLoreBackup {
+    if (!tenantId) {
+      return backup;
+    }
+
+    return backupEnvelopeSchema.parse({
+      ...backup,
+      tenants: tenantOnly(backup.tenants, tenantId),
+      credentials: tenantOnly(backup.credentials, tenantId),
+      policies: {
+        ...backup.policies,
+        rules: tenantOnly(backup.policies.rules, tenantId),
+      },
+      authClients: tenantOnly(backup.authClients, tenantId),
+      accessTokens: tenantOnly(backup.accessTokens, tenantId),
+      refreshTokens: tenantOnly(backup.refreshTokens, tenantId),
+      approvals: tenantOnly(backup.approvals, tenantId),
+      breakGlassRequests: tenantOnly(backup.breakGlassRequests, tenantId),
+      rotationRuns: tenantOnly(backup.rotationRuns, tenantId),
+      auditEvents: tenantOnly(backup.auditEvents, tenantId),
+    });
+  }
+
+  private assertTenantScopedBackup(backup: KeyLoreBackup, tenantId: string): void {
+    if (!backup.tenants.some((tenant) => tenant.tenantId === tenantId)) {
+      throw new Error(`Tenant-scoped restore payload is missing tenant metadata: ${tenantId}`);
+    }
+
+    const mismatchedTenants = new Set<string>();
+    const collect = (records: Array<{ tenantId: string }>) => {
+      for (const record of records) {
+        if (record.tenantId !== tenantId) {
+          mismatchedTenants.add(record.tenantId);
+        }
+      }
+    };
+
+    collect(backup.tenants);
+    collect(backup.credentials);
+    collect(backup.policies.rules);
+    collect(backup.authClients);
+    collect(backup.accessTokens);
+    collect(backup.refreshTokens);
+    collect(backup.approvals);
+    collect(backup.breakGlassRequests);
+    collect(backup.rotationRuns);
+    collect(backup.auditEvents);
+
+    if (mismatchedTenants.size > 0) {
+      throw new Error(
+        `Tenant-scoped restore payload includes foreign tenant data: ${Array.from(mismatchedTenants).sort().join(", ")}`,
+      );
+    }
+  }
+
   public async exportBackup(actor?: AuthContext): Promise<KeyLoreBackup> {
     const [tenants, credentials, policies, authClients, accessTokens, refreshTokens, approvals, breakGlassRequests, rotationRuns, auditEvents] = await Promise.all([
       this.database.query<BackupTenantRow>("SELECT * FROM tenants ORDER BY tenant_id"),
@@ -275,7 +334,7 @@ export class BackupService {
       this.database.query<BackupAuditRow>("SELECT * FROM audit_events ORDER BY occurred_at"),
     ]);
 
-    const backup = backupEnvelopeSchema.parse({
+    const fullBackup = backupEnvelopeSchema.parse({
       format: "keylore-logical-backup",
       version: 1,
       createdAt: new Date().toISOString(),
@@ -444,6 +503,7 @@ export class BackupService {
         metadata: row.metadata,
       })),
     });
+    const backup = this.filterBackupForTenant(fullBackup, actor?.tenantId);
 
     if (actor) {
       await this.audit.record({
@@ -471,18 +531,35 @@ export class BackupService {
   }
 
   public async restoreBackupPayload(backup: KeyLoreBackup, actor?: AuthContext): Promise<KeyLoreBackup> {
+    if (actor?.tenantId) {
+      this.assertTenantScopedBackup(backup, actor.tenantId);
+    }
+
     await this.database.withTransaction(async (client) => {
-      await client.query("DELETE FROM access_tokens");
-      await client.query("DELETE FROM refresh_tokens");
-      await client.query("DELETE FROM approval_requests");
-      await client.query("DELETE FROM break_glass_requests");
-      await client.query("DELETE FROM rotation_runs");
-      await client.query("DELETE FROM audit_events");
-      await client.query("DELETE FROM oauth_clients");
-      await client.query("DELETE FROM policy_rules");
-      await client.query("DELETE FROM credentials");
-      await client.query("DELETE FROM tenants");
-      await client.query("DELETE FROM request_rate_limits");
+      if (actor?.tenantId) {
+        await client.query("DELETE FROM access_tokens WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM refresh_tokens WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM approval_requests WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM break_glass_requests WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM rotation_runs WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM audit_events WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM oauth_clients WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM policy_rules WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM credentials WHERE tenant_id = $1", [actor.tenantId]);
+        await client.query("DELETE FROM tenants WHERE tenant_id = $1", [actor.tenantId]);
+      } else {
+        await client.query("DELETE FROM access_tokens");
+        await client.query("DELETE FROM refresh_tokens");
+        await client.query("DELETE FROM approval_requests");
+        await client.query("DELETE FROM break_glass_requests");
+        await client.query("DELETE FROM rotation_runs");
+        await client.query("DELETE FROM audit_events");
+        await client.query("DELETE FROM oauth_clients");
+        await client.query("DELETE FROM policy_rules");
+        await client.query("DELETE FROM credentials");
+        await client.query("DELETE FROM tenants");
+        await client.query("DELETE FROM request_rate_limits");
+      }
 
       for (const tenant of backup.tenants) {
         await client.query(

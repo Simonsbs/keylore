@@ -277,6 +277,8 @@ npm run dev:cli -- system rotations fail <rotation-id> --note "backend issue"
 npm run dev:cli -- system backup create --file ./keylore-backup.json
 ```
 
+When the CLI is run as the built-in local operator, the backup is full-instance. Remote tenant-scoped backup operators only receive tenant-scoped backups through the HTTP API.
+
 ### `system backup inspect`
 
 ```bash

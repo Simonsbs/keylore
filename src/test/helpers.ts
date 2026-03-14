@@ -121,7 +121,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.11.0",
+    version: "0.12.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),

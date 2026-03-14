@@ -46,6 +46,8 @@ This file maps the current repository state to the local `KeyLore.md` production
 - HA-oriented Helm values with pod disruption budget and spread constraints
 - tenant-aware partitioning across catalog, policy, auth, approval, break-glass, audit, token, rotation, and backup data
 - tenant registry plus tenant bootstrap, list, read, and update operations
+- explicit conformance suite for OAuth metadata, tenant disablement, and tenant-scoped backup boundaries
+- tenant-scoped backup export and restore isolation
 
 ## Partially implemented
 

@@ -43,6 +43,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Conformance
+        run: npm run test:conformance
+
       - name: Build
         run: npm run build
 

@@ -12,6 +12,7 @@ This repository is incubating privately today, but it is structured to be publis
 - contributor and security policies
 - CI, container packaging, and deployment examples
 - architecture, API, threat model, and roadmap docs
+- conformance and tenant-operations guides
 
 ## What is implemented now
 
@@ -48,6 +49,8 @@ This repository is incubating privately today, but it is structured to be publis
 - persisted credential rotation workflows with plan, start, complete, and fail transitions
 - tenant-aware partitioning for credentials, policies, auth clients, approvals, break-glass, audit events, tokens, rotation runs, and logical backups
 - first-class tenant registry with tenant bootstrap workflows for auth-client seeding
+- tenant-scoped backup export and restore isolation for delegated tenant operators
+- explicit conformance suite for auth, tenancy, and backup boundary regressions
 - Helm chart with dev, staging, and production values profiles
 - HA-oriented Helm profile with pod disruption budget and spread controls
 - tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
@@ -55,7 +58,7 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.11 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.12 delivery. This repo does not yet implement:
 
 - admin UI
 
@@ -136,6 +139,12 @@ npm run dev:cli -- system rotations list
 
 ```bash
 npm run ops:helm-validate
+```
+
+11. Run the release conformance gate:
+
+```bash
+npm run test:conformance
 ```
 
 ## Example API usage

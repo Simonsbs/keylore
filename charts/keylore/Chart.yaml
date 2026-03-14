@@ -2,8 +2,8 @@ apiVersion: v2
 name: keylore
 description: Self-hosted MCP credential broker and searchable credential catalogue.
 type: application
-version: 0.11.0
-appVersion: "0.11.0"
+version: 0.12.0
+appVersion: "0.12.0"
 home: https://github.com/Simonsbs/keylore
 sources:
   - https://github.com/Simonsbs/keylore

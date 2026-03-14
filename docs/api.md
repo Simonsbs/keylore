@@ -316,6 +316,22 @@ Required role: `admin` or `maintenance_operator`
 
 ### `POST /v1/system/backups/export`
 
+Exports a logical backup. Tenant-scoped backup operators receive a tenant-scoped backup only.
+Required scope: `backup:read`
+Required role: `admin` or `backup_operator`
+
+### `POST /v1/system/backups/inspect`
+
+Inspects a logical backup summary.
+Required scope: `backup:read`
+Required role: `admin` or `backup_operator`
+
+### `POST /v1/system/backups/restore`
+
+Restores a logical backup. Tenant-scoped backup operators may restore only backups that contain their own tenant data and only replace rows inside that tenant.
+Required scope: `backup:write`
+Required role: `admin` or `backup_operator`
+
 Exports a logical backup payload directly over the API.
 Required scope: `backup:read`
 Required role: `admin` or `backup_operator`
