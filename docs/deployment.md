@@ -1,6 +1,6 @@
 # Deployment
 
-`v0.12` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, and adds explicit conformance gates for release promotion.
+`v1.0.0-rc1` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, and adds explicit contract and hardening gates for release promotion.
 
 ## Helm chart
 
@@ -52,7 +52,7 @@ helm upgrade --install keylore ./charts/keylore \
 The release workflow lives at [release.yml](/home/simon/keylore/.github/workflows/release.yml). On version tags it:
 
 - runs typecheck, tests, and build
-- runs the explicit conformance suite
+- runs the explicit contract, conformance, and hardening suites
 - validates Helm lint, render, and dry-run upgrade paths
 - packages a source tarball and Helm chart archive
 - builds and pushes a GHCR image
@@ -84,7 +84,7 @@ npm run ops:helm-validate
 For production rollouts:
 
 - validate `values.yaml` plus your environment override with `ops:helm-validate`
-- run `npm run test:conformance` before promoting a release candidate
+- run `npm run test:contracts`, `npm run test:conformance`, and `npm run test:hardening` before promoting a release candidate
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
 - for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings

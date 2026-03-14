@@ -76,7 +76,9 @@ With `.env` populated, a minimal smoke test is:
 13. create, approve, and list a `POST /v1/break-glass` request
 14. export a logical backup with `POST /v1/system/backups/export` or `npm run dev:cli -- system backup create --file ./backup.json`
 15. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
-16. run `npm run test:conformance`
+16. run `npm run test:contracts`
+17. run `npm run test:conformance`
+18. run `npm run test:hardening`
 
 ## Migration policy
 
@@ -109,6 +111,11 @@ Tenant-scoped backup operators are narrower than global operators:
 - export only includes rows from their own tenant
 - restore only replaces rows from their own tenant
 - restore is rejected if the payload includes foreign-tenant records
+
+Tenant-scoped auth administrators are also narrower than global operators:
+
+- token and refresh-token actions are limited to their own tenant
+- cross-tenant revoke attempts are rejected before state mutation
 
 Automate the drill end to end:
 

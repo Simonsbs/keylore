@@ -96,7 +96,15 @@
 - add regression coverage for disabled tenants, public-client grant misuse, and tenant-scoped backup restore rejection
 - add operator docs for tenant lifecycle, interactive auth setup, conformance, and tenant-safe recovery
 
+## v1.0-rc1
+
+- completed:
+- freeze the public OAuth, REST, and MCP compatibility contract
+- add dedicated contract and hardening suites to CI and release promotion
+- reject authorization-code replay and rotated refresh-token replay in release-blocking coverage
+- harden delegated auth administration so tenant-scoped token revocation checks happen before mutation
+
 ## v1.0
 
 - add admin UI
-- add formal conformance and security hardening suites
+- finalize public release polish and operator-facing documentation

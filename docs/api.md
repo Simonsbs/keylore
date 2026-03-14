@@ -1,5 +1,7 @@
 # API
 
+The REST paths and MCP tool identifiers listed here are part of the frozen `v1.0.0-rc1` compatibility surface. The compatibility policy is documented in [docs/compatibility.md](/home/simon/keylore/docs/compatibility.md).
+
 ## REST endpoints
 
 All `/v1/*` endpoints require a bearer token minted by `POST /oauth/token`. Most endpoints are scope-gated; some also require a role.
@@ -463,6 +465,30 @@ Read adapter health and availability.
 ### `system_maintenance_status`
 
 Read background maintenance status.
+
+### `system_recent_traces`
+
+Read recent in-memory trace spans by optional trace id filter.
+
+### `system_trace_exporter_status`
+
+Read external trace-export queue status and last flush/error state.
+
+### `system_rotation_list`
+
+List credential rotation workflow runs.
+
+### `system_rotation_plan`
+
+Create pending rotation runs for due credentials.
+
+### `system_rotation_create`
+
+Create one manual rotation run.
+
+### `system_rotation_complete`
+
+Complete one rotation run and optionally update the binding reference.
 
 ### `break_glass_request`
 

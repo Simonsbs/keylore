@@ -74,6 +74,7 @@ export interface AccessTokenRepository {
     resource?: string;
     expiresAt: string;
   }): Promise<void>;
+  getById(tokenId: string): Promise<AccessTokenRecord | undefined>;
   getByHash(tokenHash: string): Promise<AccessTokenRecordWithHash | undefined>;
   touch(tokenHash: string): Promise<void>;
   list(filter?: {
@@ -101,6 +102,7 @@ export interface RefreshTokenRepository {
     resource?: string;
     expiresAt: string;
   }): Promise<void>;
+  getById(refreshTokenId: string): Promise<RefreshTokenRecord | undefined>;
   getByHash(tokenHash: string): Promise<RefreshTokenRecordWithHash | undefined>;
   touch(tokenHash: string): Promise<void>;
   list(filter?: {

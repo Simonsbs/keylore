@@ -1,6 +1,6 @@
 # Tenant Operations
 
-`v0.12` treats tenant lifecycle as an operator responsibility with explicit backup boundaries.
+`v1.0.0-rc1` treats tenant lifecycle as an operator responsibility with explicit backup and delegated-auth boundaries.
 
 ## Tenant lifecycle
 

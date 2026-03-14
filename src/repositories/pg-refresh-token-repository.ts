@@ -96,6 +96,18 @@ export class PgRefreshTokenRepository implements RefreshTokenRepository {
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   }
 
+  public async getById(refreshTokenId: string): Promise<RefreshTokenRecord | undefined> {
+    const result = await this.database.query<RefreshTokenRow>(
+      "SELECT * FROM refresh_tokens WHERE refresh_token_id = $1",
+      [refreshTokenId],
+    );
+    if (!result.rows[0]) {
+      return undefined;
+    }
+    const { tokenHash: _tokenHash, ...record } = mapRow(result.rows[0]);
+    return record;
+  }
+
   public async touch(tokenHash: string): Promise<void> {
     await this.database.query(
       "UPDATE refresh_tokens SET last_used_at = NOW() WHERE token_hash = $1",

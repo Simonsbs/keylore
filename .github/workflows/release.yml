@@ -43,8 +43,14 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Contract suite
+        run: npm run test:contracts
+
       - name: Conformance
         run: npm run test:conformance
+
+      - name: Hardening suite
+        run: npm run test:hardening
 
       - name: Build
         run: npm run build

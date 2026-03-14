@@ -93,6 +93,18 @@ export class PgAccessTokenRepository implements AccessTokenRepository {
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   }
 
+  public async getById(tokenId: string): Promise<AccessTokenRecord | undefined> {
+    const result = await this.database.query<AccessTokenRow>(
+      "SELECT * FROM access_tokens WHERE token_id = $1",
+      [tokenId],
+    );
+    if (!result.rows[0]) {
+      return undefined;
+    }
+    const { tokenHash: _tokenHash, ...record } = mapRow(result.rows[0]);
+    return record;
+  }
+
   public async touch(tokenHash: string): Promise<void> {
     await this.database.query(
       "UPDATE access_tokens SET last_used_at = NOW() WHERE token_hash = $1",

@@ -1,6 +1,6 @@
 {
   "name": "keylore",
-  "version": "0.12.0",
+  "version": "1.0.0-rc1",
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
+    "test:contracts": "node --test --import tsx src/test/contract.test.ts",
     "test:conformance": "node --test --import tsx src/test/conformance.test.ts",
+    "test:hardening": "node --test --import tsx src/test/hardening.test.ts",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "dev:http": "tsx src/index.ts --transport http",

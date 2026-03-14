@@ -6,6 +6,18 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc1] - 2026-03-14
+
+### Added
+
+- Frozen compatibility contract for OAuth metadata, protected-resource identifiers, and MCP tool names.
+- Dedicated contract and hardening suites for release-candidate promotion.
+- Regression coverage for authorization-code replay, rotated refresh-token replay, delegated auth-admin isolation, and tenant-safe restore rejection.
+
+### Fixed
+
+- Prevented tenant-scoped auth administrators from revoking foreign-tenant access or refresh tokens before tenant access checks complete.
+
 ## [0.12.0] - 2026-03-14
 
 ### Added

@@ -971,25 +971,30 @@ export class AuthService {
     actor: { principal: string; tenantId?: string },
     tokenId: string,
   ): Promise<AccessTokenRecord | undefined> {
-    const token = await this.tokens.revokeById(tokenId);
-    if (token) {
-      if (actor.tenantId && token.tenantId !== actor.tenantId) {
-        throw new Error("Tenant access denied.");
-      }
-      await this.audit.record({
-        type: "auth.token",
-        action: "auth.token.revoke",
-        outcome: "success",
-        tenantId: token.tenantId,
-        principal: actor.principal,
-        metadata: {
-          tokenId: token.tokenId,
-          tenantId: token.tenantId,
-          clientId: token.clientId,
-          subject: token.subject,
-        },
-      });
+    const existing = await this.tokens.getById(tokenId);
+    if (!existing) {
+      return undefined;
     }
+    if (actor.tenantId && existing.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
+    const token = await this.tokens.revokeById(tokenId);
+    if (!token) {
+      return undefined;
+    }
+    await this.audit.record({
+      type: "auth.token",
+      action: "auth.token.revoke",
+      outcome: "success",
+      tenantId: token.tenantId,
+      principal: actor.principal,
+      metadata: {
+        tokenId: token.tokenId,
+        tenantId: token.tenantId,
+        clientId: token.clientId,
+        subject: token.subject,
+      },
+    });
     return token;
   }
 
@@ -997,25 +1002,30 @@ export class AuthService {
     actor: { principal: string; tenantId?: string },
     refreshTokenId: string,
   ): Promise<RefreshTokenRecord | undefined> {
-    const token = await this.refreshTokens.revokeById(refreshTokenId);
-    if (token) {
-      if (actor.tenantId && token.tenantId !== actor.tenantId) {
-        throw new Error("Tenant access denied.");
-      }
-      await this.audit.record({
-        type: "auth.token",
-        action: "auth.refresh.revoke",
-        outcome: "success",
-        tenantId: token.tenantId,
-        principal: actor.principal,
-        metadata: {
-          refreshTokenId: token.refreshTokenId,
-          tenantId: token.tenantId,
-          clientId: token.clientId,
-          subject: token.subject,
-        },
-      });
+    const existing = await this.refreshTokens.getById(refreshTokenId);
+    if (!existing) {
+      return undefined;
     }
+    if (actor.tenantId && existing.tenantId !== actor.tenantId) {
+      throw new Error("Tenant access denied.");
+    }
+    const token = await this.refreshTokens.revokeById(refreshTokenId);
+    if (!token) {
+      return undefined;
+    }
+    await this.audit.record({
+      type: "auth.token",
+      action: "auth.refresh.revoke",
+      outcome: "success",
+      tenantId: token.tenantId,
+      principal: actor.principal,
+      metadata: {
+        refreshTokenId: token.refreshTokenId,
+        tenantId: token.tenantId,
+        clientId: token.clientId,
+        subject: token.subject,
+      },
+    });
     return token;
   }
 }

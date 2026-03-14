@@ -48,6 +48,9 @@ This file maps the current repository state to the local `KeyLore.md` production
 - tenant registry plus tenant bootstrap, list, read, and update operations
 - explicit conformance suite for OAuth metadata, tenant disablement, and tenant-scoped backup boundaries
 - tenant-scoped backup export and restore isolation
+- frozen `v1.0.0-rc1` compatibility contract for OAuth metadata, protected resources, and MCP tool identifiers
+- dedicated hardening suite for replay, delegated-admin, and tenant-safe recovery abuse paths
+- tenant-scoped token revocation checks that reject foreign-tenant requests before state mutation
 
 ## Partially implemented
 
