@@ -1,6 +1,6 @@
 # Release Checklist
 
-Use this checklist for `v1.0.0-rc3` and the final `v1.0.0` release.
+Use this checklist for `v1.0.0-rc4` and the final `v1.0.0` release.
 
 ## Preflight
 
@@ -10,18 +10,13 @@ Use this checklist for `v1.0.0-rc3` and the final `v1.0.0` release.
 
 ## Verification
 
-Run:
+Run the full sequential rehearsal:
 
 ```bash
-npm run typecheck
-npm test
-npm run test:contracts
-npm run test:conformance
-npm run test:hardening
-npm run build
-npm run ops:container-smoke
-npm run ops:helm-validate
+npm run ops:release-verify
 ```
+
+If `helm` is not installed locally, the Helm validation step falls back to the pinned container automatically.
 
 ## Operator validation
 

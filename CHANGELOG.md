@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc4] - 2026-03-14
+
+### Added
+
+- One-command final release verification via `npm run ops:release-verify`.
+
+### Changed
+
+- Unified the release workflow and operator checklist around the same sequential verification path.
+
 ## [1.0.0-rc3] - 2026-03-14
 
 ### Added

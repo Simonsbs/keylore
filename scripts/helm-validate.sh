@@ -1,6 +1,14 @@
 #!/bin/sh
 set -eu
 
+if ! command -v helm >/dev/null 2>&1; then
+  exec docker run --rm --entrypoint sh \
+    -v "$(pwd):/workspace" \
+    -w /workspace \
+    alpine/helm:3.17.1 \
+    ./scripts/helm-validate.sh
+fi
+
 chart_dir="./charts/keylore"
 prod_database_url="postgresql://keylore:keylore@postgres.example.com:5432/keylore"
 

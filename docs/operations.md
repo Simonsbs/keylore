@@ -76,11 +76,8 @@ With `.env` populated, a minimal smoke test is:
 13. create, approve, and list a `POST /v1/break-glass` request
 14. export a logical backup with `POST /v1/system/backups/export` or `npm run dev:cli -- system backup create --file ./backup.json`
 15. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
-16. run `npm run test:contracts`
-17. run `npm run test:conformance`
-18. run `npm run test:hardening`
-19. run `npm run ops:container-smoke`
-20. open `http://127.0.0.1:8787/admin` for the interactive operator UI
+16. run `npm run ops:release-verify`
+17. open `http://127.0.0.1:8787/admin` for the interactive operator UI
 
 ## Migration policy
 

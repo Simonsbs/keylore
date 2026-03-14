@@ -38,6 +38,12 @@ Use the shipped container smoke path to confirm the UI is reachable through the 
 npm run ops:container-smoke
 ```
 
+For the full release rehearsal, use:
+
+```bash
+npm run ops:release-verify
+```
+
 ## Operator notes
 
 - The page itself is public, but every data read and action still goes through the existing authenticated REST endpoints.

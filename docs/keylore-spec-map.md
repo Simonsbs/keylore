@@ -53,6 +53,7 @@ This file maps the current repository state to the local `KeyLore.md` production
 - tenant-scoped token revocation checks that reject foreign-tenant requests before state mutation
 - minimal admin UI for session bootstrap, tenant administration, auth-client administration, review queues, backups, audit, and system status
 - live container smoke path for `/admin`, health, and token-backed operator validation
+- one-command final release verification via `ops:release-verify`
 
 ## Partially implemented
 

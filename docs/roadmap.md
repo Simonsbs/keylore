@@ -119,6 +119,12 @@
 - tighten install, upgrade, rollback, and recovery documentation for the final release path
 - add an explicit release checklist for final promotion
 
+## v1.0-rc4
+
+- completed:
+- add one-command sequential release verification via `ops:release-verify`
+- align release automation and operator docs to the same final rehearsal path
+
 ## v1.0
 
 - finalize public release polish and operator-facing documentation

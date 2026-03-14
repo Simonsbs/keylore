@@ -64,7 +64,7 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc3` delivery. The main remaining work before `v1.0.0` is:
+The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc4` delivery. The main remaining work before `v1.0.0` is:
 
 - public release polish and final operator documentation cleanup
 
@@ -150,10 +150,7 @@ npm run ops:helm-validate
 11. Run the release candidate gates:
 
 ```bash
-npm run test:contracts
-npm run test:conformance
-npm run test:hardening
-npm run ops:container-smoke
+npm run ops:release-verify
 ```
 
 12. Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.

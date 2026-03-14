@@ -37,29 +37,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Contract suite
-        run: npm run test:contracts
-
-      - name: Conformance
-        run: npm run test:conformance
-
-      - name: Hardening suite
-        run: npm run test:hardening
-
-      - name: Build
-        run: npm run build
-
-      - name: Container smoke
-        run: npm run ops:container-smoke
-
-      - name: Validate Helm chart
-        run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 sh ./scripts/helm-validate.sh
+      - name: Release verification
+        run: npm run ops:release-verify
 
       - name: Package Helm chart
         run: |

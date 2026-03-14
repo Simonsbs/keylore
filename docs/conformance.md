@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc3` continues the three release-candidate gates for KeyLore: contract, conformance, and hardening, and adds a live container smoke check to the recommended release flow.
+`v1.0.0-rc4` continues the three release-candidate gates for KeyLore and standardizes the full rehearsal behind one sequential release-verification command.
 
 ## Purpose
 
@@ -35,13 +35,7 @@ These suites are also run in CI in addition to the broader `npm test` suite.
 A release candidate should pass:
 
 ```bash
-npm run typecheck
-npm test
-npm run test:contracts
-npm run test:conformance
-npm run test:hardening
-npm run build
-docker run --rm --entrypoint sh -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 ./scripts/helm-validate.sh
+npm run ops:release-verify
 ```
 
 ## Scope boundaries

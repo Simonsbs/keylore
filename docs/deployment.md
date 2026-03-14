@@ -1,6 +1,6 @@
 # Deployment
 
-`v1.0.0-rc3` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, serves the minimal admin UI from the same HTTP service, and adds an explicit container smoke path for `/admin`.
+`v1.0.0-rc4` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, serves the minimal admin UI from the same HTTP service, and now standardizes final release verification behind one sequential rehearsal command.
 
 ## Helm chart
 
@@ -25,6 +25,12 @@ Run the shipped image smoke test to verify the built container serves `/admin`, 
 
 ```bash
 npm run ops:container-smoke
+```
+
+Run the full final-release rehearsal:
+
+```bash
+npm run ops:release-verify
 ```
 
 Development-style install:
@@ -91,10 +97,12 @@ Run the shipped validation script before promoting a new chart revision:
 npm run ops:helm-validate
 ```
 
+If `helm` is not installed on the host, the validation script automatically falls back to the pinned `alpine/helm:3.17.1` container.
+
 For production rollouts:
 
 - validate `values.yaml` plus your environment override with `ops:helm-validate`
-- run `npm run test:contracts`, `npm run test:conformance`, `npm run test:hardening`, and `npm run ops:container-smoke` before promoting a release candidate
+- run `npm run ops:release-verify` before promoting a release candidate
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
 - for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings
