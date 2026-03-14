@@ -28,20 +28,23 @@ This file maps the current repository state to the local `KeyLore.md` production
 - tagged release workflow with SBOM generation, scanning, and signing
 - shipped observability artifacts for dashboards and alert rules
 - break-glass workflow with persisted requests and audited activation/revocation
+- quorum-based approval and break-glass reviews with persisted review history
+- signed notification webhooks for approval and break-glass lifecycle events
+- recent trace capture with operator inspection over REST, CLI, and MCP
 - delegated auth, maintenance, and backup administration roles
 - egress policy enforcement for blocked private and link-local targets
 - sandbox env allowlisting and reserved-name protection
 - container packaging and CI basics
 - startup migrations, config validation, and bootstrap import
 - ingress and egress hardening controls
+- Helm dry-run upgrade validation in CI and release automation
 
 ## Partially implemented
 
 - Catalogue CRUD: REST and CLI implemented, no UI yet
 - Remote MCP auth: client credentials and protected-resource metadata exist, but no broader OAuth authorization flows
 - Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
-- Observability: metrics, dashboards, and alert rules are present, but no traces backend is shipped yet
-- Approval and break-glass operations: CLI, API, and MCP surfaces exist, but no notification or delegated multi-party workflow layer yet
+- Observability: metrics, recent traces, dashboards, and alert rules are present, but no external traces backend is shipped yet
 
 ## Deferred
 

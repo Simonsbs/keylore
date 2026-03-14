@@ -153,6 +153,13 @@ export class TelemetryService {
     this.setGauge("keylore_maintenance_last_run_timestamp_seconds", { task }, Math.floor(Date.now() / 1000));
   }
 
+  public recordNotificationDelivery(
+    eventType: string,
+    outcome: "success" | "error" | "disabled",
+  ): void {
+    this.incrementCounter("keylore_notification_deliveries_total", { event_type: eventType, outcome });
+  }
+
   public renderPrometheus(): string {
     const lines: string[] = [
       "# HELP keylore_process_start_time_seconds Process start time in Unix seconds.",

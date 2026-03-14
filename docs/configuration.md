@@ -25,7 +25,9 @@
 - `KEYLORE_MAINTENANCE_INTERVAL_MS`: maintenance interval
 - `KEYLORE_ACCESS_TOKEN_TTL_SECONDS`: issued bearer token lifetime
 - `KEYLORE_APPROVAL_TTL_SECONDS`: pending approval lifetime
+- `KEYLORE_APPROVAL_REVIEW_QUORUM`: distinct reviews required before an approval request becomes approved
 - `KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS`: max lifetime for an approved break-glass request
+- `KEYLORE_BREAKGLASS_REVIEW_QUORUM`: distinct reviews required before a break-glass request becomes active
 - `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET`: seed secret for `keylore-admin-local`
 - `KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET`: seed secret for `keylore-consumer-local`
 - `KEYLORE_VAULT_ADDR`: Vault base URL for the Vault adapter
@@ -46,6 +48,11 @@
 - `KEYLORE_ADAPTER_RETRY_DELAY_MS`: adapter retry backoff base
 - `KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD`: failures before opening an adapter circuit
 - `KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS`: time before a tripped adapter circuit may be retried
+- `KEYLORE_NOTIFICATION_WEBHOOK_URL`: optional lifecycle notification destination
+- `KEYLORE_NOTIFICATION_SIGNING_SECRET`: optional HMAC secret for webhook signatures
+- `KEYLORE_NOTIFICATION_TIMEOUT_MS`: notification delivery timeout
+- `KEYLORE_TRACE_CAPTURE_ENABLED`: enable in-memory recent trace capture
+- `KEYLORE_TRACE_RECENT_SPAN_LIMIT`: recent trace span retention limit
 
 ## Secret bindings
 
@@ -99,6 +106,23 @@ Remote callers use the `client_credentials` grant. Tokens may be resource-bound:
 - use `resource=<publicBaseUrl>/mcp` for remote MCP access
 
 If a token is resource-bound, KeyLore rejects it on the wrong protected resource.
+
+## Approvals and break-glass quorum
+
+Approval and break-glass requests are persisted with:
+
+- `requiredApprovals`
+- `approvalCount`
+- `denialCount`
+- `reviews`
+
+Any denial finalizes the request as denied. Approvals require distinct reviewers; the same reviewer cannot count twice.
+
+## Notifications and traces
+
+When `KEYLORE_NOTIFICATION_WEBHOOK_URL` is configured, KeyLore emits signed JSON webhook envelopes for approval and break-glass lifecycle events. If `KEYLORE_NOTIFICATION_SIGNING_SECRET` is set, KeyLore includes an `x-keylore-signature` HMAC-SHA256 header over the raw JSON body.
+
+When trace capture is enabled, KeyLore records recent spans in memory and propagates `x-trace-id` from inbound HTTP requests into approval, break-glass, and notification spans.
 
 ## Roles and scopes
 
@@ -154,6 +178,7 @@ Operational visibility is exposed through:
 - `GET /metrics`
 - `GET /readyz`
 - `GET /v1/system/maintenance`
+- `GET /v1/system/traces`
 
 Deployment profiles are shipped through Helm values files:
 

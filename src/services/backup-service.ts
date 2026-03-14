@@ -110,6 +110,10 @@ interface BackupApprovalRow {
   reviewed_by: string | null;
   reviewed_at: string | Date | null;
   review_note: string | null;
+  required_approvals: number;
+  approval_count: number;
+  denial_count: number;
+  reviews: unknown;
 }
 
 interface BackupAuditRow {
@@ -141,6 +145,10 @@ interface BackupBreakGlassRow {
   reviewed_by: string | null;
   reviewed_at: string | Date | null;
   review_note: string | null;
+  required_approvals: number;
+  approval_count: number;
+  denial_count: number;
+  reviews: unknown;
   revoked_by: string | null;
   revoked_at: string | Date | null;
   revoke_note: string | null;
@@ -269,6 +277,10 @@ export class BackupService {
         reviewedBy: row.reviewed_by ?? undefined,
         reviewedAt: toIso(row.reviewed_at) ?? undefined,
         reviewNote: row.review_note ?? undefined,
+        requiredApprovals: row.required_approvals,
+        approvalCount: row.approval_count,
+        denialCount: row.denial_count,
+        reviews: row.reviews,
       })),
       breakGlassRequests: breakGlassRequests.rows.map((row) => ({
         id: row.id,
@@ -288,6 +300,10 @@ export class BackupService {
         reviewedBy: row.reviewed_by ?? undefined,
         reviewedAt: toIso(row.reviewed_at) ?? undefined,
         reviewNote: row.review_note ?? undefined,
+        requiredApprovals: row.required_approvals,
+        approvalCount: row.approval_count,
+        denialCount: row.denial_count,
+        reviews: row.reviews,
         revokedBy: row.revoked_by ?? undefined,
         revokedAt: toIso(row.revoked_at) ?? undefined,
         revokeNote: row.revoke_note ?? undefined,
@@ -441,11 +457,13 @@ export class BackupService {
           `INSERT INTO approval_requests (
              id, created_at, expires_at, status, requested_by, requested_roles,
              credential_id, operation, target_url, target_host, reason, rule_id,
-             correlation_id, fingerprint, reviewed_by, reviewed_at, review_note
+             correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
+             required_approvals, approval_count, denial_count, reviews
            ) VALUES (
              $1, $2, $3, $4, $5, $6,
              $7, $8, $9, $10, $11, $12,
-             $13, $14, $15, $16, $17
+             $13, $14, $15, $16, $17,
+             $18, $19, $20, $21
            )`,
           [
             approval.id,
@@ -465,6 +483,10 @@ export class BackupService {
             approval.reviewedBy ?? null,
             approval.reviewedAt ?? null,
             approval.reviewNote ?? null,
+            approval.requiredApprovals,
+            approval.approvalCount,
+            approval.denialCount,
+            approval.reviews,
           ],
         );
       }
@@ -475,12 +497,14 @@ export class BackupService {
              id, created_at, expires_at, status, requested_by, requested_roles,
              credential_id, operation, target_url, target_host, justification, requested_duration_seconds,
              correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
+             required_approvals, approval_count, denial_count, reviews,
              revoked_by, revoked_at, revoke_note
            ) VALUES (
              $1, $2, $3, $4, $5, $6,
              $7, $8, $9, $10, $11, $12,
              $13, $14, $15, $16, $17,
-             $18, $19, $20
+             $18, $19, $20, $21,
+             $22, $23, $24
            )`,
           [
             request.id,
@@ -500,6 +524,10 @@ export class BackupService {
             request.reviewedBy ?? null,
             request.reviewedAt ?? null,
             request.reviewNote ?? null,
+            request.requiredApprovals,
+            request.approvalCount,
+            request.denialCount,
+            request.reviews,
             request.revokedBy ?? null,
             request.revokedAt ?? null,
             request.revokeNote ?? null,

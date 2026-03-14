@@ -4,12 +4,17 @@ import { AccessRequestInput, ApprovalRequest, approvalRequestSchema, AuthContext
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { ApprovalRepository } from "../repositories/interfaces.js";
 import { accessFingerprint } from "./access-fingerprint.js";
+import { NotificationService } from "./notification-service.js";
+import { TraceService } from "./trace-service.js";
 
 export class ApprovalService {
   public constructor(
     private readonly approvals: ApprovalRepository,
     private readonly audit: PgAuditLogService,
     private readonly approvalTtlSeconds: number,
+    private readonly approvalReviewQuorum: number,
+    private readonly notifications: NotificationService,
+    private readonly traces: TraceService,
   ) {}
 
   public async createPending(
@@ -17,38 +22,52 @@ export class ApprovalService {
     input: AccessRequestInput,
     decision: { reason: string; ruleId?: string; correlationId: string },
   ): Promise<ApprovalRequest> {
-    const request = approvalRequestSchema.parse({
-      id: randomUUID(),
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + this.approvalTtlSeconds * 1000).toISOString(),
-      status: "pending",
-      requestedBy: context.principal,
-      requestedRoles: context.roles,
-      credentialId: input.credentialId,
-      operation: input.operation,
-      targetUrl: input.targetUrl,
-      targetHost: new URL(input.targetUrl).hostname,
-      reason: decision.reason,
-      ruleId: decision.ruleId,
-      correlationId: decision.correlationId,
-      fingerprint: accessFingerprint(context, input),
-    });
-    const created = await this.approvals.create(request);
-    await this.audit.record({
-      type: "approval.request",
-      action: "approval.request",
-      outcome: "success",
-      principal: context.principal,
-      correlationId: decision.correlationId,
-      metadata: {
+    return this.traces.withSpan("approval.create_pending", { credentialId: input.credentialId }, async () => {
+      const request = approvalRequestSchema.parse({
+        id: randomUUID(),
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + this.approvalTtlSeconds * 1000).toISOString(),
+        status: "pending",
+        requestedBy: context.principal,
+        requestedRoles: context.roles,
+        credentialId: input.credentialId,
+        operation: input.operation,
+        targetUrl: input.targetUrl,
+        targetHost: new URL(input.targetUrl).hostname,
+        reason: decision.reason,
+        ruleId: decision.ruleId,
+        correlationId: decision.correlationId,
+        fingerprint: accessFingerprint(context, input),
+        requiredApprovals: this.approvalReviewQuorum,
+        approvalCount: 0,
+        denialCount: 0,
+        reviews: [],
+      });
+      const created = await this.approvals.create(request);
+      await this.audit.record({
+        type: "approval.request",
+        action: "approval.request",
+        outcome: "success",
+        principal: context.principal,
+        correlationId: decision.correlationId,
+        metadata: {
+          approvalId: created.id,
+          credentialId: created.credentialId,
+          operation: created.operation,
+          targetHost: created.targetHost,
+          ruleId: created.ruleId ?? null,
+          requiredApprovals: created.requiredApprovals,
+        },
+      });
+      await this.notifications.send("approval.pending", {
         approvalId: created.id,
         credentialId: created.credentialId,
-        operation: created.operation,
+        requestedBy: created.requestedBy,
+        requiredApprovals: created.requiredApprovals,
         targetHost: created.targetHost,
-        ruleId: created.ruleId ?? null,
-      },
+      });
+      return created;
     });
-    return created;
   }
 
   public async verifyApproval(
@@ -83,27 +102,54 @@ export class ApprovalService {
     status: "approved" | "denied",
     note?: string,
   ) {
-    await this.approvals.expireStale();
-    const reviewed = await this.approvals.review(id, {
-      status,
-      reviewedBy: context.principal,
-      reviewNote: note,
-    });
-    if (reviewed) {
-      await this.audit.record({
-        type: "approval.review",
-        action: `approval.${status}`,
-        outcome: status === "approved" ? "allowed" : "denied",
-        principal: context.principal,
-        correlationId: reviewed.correlationId,
-        metadata: {
+    return this.traces.withSpan("approval.review", { approvalId: id, decision: status }, async () => {
+      await this.approvals.expireStale();
+      const reviewed = await this.approvals.review(id, {
+        status,
+        reviewedBy: context.principal,
+        reviewNote: note,
+      });
+      if (reviewed) {
+        await this.audit.record({
+          type: "approval.review",
+          action: `approval.${status}`,
+          outcome: status === "approved" ? "allowed" : "denied",
+          principal: context.principal,
+          correlationId: reviewed.correlationId,
+          metadata: {
+            approvalId: reviewed.id,
+            credentialId: reviewed.credentialId,
+            requestedBy: reviewed.requestedBy,
+            reviewNote: reviewed.reviewNote ?? null,
+            approvalCount: reviewed.approvalCount,
+            denialCount: reviewed.denialCount,
+            requiredApprovals: reviewed.requiredApprovals,
+            currentStatus: reviewed.status,
+          },
+        });
+        await this.notifications.send("approval.reviewed", {
           approvalId: reviewed.id,
           credentialId: reviewed.credentialId,
           requestedBy: reviewed.requestedBy,
-          reviewNote: reviewed.reviewNote ?? null,
-        },
-      });
-    }
-    return reviewed;
+          reviewer: context.principal,
+          decision: status,
+          currentStatus: reviewed.status,
+          approvalCount: reviewed.approvalCount,
+          denialCount: reviewed.denialCount,
+          requiredApprovals: reviewed.requiredApprovals,
+        });
+        if (reviewed.status === "approved" || reviewed.status === "denied") {
+          await this.notifications.send(`approval.${reviewed.status}`, {
+            approvalId: reviewed.id,
+            credentialId: reviewed.credentialId,
+            requestedBy: reviewed.requestedBy,
+            approvalCount: reviewed.approvalCount,
+            denialCount: reviewed.denialCount,
+            requiredApprovals: reviewed.requiredApprovals,
+          });
+        }
+      }
+      return reviewed;
+    });
   }
 }

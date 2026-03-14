@@ -19,6 +19,8 @@ data:
   KEYLORE_MAINTENANCE_INTERVAL_MS: {{ .Values.app.maintenanceIntervalMs | quote }}
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: {{ .Values.app.accessTokenTtlSeconds | quote }}
   KEYLORE_APPROVAL_TTL_SECONDS: {{ .Values.app.approvalTtlSeconds | quote }}
+  KEYLORE_APPROVAL_REVIEW_QUORUM: {{ .Values.app.approvalReviewQuorum | quote }}
+  KEYLORE_BREAKGLASS_REVIEW_QUORUM: {{ .Values.app.breakGlassReviewQuorum | quote }}
   KEYLORE_SANDBOX_INJECTION_ENABLED: {{ ternary "true" "false" .Values.app.sandboxInjectionEnabled | quote }}
   KEYLORE_SANDBOX_COMMAND_ALLOWLIST: {{ .Values.app.sandboxCommandAllowlist | quote }}
   KEYLORE_SANDBOX_DEFAULT_TIMEOUT_MS: {{ .Values.app.sandboxDefaultTimeoutMs | quote }}
@@ -27,5 +29,9 @@ data:
   KEYLORE_ADAPTER_RETRY_DELAY_MS: {{ .Values.app.adapterRetryDelayMs | quote }}
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD: {{ .Values.app.adapterCircuitBreakerThreshold | quote }}
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS: {{ .Values.app.adapterCircuitBreakerCooldownMs | quote }}
+  KEYLORE_NOTIFICATION_WEBHOOK_URL: {{ .Values.app.notificationWebhookUrl | quote }}
+  KEYLORE_NOTIFICATION_TIMEOUT_MS: {{ .Values.app.notificationTimeoutMs | quote }}
+  KEYLORE_TRACE_CAPTURE_ENABLED: {{ ternary "true" "false" .Values.app.traceCaptureEnabled | quote }}
+  KEYLORE_TRACE_RECENT_SPAN_LIMIT: {{ .Values.app.traceRecentSpanLimit | quote }}
   KEYLORE_PUBLIC_BASE_URL: {{ default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl | quote }}
   KEYLORE_OAUTH_ISSUER_URL: {{ default (printf "%s/oauth" (default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl)) .Values.app.oauthIssuerUrl | quote }}

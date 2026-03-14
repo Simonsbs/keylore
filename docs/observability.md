@@ -17,6 +17,19 @@ KeyLore exposes operational metrics at `GET /metrics` in Prometheus text format.
 - `keylore_maintenance_duration_ms_count`
 - `keylore_maintenance_duration_ms_sum`
 - `keylore_maintenance_last_run_timestamp_seconds`
+- `keylore_notification_deliveries_total`
+
+## Traces
+
+KeyLore now keeps a bounded in-memory list of recent spans for operator inspection. This is intentionally lightweight: it is for local debugging and self-hosted incident response, not a replacement for a full tracing backend.
+
+Trace visibility is exposed through:
+
+- `GET /v1/system/traces`
+- `npm run dev:cli -- system traces`
+- MCP tool `system_recent_traces`
+
+HTTP callers can supply `x-trace-id`; KeyLore echoes it in the response and propagates it into approval, break-glass, and notification spans.
 
 ## Shipped artifacts
 

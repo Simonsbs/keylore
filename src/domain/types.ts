@@ -50,6 +50,7 @@ export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "ex
 export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
 export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
 export const breakGlassStatusSchema = z.enum(["pending", "active", "denied", "expired", "revoked"]);
+export const reviewDecisionSchema = z.enum(["approved", "denied"]);
 
 export const credentialBindingSchema = z.object({
   adapter: bindingAdapterSchema,
@@ -123,6 +124,7 @@ export const auditEventSchema = z.object({
     "auth.token",
     "runtime.exec",
     "adapter.health",
+    "notification.delivery",
     "system.backup",
   ]),
   action: z.string().min(1),
@@ -304,6 +306,18 @@ export const approvalRequestSchema = z.object({
   ruleId: z.string().optional(),
   correlationId: z.string().uuid(),
   fingerprint: z.string().min(1),
+  requiredApprovals: z.number().int().min(1),
+  approvalCount: z.number().int().min(0),
+  denialCount: z.number().int().min(0),
+  reviews: z.array(
+    z.object({
+      reviewId: z.string().uuid(),
+      reviewedAt: z.string().datetime(),
+      reviewedBy: z.string().min(1),
+      decision: reviewDecisionSchema,
+      note: z.string().max(1000).optional(),
+    }),
+  ).default([]),
   reviewedBy: z.string().optional(),
   reviewedAt: z.string().datetime().optional(),
   reviewNote: z.string().optional(),
@@ -332,6 +346,18 @@ export const breakGlassRequestSchema = z.object({
   requestedDurationSeconds: z.number().int().min(60),
   correlationId: z.string().uuid(),
   fingerprint: z.string().min(1),
+  requiredApprovals: z.number().int().min(1),
+  approvalCount: z.number().int().min(0),
+  denialCount: z.number().int().min(0),
+  reviews: z.array(
+    z.object({
+      reviewId: z.string().uuid(),
+      reviewedAt: z.string().datetime(),
+      reviewedBy: z.string().min(1),
+      decision: reviewDecisionSchema,
+      note: z.string().max(1000).optional(),
+    }),
+  ).default([]),
   reviewedBy: z.string().optional(),
   reviewedAt: z.string().datetime().optional(),
   reviewNote: z.string().max(1000).optional(),
@@ -448,6 +474,23 @@ export const maintenanceStatusOutputSchema = z.object({
   maintenance: maintenanceStatusSchema,
 });
 
+export const traceSpanSchema = z.object({
+  spanId: z.string().uuid(),
+  traceId: z.string().min(1).max(128),
+  parentSpanId: z.string().uuid().optional(),
+  name: z.string().min(1),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime(),
+  durationMs: z.number().int().min(0),
+  status: z.enum(["ok", "error"]),
+  attributes: z.record(z.string(), z.unknown()),
+});
+
+export const traceListOutputSchema = z.object({
+  traceId: z.string().min(1).max(128).optional(),
+  traces: z.array(traceSpanSchema),
+});
+
 export const backupSummarySchema = z.object({
   format: z.literal("keylore-logical-backup"),
   version: z.number().int().positive(),
@@ -497,3 +540,4 @@ export type AdapterHealth = z.infer<typeof adapterHealthSchema>;
 export type MaintenanceTaskResult = z.infer<typeof maintenanceTaskResultSchema>;
 export type MaintenanceStatus = z.infer<typeof maintenanceStatusSchema>;
 export type BackupSummary = z.infer<typeof backupSummarySchema>;
+export type TraceSpan = z.infer<typeof traceSpanSchema>;

@@ -17,6 +17,7 @@ import {
   maintenanceStatusOutputSchema,
   operationSchema,
   runtimeExecutionResultSchema,
+  traceListOutputSchema,
   sensitivitySchema,
   scopeTierSchema,
 } from "../domain/types.js";
@@ -263,6 +264,30 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         content: [{ type: "text", text: makeText(app.maintenance.status()) }],
         structuredContent: {
           maintenance: app.maintenance.status(),
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_recent_traces",
+    {
+      description: "Inspect recent in-memory trace spans for HTTP, review, notification, and operator flows.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(100).default(20),
+        traceId: z.string().optional(),
+      },
+      outputSchema: traceListOutputSchema,
+    },
+    async ({ limit, traceId }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:read"]);
+      app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
+
+      return {
+        content: [{ type: "text", text: makeText(app.traces.recent(limit, traceId)) }],
+        structuredContent: {
+          traces: app.traces.recent(limit, traceId),
         },
       };
     },

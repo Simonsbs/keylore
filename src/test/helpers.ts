@@ -25,9 +25,11 @@ import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
 import { validateEgressTarget } from "../services/egress-policy.js";
 import { MaintenanceService } from "../services/maintenance-service.js";
+import { NotificationService } from "../services/notification-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
 import { PgRateLimitService } from "../services/rate-limit-service.js";
 import { TelemetryService } from "../services/telemetry.js";
+import { TraceService } from "../services/trace-service.js";
 import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
 import { SqlDatabase } from "../storage/database.js";
@@ -99,7 +101,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.7.0",
+    version: "0.8.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -124,7 +126,9 @@ export async function makeTestApp(options?: {
     maintenanceIntervalMs: 60000,
     accessTokenTtlSeconds: 3600,
     approvalTtlSeconds: 1800,
+    approvalReviewQuorum: 1,
     breakGlassMaxDurationSeconds: 900,
+    breakGlassReviewQuorum: 1,
     vaultAddr: undefined,
     vaultToken: undefined,
     vaultNamespace: undefined,
@@ -143,6 +147,11 @@ export async function makeTestApp(options?: {
     adapterRetryDelayMs: 1,
     adapterCircuitBreakerThreshold: 2,
     adapterCircuitBreakerCooldownMs: 1000,
+    notificationWebhookUrl: undefined,
+    notificationSigningSecret: undefined,
+    notificationTimeoutMs: 1000,
+    traceCaptureEnabled: true,
+    traceRecentSpanLimit: 200,
     ...options?.configOverrides,
   };
 
@@ -154,6 +163,15 @@ export async function makeTestApp(options?: {
   const approvalRepository = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
   const telemetry = new TelemetryService();
+  const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
+  const notifications = new NotificationService(
+    config.notificationWebhookUrl,
+    config.notificationSigningSecret,
+    config.notificationTimeoutMs,
+    audit,
+    telemetry,
+    traces,
+  );
   const rateLimits = new PgRateLimitService(
     database,
     config.rateLimitWindowMs,
@@ -243,11 +261,21 @@ export async function makeTestApp(options?: {
     config.accessTokenTtlSeconds,
     telemetry,
   );
-  const approvals = new ApprovalService(approvalRepository, audit, config.approvalTtlSeconds);
+  const approvals = new ApprovalService(
+    approvalRepository,
+    audit,
+    config.approvalTtlSeconds,
+    config.approvalReviewQuorum,
+    notifications,
+    traces,
+  );
   const breakGlass = new BreakGlassService(
     breakGlassRepository,
     audit,
     config.breakGlassMaxDurationSeconds,
+    config.breakGlassReviewQuorum,
+    notifications,
+    traces,
   );
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
@@ -281,6 +309,7 @@ export async function makeTestApp(options?: {
     breakGlass,
     database,
     telemetry,
+    traces,
     rateLimits,
     maintenance,
     backup: new BackupService(database, config.version, audit),

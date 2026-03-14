@@ -49,6 +49,7 @@ Usage:
   keylore system adapters
   keylore system maintenance
   keylore system maintenance run
+  keylore system traces [--limit 20] [--trace-id uuid]
   keylore system backup create --file /path/to/backup.json
   keylore system backup inspect --file /path/to/backup.json
   keylore system backup restore --file /path/to/backup.json --yes
@@ -281,6 +282,12 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
   if (resource === "system" && action === "maintenance" && subject === "run") {
     const result = await app.maintenance.runOnce();
     return output({ maintenance: app.maintenance.status(), result });
+  }
+
+  if (resource === "system" && action === "traces") {
+    const limit = readNumberFlag(parsed.flags, "limit") ?? 20;
+    const traceId = readStringFlag(parsed.flags, "trace-id");
+    return output({ traces: app.traces.recent(limit, traceId) });
   }
 
   if (resource === "system" && action === "backup" && subject === "create") {

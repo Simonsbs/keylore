@@ -22,6 +22,7 @@ import {
   catalogSearchInputSchema,
   createCredentialInputSchema,
   runtimeExecutionInputSchema,
+  traceListOutputSchema,
   tokenIssueInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
@@ -104,6 +105,17 @@ function routeParam(pathname: string, prefix: string): string | undefined {
 
 function clientKey(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? "unknown";
+}
+
+function traceIdFromRequest(req: IncomingMessage): string {
+  const header = req.headers["x-trace-id"];
+  if (typeof header === "string" && header.trim().length > 0) {
+    return header.trim();
+  }
+  if (Array.isArray(header) && header[0]?.trim()) {
+    return header[0].trim();
+  }
+  return randomUUID();
 }
 
 function normalizeRoute(pathname: string): string {
@@ -242,7 +254,9 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
     let routeLabel = req.url ?? "/";
     app.telemetry.adjustGauge("keylore_http_inflight_requests", {}, 1);
     const requestId = randomUUID();
+    const traceId = traceIdFromRequest(req);
     res.setHeader("x-request-id", requestId);
+    res.setHeader("x-trace-id", traceId);
     res.on("finish", () => {
       app.telemetry.adjustGauge("keylore_http_inflight_requests", {}, -1);
       app.telemetry.recordHttpRequest(
@@ -253,122 +267,129 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
       );
     });
 
-    try {
-      const url = new URL(
-        req.url ?? "/",
-        `http://${req.headers.host ?? `${app.config.httpHost}:${app.config.httpPort}`}`,
-      );
-      routeLabel = normalizeRoute(url.pathname);
+    await app.traces.runWithTrace(traceId, async () => {
+      await app.traces.withSpan("http.request", { method: req.method ?? "UNKNOWN", route: routeLabel }, async () => {
+        try {
+          const url = new URL(
+            req.url ?? "/",
+            `http://${req.headers.host ?? `${app.config.httpHost}:${app.config.httpPort}`}`,
+          );
+          routeLabel = normalizeRoute(url.pathname);
 
-      const rateLimitExempt =
-        url.pathname === "/healthz" || url.pathname === "/readyz" || url.pathname === "/metrics";
-      if (!rateLimitExempt) {
-        const limited = await app.rateLimits.check(clientKey(req));
-        if (limited.limited) {
-          if (limited.retryAfterSeconds) {
-            res.setHeader("retry-after", String(limited.retryAfterSeconds));
+          const rateLimitExempt =
+            url.pathname === "/healthz" || url.pathname === "/readyz" || url.pathname === "/metrics";
+          if (!rateLimitExempt) {
+            const limited = await app.rateLimits.check(clientKey(req));
+            if (limited.limited) {
+              if (limited.retryAfterSeconds) {
+                res.setHeader("retry-after", String(limited.retryAfterSeconds));
+              }
+              respondJson(res, 429, { error: "Rate limit exceeded." });
+              return;
+            }
           }
-          respondJson(res, 429, { error: "Rate limit exceeded." });
-          return;
-        }
-      }
 
-      if (url.pathname === "/healthz" && req.method === "GET") {
-        respondJson(res, 200, { status: "ok", service: app.config.appName });
-        return;
-      }
+          if (url.pathname === "/healthz" && req.method === "GET") {
+            respondJson(res, 200, { status: "ok", service: app.config.appName });
+            return;
+          }
 
-      if (url.pathname === "/readyz" && req.method === "GET") {
-        respondJson(res, 200, await app.health.readiness());
-        return;
-      }
+          if (url.pathname === "/readyz" && req.method === "GET") {
+            respondJson(res, 200, await app.health.readiness());
+            return;
+          }
 
-      if (url.pathname === "/metrics" && req.method === "GET") {
-        res.writeHead(200, {
-          "content-type": "text/plain; version=0.0.4; charset=utf-8",
-        });
-        res.end(app.telemetry.renderPrometheus());
-        return;
-      }
+          if (url.pathname === "/metrics" && req.method === "GET") {
+            res.writeHead(200, {
+              "content-type": "text/plain; version=0.0.4; charset=utf-8",
+            });
+            res.end(app.telemetry.renderPrometheus());
+            return;
+          }
 
-      if (url.pathname === "/.well-known/oauth-authorization-server" && req.method === "GET") {
-        respondJson(res, 200, app.auth.oauthMetadata());
-        return;
-      }
+          if (url.pathname === "/.well-known/oauth-authorization-server" && req.method === "GET") {
+            respondJson(res, 200, app.auth.oauthMetadata());
+            return;
+          }
 
-      if (
-        url.pathname === "/.well-known/oauth-protected-resource/mcp" &&
-        req.method === "GET"
-      ) {
-        respondJson(res, 200, app.auth.protectedResourceMetadata("/mcp"));
-        return;
-      }
+          if (
+            url.pathname === "/.well-known/oauth-protected-resource/mcp" &&
+            req.method === "GET"
+          ) {
+            respondJson(res, 200, app.auth.protectedResourceMetadata("/mcp"));
+            return;
+          }
 
-      if (
-        url.pathname === "/.well-known/oauth-protected-resource/api" &&
-        req.method === "GET"
-      ) {
-        respondJson(res, 200, app.auth.protectedResourceMetadata("/v1"));
-        return;
-      }
+          if (
+            url.pathname === "/.well-known/oauth-protected-resource/api" &&
+            req.method === "GET"
+          ) {
+            respondJson(res, 200, app.auth.protectedResourceMetadata("/v1"));
+            return;
+          }
 
-      if (url.pathname === "/oauth/token" && req.method === "POST") {
-        await handleOAuthToken(app, req, res);
-        return;
-      }
+          if (url.pathname === "/oauth/token" && req.method === "POST") {
+            await handleOAuthToken(app, req, res);
+            return;
+          }
 
-      if (url.pathname.startsWith("/v1/")) {
-        await handleApiRequest(app, req as RequestWithAuth, res, url);
-        return;
-      }
+          if (url.pathname.startsWith("/v1/")) {
+            await handleApiRequest(app, req as RequestWithAuth, res, url);
+            return;
+          }
 
-      if (url.pathname === "/mcp") {
-        const authContext = await authenticateRequest(
-          app,
-          req,
-          res,
-          ["mcp:use"],
-          "mcp",
-          `${app.config.publicBaseUrl}/mcp`,
-        );
-        if (!authContext) {
-          return;
-        }
-        await handleMcpRequest(app, req as RequestWithAuth, res, transports, authContext);
-        return;
-      }
+          if (url.pathname === "/mcp") {
+            const authContext = await authenticateRequest(
+              app,
+              req,
+              res,
+              ["mcp:use"],
+              "mcp",
+              `${app.config.publicBaseUrl}/mcp`,
+            );
+            if (!authContext) {
+              return;
+            }
+            await handleMcpRequest(app, req as RequestWithAuth, res, transports, authContext);
+            return;
+          }
 
-      respondJson(res, 404, { error: "Not found" });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Internal server error";
-      const statusCode =
-        message.includes("Request body exceeds")
-          ? 413
-          : message.includes("JSON")
-            ? 400
-            : message === "Invalid client credentials." || message === "Invalid access token."
-              ? 401
-              : message === "Access token expired."
-                ? 401
-                : message === "Access token resource does not match this protected resource."
-                  ? 401
-                  : message === "No valid scopes were granted."
-                    ? 400
-                    : message.startsWith("Client already exists")
-                      ? 409
-            : message.startsWith("Missing required role")
-              ? 403
-              : message.startsWith("Missing required scopes") ||
-                  message.startsWith("Missing one of the required scopes")
-                ? 403
-              : message === "Credential not found."
-                ? 404
-              : message.startsWith("Sandbox env variable")
+          respondJson(res, 404, { error: "Not found" });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Internal server error";
+          const statusCode =
+            message.includes("Request body exceeds")
+              ? 413
+              : message.includes("JSON")
                 ? 400
-              : 500;
-      app.logger.error({ err: error, requestId, route: routeLabel }, "http_request_failed");
-      respondJson(res, statusCode, { error: message });
-    }
+                : message === "Invalid client credentials." || message === "Invalid access token."
+                  ? 401
+                  : message === "Access token expired."
+                    ? 401
+                    : message === "Access token resource does not match this protected resource."
+                      ? 401
+                      : message === "No valid scopes were granted."
+                        ? 400
+                        : message.startsWith("Client already exists")
+                          ? 409
+                : message.startsWith("Reviewer has already reviewed")
+                  ? 409
+                : message.startsWith("Missing required role")
+                  ? 403
+                  : message.startsWith("Missing required scopes") ||
+                      message.startsWith("Missing one of the required scopes")
+                    ? 403
+                  : message === "Credential not found."
+                    ? 404
+                  : message.startsWith("Sandbox env variable")
+                    ? 400
+                  : 500;
+          app.logger.error({ err: error, requestId, traceId, route: routeLabel }, "http_request_failed");
+          respondJson(res, statusCode, { error: message });
+          return;
+        }
+      });
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -649,6 +670,32 @@ async function handleApiRequest(
     app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
     app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
     respondJson(res, 200, { maintenance: app.maintenance.status() });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/traces" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
+    const limit = Number.parseInt(url.searchParams.get("limit") ?? "20", 10);
+    const traceId = url.searchParams.get("traceId") ?? undefined;
+    respondJson(
+      res,
+      200,
+      traceListOutputSchema.parse({
+        traces: app.traces.recent(limit, traceId),
+      }),
+    );
     return;
   }
 

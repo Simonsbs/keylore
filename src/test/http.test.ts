@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import http from "node:http";
 import test from "node:test";
 
@@ -213,6 +214,205 @@ test("oauth token endpoint and approval workflow operate over HTTP", async () =>
       credentialId: "demo",
       operation: "http.get",
       targetUrl: `http://localhost:${target.port}/approved`,
+      approvalId: approvalDecision.approvalRequestId,
+    }),
+  });
+  const approvedDecision = (await approvedAccess.json()) as { decision: string };
+  assert.equal(approvedDecision.decision, "allowed");
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await target.close();
+  await close();
+});
+
+test("approval review quorum requires distinct approvers before access is granted", async () => {
+  process.env.KEYLORE_TEST_SECRET = "phase2-quorum-secret";
+  const target = await startLocalTargetServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
+  const { app, close } = await makeTestApp({
+    policies: {
+      version: 1,
+      rules: [
+        {
+          id: "approval-quorum-demo",
+          effect: "approval",
+          description: "Needs quorum approval",
+          principals: ["consumer-client"],
+          principalRoles: ["consumer"],
+          credentialIds: ["demo"],
+          operations: ["http.get"],
+          domainPatterns: ["localhost"],
+          environments: ["test"],
+        },
+      ],
+    },
+    authClients: [
+      {
+        clientId: "consumer-client",
+        displayName: "Consumer Client",
+        roles: ["consumer"],
+        allowedScopes: ["broker:use"],
+        status: "active",
+        clientSecret: "consumer-secret",
+      },
+      {
+        clientId: "approver-one",
+        displayName: "Approver One",
+        roles: ["approver"],
+        allowedScopes: ["approval:read", "approval:review"],
+        status: "active",
+        clientSecret: "approver-one-secret",
+      },
+      {
+        clientId: "approver-two",
+        displayName: "Approver Two",
+        roles: ["approver"],
+        allowedScopes: ["approval:read", "approval:review"],
+        status: "active",
+        clientSecret: "approver-two-secret",
+      },
+    ],
+    configOverrides: {
+      approvalReviewQuorum: 2,
+      httpPort: 8879,
+      publicBaseUrl: "http://127.0.0.1:8879",
+      oauthIssuerUrl: "http://127.0.0.1:8879/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const consumerTokenResponse = await fetch("http://127.0.0.1:8879/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "consumer-client",
+      client_secret: "consumer-secret",
+      scope: "broker:use",
+      resource: "http://127.0.0.1:8879/v1",
+    }),
+  });
+  assert.equal(consumerTokenResponse.status, 200);
+  const consumerToken = (await consumerTokenResponse.json()) as { access_token: string };
+
+  const approvalResponse = await fetch("http://127.0.0.1:8879/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${consumerToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/quorum-approved`,
+    }),
+  });
+  assert.equal(approvalResponse.status, 200);
+  const approvalDecision = (await approvalResponse.json()) as {
+    decision: string;
+    approvalRequestId?: string;
+  };
+  assert.equal(approvalDecision.decision, "approval_required");
+  assert.ok(approvalDecision.approvalRequestId);
+
+  const approverOneTokenResponse = await fetch("http://127.0.0.1:8879/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "approver-one",
+      client_secret: "approver-one-secret",
+      scope: "approval:read approval:review",
+      resource: "http://127.0.0.1:8879/v1",
+    }),
+  });
+  assert.equal(approverOneTokenResponse.status, 200);
+  const approverOneToken = (await approverOneTokenResponse.json()) as { access_token: string };
+
+  const firstApprovalResponse = await fetch(
+    `http://127.0.0.1:8879/v1/approvals/${approvalDecision.approvalRequestId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${approverOneToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "first approval" }),
+    },
+  );
+  assert.equal(firstApprovalResponse.status, 200);
+  const firstApprovalPayload = (await firstApprovalResponse.json()) as {
+    approval: { status: string; approvalCount: number; requiredApprovals: number };
+  };
+  assert.equal(firstApprovalPayload.approval.status, "pending");
+  assert.equal(firstApprovalPayload.approval.approvalCount, 1);
+  assert.equal(firstApprovalPayload.approval.requiredApprovals, 2);
+
+  const duplicateApprovalResponse = await fetch(
+    `http://127.0.0.1:8879/v1/approvals/${approvalDecision.approvalRequestId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${approverOneToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "duplicate approval" }),
+    },
+  );
+  assert.equal(duplicateApprovalResponse.status, 409);
+
+  const approverTwoTokenResponse = await fetch("http://127.0.0.1:8879/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "approver-two",
+      client_secret: "approver-two-secret",
+      scope: "approval:read approval:review",
+      resource: "http://127.0.0.1:8879/v1",
+    }),
+  });
+  assert.equal(approverTwoTokenResponse.status, 200);
+  const approverTwoToken = (await approverTwoTokenResponse.json()) as { access_token: string };
+
+  const finalApprovalResponse = await fetch(
+    `http://127.0.0.1:8879/v1/approvals/${approvalDecision.approvalRequestId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${approverTwoToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "second approval" }),
+    },
+  );
+  assert.equal(finalApprovalResponse.status, 200);
+  const finalApprovalPayload = (await finalApprovalResponse.json()) as {
+    approval: { status: string; approvalCount: number };
+  };
+  assert.equal(finalApprovalPayload.approval.status, "approved");
+  assert.equal(finalApprovalPayload.approval.approvalCount, 2);
+
+  const approvedAccess = await fetch("http://127.0.0.1:8879/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${consumerToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/quorum-approved`,
       approvalId: approvalDecision.approvalRequestId,
     }),
   });
@@ -1009,6 +1209,324 @@ test("break-glass workflow enables emergency access after approval", async () =>
   await close();
 });
 
+test("break-glass review quorum requires distinct approvers before emergency access activates", async () => {
+  process.env.KEYLORE_TEST_SECRET = "breakglass-quorum-secret";
+  const target = await startLocalTargetServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
+  const { app, close } = await makeTestApp({
+    authClients: [
+      {
+        clientId: "breakglass-requester",
+        displayName: "Breakglass Requester",
+        roles: ["breakglass_operator"],
+        allowedScopes: ["broker:use", "breakglass:request", "breakglass:read"],
+        status: "active",
+        clientSecret: "breakglass-requester-secret",
+      },
+      {
+        clientId: "breakglass-approver-one",
+        displayName: "Breakglass Approver One",
+        roles: ["approver"],
+        allowedScopes: ["breakglass:read", "breakglass:review"],
+        status: "active",
+        clientSecret: "breakglass-approver-one-secret",
+      },
+      {
+        clientId: "breakglass-approver-two",
+        displayName: "Breakglass Approver Two",
+        roles: ["approver"],
+        allowedScopes: ["breakglass:read", "breakglass:review"],
+        status: "active",
+        clientSecret: "breakglass-approver-two-secret",
+      },
+    ],
+    configOverrides: {
+      breakGlassReviewQuorum: 2,
+      httpPort: 8891,
+      publicBaseUrl: "http://127.0.0.1:8891",
+      oauthIssuerUrl: "http://127.0.0.1:8891/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const requesterTokenResponse = await fetch("http://127.0.0.1:8891/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "breakglass-requester",
+      client_secret: "breakglass-requester-secret",
+      scope: "broker:use breakglass:request breakglass:read",
+      resource: "http://127.0.0.1:8891/v1",
+    }),
+  });
+  assert.equal(requesterTokenResponse.status, 200);
+  const requesterToken = (await requesterTokenResponse.json()) as { access_token: string };
+
+  const requestResponse = await fetch("http://127.0.0.1:8891/v1/break-glass", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${requesterToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/breakglass-quorum`,
+      justification: "Emergency package registry access to recover a blocked release pipeline.",
+      requestedDurationSeconds: 300,
+    }),
+  });
+  assert.equal(requestResponse.status, 201);
+  const requestBody = (await requestResponse.json()) as {
+    request: { id: string; status: string; requiredApprovals: number };
+  };
+  assert.equal(requestBody.request.status, "pending");
+  assert.equal(requestBody.request.requiredApprovals, 2);
+
+  const approverOneTokenResponse = await fetch("http://127.0.0.1:8891/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "breakglass-approver-one",
+      client_secret: "breakglass-approver-one-secret",
+      scope: "breakglass:read breakglass:review",
+      resource: "http://127.0.0.1:8891/v1",
+    }),
+  });
+  assert.equal(approverOneTokenResponse.status, 200);
+  const approverOneToken = (await approverOneTokenResponse.json()) as { access_token: string };
+
+  const firstApproveResponse = await fetch(
+    `http://127.0.0.1:8891/v1/break-glass/${requestBody.request.id}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${approverOneToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "first breakglass approval" }),
+    },
+  );
+  assert.equal(firstApproveResponse.status, 200);
+  const firstApprovePayload = (await firstApproveResponse.json()) as {
+    request: { status: string; approvalCount: number; requiredApprovals: number };
+  };
+  assert.equal(firstApprovePayload.request.status, "pending");
+  assert.equal(firstApprovePayload.request.approvalCount, 1);
+  assert.equal(firstApprovePayload.request.requiredApprovals, 2);
+
+  const approverTwoTokenResponse = await fetch("http://127.0.0.1:8891/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "breakglass-approver-two",
+      client_secret: "breakglass-approver-two-secret",
+      scope: "breakglass:read breakglass:review",
+      resource: "http://127.0.0.1:8891/v1",
+    }),
+  });
+  assert.equal(approverTwoTokenResponse.status, 200);
+  const approverTwoToken = (await approverTwoTokenResponse.json()) as { access_token: string };
+
+  const secondApproveResponse = await fetch(
+    `http://127.0.0.1:8891/v1/break-glass/${requestBody.request.id}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${approverTwoToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "second breakglass approval" }),
+    },
+  );
+  assert.equal(secondApproveResponse.status, 200);
+  const secondApprovePayload = (await secondApproveResponse.json()) as {
+    request: { status: string; approvalCount: number };
+  };
+  assert.equal(secondApprovePayload.request.status, "active");
+  assert.equal(secondApprovePayload.request.approvalCount, 2);
+
+  const approvedAccessResponse = await fetch("http://127.0.0.1:8891/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${requesterToken.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/breakglass-quorum`,
+      breakGlassId: requestBody.request.id,
+    }),
+  });
+  assert.equal(approvedAccessResponse.status, 200);
+  const approvedDecision = (await approvedAccessResponse.json()) as { decision: string };
+  assert.equal(approvedDecision.decision, "allowed");
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await target.close();
+  await close();
+});
+
+test("notification webhooks are signed and traces can be queried by propagated trace id", async () => {
+  process.env.KEYLORE_TEST_SECRET = "notify-secret-value";
+  const deliveries: Array<{ headers: http.IncomingHttpHeaders; body: string }> = [];
+  const webhook = await startLocalTargetServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.from(chunk));
+    }
+    deliveries.push({
+      headers: req.headers,
+      body: Buffer.concat(chunks).toString("utf8"),
+    });
+    res.writeHead(202, { "content-type": "application/json" });
+    res.end(JSON.stringify({ accepted: true }));
+  });
+
+  const { app, close } = await makeTestApp({
+    policies: {
+      version: 1,
+      rules: [
+        {
+          id: "approval-notify-demo",
+          effect: "approval",
+          description: "Needs approval",
+          principals: ["consumer-client"],
+          principalRoles: ["consumer"],
+          credentialIds: ["demo"],
+          operations: ["http.get"],
+          domainPatterns: ["localhost"],
+          environments: ["test"],
+        },
+      ],
+    },
+    configOverrides: {
+      notificationWebhookUrl: `http://127.0.0.1:${webhook.port}/notify`,
+      notificationSigningSecret: "notify-signing-secret",
+      httpPort: 8895,
+      publicBaseUrl: "http://127.0.0.1:8895",
+      oauthIssuerUrl: "http://127.0.0.1:8895/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const consumerTokenResponse = await fetch("http://127.0.0.1:8895/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "consumer-client",
+      client_secret: "consumer-secret",
+      scope: "broker:use",
+      resource: "http://127.0.0.1:8895/v1",
+    }),
+  });
+  assert.equal(consumerTokenResponse.status, 200);
+  const consumerToken = (await consumerTokenResponse.json()) as { access_token: string };
+
+  const traceId = "trace-http-test";
+  const approvalResponse = await fetch("http://127.0.0.1:8895/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${consumerToken.access_token}`,
+      "x-trace-id": traceId,
+    },
+    body: JSON.stringify({
+      credentialId: "demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${webhook.port}/approval-protected`,
+    }),
+  });
+  assert.equal(approvalResponse.status, 200);
+  assert.equal(approvalResponse.headers.get("x-trace-id"), traceId);
+  const approvalDecision = (await approvalResponse.json()) as {
+    decision: string;
+    approvalRequestId?: string;
+  };
+  assert.equal(approvalDecision.decision, "approval_required");
+  assert.ok(approvalDecision.approvalRequestId);
+
+  const adminTokenResponse = await fetch("http://127.0.0.1:8895/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "approval:read approval:review system:read",
+      resource: "http://127.0.0.1:8895/v1",
+    }),
+  });
+  assert.equal(adminTokenResponse.status, 200);
+  const adminToken = (await adminTokenResponse.json()) as { access_token: string };
+
+  const reviewResponse = await fetch(
+    `http://127.0.0.1:8895/v1/approvals/${approvalDecision.approvalRequestId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken.access_token}`,
+        "x-trace-id": traceId,
+      },
+      body: JSON.stringify({ note: "approved in test" }),
+    },
+  );
+  assert.equal(reviewResponse.status, 200);
+  assert.equal(reviewResponse.headers.get("x-trace-id"), traceId);
+
+  assert.equal(deliveries.length >= 3, true);
+  const eventTypes = deliveries.map((delivery) => delivery.headers["x-keylore-event-type"]);
+  assert.equal(eventTypes.includes("approval.pending"), true);
+  assert.equal(eventTypes.includes("approval.reviewed"), true);
+  assert.equal(eventTypes.includes("approval.approved"), true);
+  const signedDelivery = deliveries.find((delivery) => delivery.headers["x-keylore-event-type"] === "approval.pending");
+  assert.ok(signedDelivery);
+  assert.equal(
+    signedDelivery.headers["x-keylore-signature"],
+    createHmac("sha256", "notify-signing-secret").update(signedDelivery.body).digest("hex"),
+  );
+  assert.equal(
+    (JSON.parse(signedDelivery.body) as { traceId?: string }).traceId,
+    traceId,
+  );
+
+  const tracesResponse = await fetch(`http://127.0.0.1:8895/v1/system/traces?traceId=${traceId}&limit=10`, {
+    headers: {
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+  });
+  assert.equal(tracesResponse.status, 200);
+  const tracesPayload = (await tracesResponse.json()) as {
+    traces: Array<{ traceId: string; name: string }>;
+  };
+  assert.equal(tracesPayload.traces.some((span) => span.traceId === traceId && span.name === "http.request"), true);
+
+  delete process.env.KEYLORE_TEST_SECRET;
+  await server.close();
+  await webhook.close();
+  await close();
+});
+
 test("egress policy blocks private address literals even when policy and credential metadata allow them", async () => {
   const { app, close } = await makeTestApp({
     catalog: {
@@ -1203,14 +1721,14 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
       },
     ],
     configOverrides: {
-      httpPort: 8892,
-      publicBaseUrl: "http://127.0.0.1:8892",
-      oauthIssuerUrl: "http://127.0.0.1:8892/oauth",
+      httpPort: 8893,
+      publicBaseUrl: "http://127.0.0.1:8893",
+      oauthIssuerUrl: "http://127.0.0.1:8893/oauth",
     },
   });
   const server = await startHttpServer(app);
 
-  const backupTokenResponse = await fetch("http://127.0.0.1:8892/oauth/token", {
+  const backupTokenResponse = await fetch("http://127.0.0.1:8893/oauth/token", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -1220,13 +1738,13 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
       client_id: "backup-client",
       client_secret: "backup-secret",
       scope: "backup:read backup:write",
-      resource: "http://127.0.0.1:8892/v1",
+      resource: "http://127.0.0.1:8893/v1",
     }),
   });
   assert.equal(backupTokenResponse.status, 200);
   const backupToken = (await backupTokenResponse.json()) as { access_token: string };
 
-  const exportResponse = await fetch("http://127.0.0.1:8892/v1/system/backups/export", {
+  const exportResponse = await fetch("http://127.0.0.1:8893/v1/system/backups/export", {
     method: "POST",
     headers: {
       authorization: `Bearer ${backupToken.access_token}`,
@@ -1239,7 +1757,7 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
   };
   assert.equal(exportBody.summary.credentials >= 1, true);
 
-  const inspectResponse = await fetch("http://127.0.0.1:8892/v1/system/backups/inspect", {
+  const inspectResponse = await fetch("http://127.0.0.1:8893/v1/system/backups/inspect", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -1254,7 +1772,7 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
   await broker.deleteCredential(localOperatorContext("local-operator"), "demo");
   assert.equal((await broker.getCredential(localOperatorContext("local-operator"), "demo")) === undefined, true);
 
-  const restoreResponse = await fetch("http://127.0.0.1:8892/v1/system/backups/restore", {
+  const restoreResponse = await fetch("http://127.0.0.1:8893/v1/system/backups/restore", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -1268,7 +1786,7 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
   assert.equal(restoreResponse.status, 200);
   assert.equal((await broker.getCredential(localOperatorContext("local-operator"), "demo"))?.id, "demo");
 
-  const authAdminTokenResponse = await fetch("http://127.0.0.1:8892/oauth/token", {
+  const authAdminTokenResponse = await fetch("http://127.0.0.1:8893/oauth/token", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -1278,13 +1796,13 @@ test("backup endpoints export, inspect, and restore with the backup operator rol
       client_id: "auth-admin-only",
       client_secret: "auth-admin-only-secret",
       scope: "auth:read auth:write",
-      resource: "http://127.0.0.1:8892/v1",
+      resource: "http://127.0.0.1:8893/v1",
     }),
   });
   assert.equal(authAdminTokenResponse.status, 200);
   const authAdminToken = (await authAdminTokenResponse.json()) as { access_token: string };
 
-  const forbiddenBackupResponse = await fetch("http://127.0.0.1:8892/v1/system/backups/export", {
+  const forbiddenBackupResponse = await fetch("http://127.0.0.1:8893/v1/system/backups/export", {
     method: "POST",
     headers: {
       authorization: `Bearer ${authAdminToken.access_token}`,

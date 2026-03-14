@@ -102,6 +102,8 @@ app:
   maintenanceIntervalMs: 60000
   accessTokenTtlSeconds: 3600
   approvalTtlSeconds: 1800
+  approvalReviewQuorum: 1
+  breakGlassReviewQuorum: 1
   sandboxInjectionEnabled: false
   sandboxCommandAllowlist: ""
   sandboxDefaultTimeoutMs: 5000
@@ -110,6 +112,10 @@ app:
   adapterRetryDelayMs: 250
   adapterCircuitBreakerThreshold: 3
   adapterCircuitBreakerCooldownMs: 60000
+  notificationWebhookUrl: ""
+  notificationTimeoutMs: 5000
+  traceCaptureEnabled: true
+  traceRecentSpanLimit: 500
 
 bootstrapSecrets:
   existingSecret: ""
@@ -117,6 +123,7 @@ bootstrapSecrets:
   consumerClientSecret: ""
   githubReadonly: ""
   npmReadonly: ""
+  notificationSigningSecret: ""
 
 extraEnv: []
 

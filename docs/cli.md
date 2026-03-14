@@ -162,6 +162,13 @@ npm run dev:cli -- system maintenance
 npm run dev:cli -- system maintenance run
 ```
 
+### `system traces`
+
+```bash
+npm run dev:cli -- system traces --limit 20
+npm run dev:cli -- system traces --trace-id deploy-trace-123
+```
+
 ### `system backup create`
 
 ```bash
@@ -198,6 +205,8 @@ npm run dev:cli -- breakglass request --file ./breakglass-request.json
 npm run dev:cli -- breakglass approve <request-id> --note "approved for emergency recovery"
 ```
 
+If break-glass review quorum is greater than `1`, the request stays `pending` until enough distinct reviewers approve it.
+
 ### `breakglass deny`
 
 ```bash
@@ -230,6 +239,8 @@ npm run dev:cli -- approvals list --status pending
 ```bash
 npm run dev:cli -- approvals approve <approval-id> --note "approved for deployment"
 ```
+
+If approval quorum is greater than `1`, the request stays `pending` until enough distinct reviewers approve it.
 
 ### `approvals deny`
 

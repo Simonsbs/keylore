@@ -1,6 +1,6 @@
 # Deployment
 
-`v0.7` keeps the Helm-based deployment path for self-hosted Kubernetes environments and layers the new security guardrails on top.
+`v0.8` keeps the Helm-based deployment path for self-hosted Kubernetes environments and adds upgrade-path validation plus operator guidance for rollback planning.
 
 ## Helm chart
 
@@ -41,6 +41,7 @@ helm upgrade --install keylore ./charts/keylore \
 The release workflow lives at [release.yml](/home/simon/keylore/.github/workflows/release.yml). On version tags it:
 
 - runs typecheck, tests, and build
+- validates Helm lint, render, and dry-run upgrade paths
 - packages a source tarball and Helm chart archive
 - builds and pushes a GHCR image
 - generates an SPDX SBOM
@@ -59,3 +60,17 @@ KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=... \
 KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=... \
 npm run ops:restore-drill
 ```
+
+## Helm validation and rollback
+
+Run the shipped validation script before promoting a new chart revision:
+
+```bash
+npm run ops:helm-validate
+```
+
+For production rollouts:
+
+- validate `values.yaml` plus your environment override with `ops:helm-validate`
+- perform `helm upgrade --install` with the exact values file set you validated
+- keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly

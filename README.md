@@ -23,6 +23,7 @@ This repository is incubating privately today, but it is structured to be publis
 - protected-resource metadata for REST and MCP surfaces
 - identity-aware policy evaluation with role-aware rule matching
 - approval-required policy outcomes with review endpoints and CLI support
+- multi-review approval and break-glass quorums with duplicate-review protection
 - RBAC separation for admin, auth admin, operator, maintenance, backup, break-glass, auditor, approver, and consumer clients
 - policy simulation and non-executing dry-run access evaluation
 - auth-client lifecycle APIs with secret rotation and status control
@@ -39,15 +40,18 @@ This repository is incubating privately today, but it is structured to be publis
 - delegated backup export, inspect, and restore API endpoints for self-hosted operators
 - egress policy blocks private, loopback, and link-local upstream targets unless explicitly allowed
 - sandbox env allowlisting for injected runtime execution
+- signed notification webhooks for approval and break-glass lifecycle events
+- request trace capture with `x-trace-id` propagation and recent-trace inspection
 - Helm chart with dev, staging, and production values profiles
-- tagged release workflow with SBOM generation, vulnerability scanning, and keyless image signing
+- tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
 - shipped Grafana dashboard and Prometheus alert rule examples
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.7 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.8 delivery. This repo does not yet implement:
 
-- multi-tenant isolation and delegated multi-party approvals
+- multi-tenant isolation
+- broader OAuth authorization flows beyond client credentials
 - admin UI and rotation orchestration
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
@@ -114,12 +118,13 @@ curl http://127.0.0.1:8787/healthz
 ```bash
 curl http://127.0.0.1:8787/metrics
 npm run dev:cli -- system maintenance
+npm run dev:cli -- system traces --limit 10
 ```
 
-10. Render the Helm chart:
+10. Validate the Helm deployment path:
 
 ```bash
-helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml
+npm run ops:helm-validate
 ```
 
 ## Example API usage
@@ -184,6 +189,14 @@ curl -X POST http://127.0.0.1:8787/v1/runtime/sandbox \
   }'
 ```
 
+Inspect recent traces for a propagated request trace id:
+
+```bash
+TOKEN=...
+curl "http://127.0.0.1:8787/v1/system/traces?traceId=deploy-trace-123&limit=10" \
+  -H "authorization: Bearer ${TOKEN}"
+```
+
 ## Example Codex configuration
 
 See [examples/codex/config.toml](/home/simon/keylore/examples/codex/config.toml) for both `stdio` and remote HTTP MCP registration examples. For remote MCP, mint a token with `resource=http://127.0.0.1:8787/mcp` and export it into the configured client env var.
@@ -233,6 +246,12 @@ KEYLORE_DATABASE_URL=postgresql://... \
 KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET=... \
 KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET=... \
 npm run ops:restore-drill
+```
+
+Validate Helm render and dry-run upgrade paths:
+
+```bash
+npm run ops:helm-validate
 ```
 
 ## Documentation

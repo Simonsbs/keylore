@@ -1,6 +1,6 @@
 {
   "name": "keylore",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",
   "main": "dist/index.js",
@@ -32,6 +32,7 @@
     "dev:http": "tsx src/index.ts --transport http",
     "dev:stdio": "tsx src/index.ts --transport stdio",
     "dev:cli": "tsx src/cli.ts",
+    "ops:helm-validate": "bash ./scripts/helm-validate.sh",
     "ops:restore-drill": "bash ./scripts/restore-drill.sh",
     "start:http": "node dist/index.js --transport http",
     "start:stdio": "node dist/index.js --transport stdio",

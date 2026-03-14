@@ -29,7 +29,9 @@ export interface KeyLoreConfig {
   maintenanceIntervalMs: number;
   accessTokenTtlSeconds: number;
   approvalTtlSeconds: number;
+  approvalReviewQuorum: number;
   breakGlassMaxDurationSeconds: number;
+  breakGlassReviewQuorum: number;
   vaultAddr: string | undefined;
   vaultToken: string | undefined;
   vaultNamespace: string | undefined;
@@ -48,6 +50,11 @@ export interface KeyLoreConfig {
   adapterRetryDelayMs: number;
   adapterCircuitBreakerThreshold: number;
   adapterCircuitBreakerCooldownMs: number;
+  notificationWebhookUrl: string | undefined;
+  notificationSigningSecret: string | undefined;
+  notificationTimeoutMs: number;
+  traceCaptureEnabled: boolean;
+  traceRecentSpanLimit: number;
 }
 
 const envSchema = z.object({
@@ -81,7 +88,9 @@ const envSchema = z.object({
   KEYLORE_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
   KEYLORE_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
   KEYLORE_APPROVAL_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
+  KEYLORE_APPROVAL_REVIEW_QUORUM: z.coerce.number().int().min(1).max(5).default(1),
   KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
+  KEYLORE_BREAKGLASS_REVIEW_QUORUM: z.coerce.number().int().min(1).max(5).default(1),
   KEYLORE_VAULT_ADDR: z.string().url().optional(),
   KEYLORE_VAULT_TOKEN: z.string().optional(),
   KEYLORE_VAULT_NAMESPACE: z.string().optional(),
@@ -106,6 +115,14 @@ const envSchema = z.object({
   KEYLORE_ADAPTER_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(250),
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().min(1).default(3),
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).default(60000),
+  KEYLORE_NOTIFICATION_WEBHOOK_URL: z.string().url().optional(),
+  KEYLORE_NOTIFICATION_SIGNING_SECRET: z.string().optional(),
+  KEYLORE_NOTIFICATION_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
+  KEYLORE_TRACE_CAPTURE_ENABLED: z
+    .string()
+    .transform((value) => value !== "false")
+    .prefault("true"),
+  KEYLORE_TRACE_RECENT_SPAN_LIMIT: z.coerce.number().int().min(10).max(5000).default(500),
 });
 
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
@@ -117,7 +134,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.7.0",
+    version: "0.8.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -145,7 +162,9 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     maintenanceIntervalMs: env.KEYLORE_MAINTENANCE_INTERVAL_MS,
     accessTokenTtlSeconds: env.KEYLORE_ACCESS_TOKEN_TTL_SECONDS,
     approvalTtlSeconds: env.KEYLORE_APPROVAL_TTL_SECONDS,
+    approvalReviewQuorum: env.KEYLORE_APPROVAL_REVIEW_QUORUM,
     breakGlassMaxDurationSeconds: env.KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS,
+    breakGlassReviewQuorum: env.KEYLORE_BREAKGLASS_REVIEW_QUORUM,
     vaultAddr: env.KEYLORE_VAULT_ADDR || undefined,
     vaultToken: env.KEYLORE_VAULT_TOKEN || undefined,
     vaultNamespace: env.KEYLORE_VAULT_NAMESPACE || undefined,
@@ -176,5 +195,10 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     adapterRetryDelayMs: env.KEYLORE_ADAPTER_RETRY_DELAY_MS,
     adapterCircuitBreakerThreshold: env.KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD,
     adapterCircuitBreakerCooldownMs: env.KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS,
+    notificationWebhookUrl: env.KEYLORE_NOTIFICATION_WEBHOOK_URL || undefined,
+    notificationSigningSecret: env.KEYLORE_NOTIFICATION_SIGNING_SECRET || undefined,
+    notificationTimeoutMs: env.KEYLORE_NOTIFICATION_TIMEOUT_MS,
+    traceCaptureEnabled: env.KEYLORE_TRACE_CAPTURE_ENABLED,
+    traceRecentSpanLimit: env.KEYLORE_TRACE_RECENT_SPAN_LIMIT,
   };
 }

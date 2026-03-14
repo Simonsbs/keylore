@@ -50,6 +50,16 @@
 - add backup export, inspect, and restore API endpoints for delegated self-hosted operations
 - expand abuse-case coverage for egress, sandbox, break-glass, and delegated operator roles
 
+## v0.8
+
+- completed:
+- add quorum-based approval and break-glass review workflows with duplicate-review protection
+- add signed notification webhooks for approval and break-glass lifecycle events
+- add in-memory recent trace capture with `x-trace-id` propagation across HTTP and notification flows
+- add REST, CLI, and MCP trace inspection surfaces for operators
+- add Helm lint, render, and dry-run upgrade validation to CI and release flows
+- add operator guidance for Helm upgrade validation and rollback planning
+
 ## v1.0
 
 - add multi-tenant RBAC and audit partitioning

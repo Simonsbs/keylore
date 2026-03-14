@@ -4,6 +4,8 @@
 
 All `/v1/*` endpoints require a bearer token minted by `POST /oauth/token`. Most endpoints are scope-gated; some also require a role.
 
+KeyLore echoes an `x-trace-id` response header on HTTP requests. Callers may supply their own `x-trace-id` header to correlate approval, break-glass, and notification activity.
+
 ### `GET /.well-known/oauth-authorization-server`
 
 Returns OAuth-style token metadata for the `client_credentials` grant.
@@ -126,19 +128,19 @@ Required role: `admin` or `auditor`
 
 ### `GET /v1/approvals`
 
-Lists approval requests.
+Lists approval requests, including quorum counters and review history.
 Required scope: `approval:read`
 Required role: `admin` or `approver`
 
 ### `POST /v1/approvals/:id/approve`
 
-Approves a pending request.
+Approves a pending request. If the configured review quorum is not yet met, the request remains `pending`.
 Required scope: `approval:review`
 Required role: `admin` or `approver`
 
 ### `POST /v1/approvals/:id/deny`
 
-Denies a pending request.
+Denies a pending request immediately. Duplicate reviews from the same reviewer are rejected.
 Required scope: `approval:review`
 Required role: `admin` or `approver`
 
@@ -214,6 +216,16 @@ Returns maintenance-loop status and the last cleanup result.
 Required scope: `system:read`
 Required role: `admin`, `maintenance_operator`, or `auditor`
 
+### `GET /v1/system/traces`
+
+Returns recent in-memory trace spans. Optional query params:
+
+- `limit`
+- `traceId`
+
+Required scope: `system:read`
+Required role: `admin`, `maintenance_operator`, or `auditor`
+
 ### `POST /v1/system/maintenance/run`
 
 Runs maintenance immediately.
@@ -240,7 +252,7 @@ Required role: `admin` or `backup_operator`
 
 ### `GET /v1/break-glass`
 
-Lists break-glass requests with optional `status` and `requestedBy` filters.
+Lists break-glass requests with optional `status` and `requestedBy` filters, including quorum counters and review history.
 Required scope: `breakglass:read`
 Required role: `admin`, `approver`, `auditor`, or `breakglass_operator`
 
@@ -252,7 +264,7 @@ Required role: `admin` or `breakglass_operator`
 
 ### `POST /v1/break-glass/:id/approve`
 
-Activates a pending break-glass request.
+Reviews a pending break-glass request. The request becomes `active` only after the configured review quorum is met.
 Required scope: `breakglass:review`
 Required role: `admin` or `approver`
 
@@ -267,6 +279,22 @@ Required role: `admin` or `approver`
 Revokes an active break-glass request.
 Required scope: `breakglass:review`
 Required role: `admin`, `approver`, or `breakglass_operator`
+
+## Notification webhooks
+
+If notifications are configured, KeyLore sends JSON envelopes with:
+
+- `id`
+- `type`
+- `occurredAt`
+- `traceId`
+- `payload`
+
+Headers include:
+
+- `x-keylore-event-type`
+- `x-keylore-event-id`
+- optional `x-keylore-signature`
 
 ## MCP tools
 

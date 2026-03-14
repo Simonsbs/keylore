@@ -22,9 +22,11 @@ import { BreakGlassService } from "./services/break-glass-service.js";
 import { BrokerService } from "./services/broker-service.js";
 import { validateEgressTarget } from "./services/egress-policy.js";
 import { MaintenanceService } from "./services/maintenance-service.js";
+import { NotificationService } from "./services/notification-service.js";
 import { PolicyEngine } from "./services/policy-engine.js";
 import { PgRateLimitService } from "./services/rate-limit-service.js";
 import { TelemetryService } from "./services/telemetry.js";
+import { TraceService } from "./services/trace-service.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
 import { createPostgresDatabase, SqlDatabase } from "./storage/database.js";
 import { runMigrations } from "./storage/migrations.js";
@@ -48,6 +50,7 @@ export interface KeyLoreApp {
   breakGlass: BreakGlassService;
   database: SqlDatabase;
   telemetry: TelemetryService;
+  traces: TraceService;
   rateLimits: PgRateLimitService;
   maintenance: MaintenanceService;
   backup: BackupService;
@@ -60,6 +63,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const logger = pino({ name: config.appName, level: config.logLevel });
   const database = createPostgresDatabase(config);
   const telemetry = new TelemetryService();
+  const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
 
   await database.healthcheck();
   await runMigrations(database, config.migrationsDir);
@@ -71,6 +75,14 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const accessTokens = new PgAccessTokenRepository(database);
   const approvals = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
+  const notificationService = new NotificationService(
+    config.notificationWebhookUrl,
+    config.notificationSigningSecret,
+    config.notificationTimeoutMs,
+    audit,
+    telemetry,
+    traces,
+  );
   const rateLimits = new PgRateLimitService(
     database,
     config.rateLimitWindowMs,
@@ -102,11 +114,21 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     config.accessTokenTtlSeconds,
     telemetry,
   );
-  const approvalService = new ApprovalService(approvals, audit, config.approvalTtlSeconds);
+  const approvalService = new ApprovalService(
+    approvals,
+    audit,
+    config.approvalTtlSeconds,
+    config.approvalReviewQuorum,
+    notificationService,
+    traces,
+  );
   const breakGlassService = new BreakGlassService(
     breakGlassRepository,
     audit,
     config.breakGlassMaxDurationSeconds,
+    config.breakGlassReviewQuorum,
+    notificationService,
+    traces,
   );
 
   if (config.bootstrapFromFiles) {
@@ -153,6 +175,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     breakGlass: breakGlassService,
     database,
     telemetry,
+    traces,
     rateLimits,
     maintenance,
     backup,

@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-14
+
+### Added
+
+- Quorum-based approval and break-glass reviews with duplicate-review protection and persisted review history.
+- Signed notification webhooks for approval and break-glass lifecycle events.
+- Recent trace capture with `x-trace-id` propagation plus REST, CLI, and MCP inspection surfaces.
+- Helm lint, render, and dry-run upgrade validation in CI and release automation.
+- Additional integration coverage for quorum workflows, notification delivery, trace inspection, and delegated backup flows.
+
 ## [0.7.0] - 2026-03-14
 
 ### Added

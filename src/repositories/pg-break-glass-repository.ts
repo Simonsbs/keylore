@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { BreakGlassRequest, breakGlassRequestSchema } from "../domain/types.js";
 import { SqlDatabase } from "../storage/database.js";
 import { BreakGlassRepository } from "./interfaces.js";
@@ -17,6 +19,10 @@ interface BreakGlassRow {
   requested_duration_seconds: number;
   correlation_id: string;
   fingerprint: string;
+  required_approvals: number;
+  approval_count: number;
+  denial_count: number;
+  reviews: BreakGlassRequest["reviews"] | unknown;
   reviewed_by: string | null;
   reviewed_at: string | Date | null;
   review_note: string | null;
@@ -49,6 +55,10 @@ function mapRow(row: BreakGlassRow): BreakGlassRequest {
     requestedDurationSeconds: row.requested_duration_seconds,
     correlationId: row.correlation_id,
     fingerprint: row.fingerprint,
+    requiredApprovals: row.required_approvals,
+    approvalCount: row.approval_count,
+    denialCount: row.denial_count,
+    reviews: Array.isArray(row.reviews) ? row.reviews : [],
     reviewedBy: row.reviewed_by ?? undefined,
     reviewedAt: toIso(row.reviewed_at),
     reviewNote: row.review_note ?? undefined,
@@ -67,13 +77,13 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
       `INSERT INTO break_glass_requests (
          id, created_at, expires_at, status, requested_by, requested_roles,
          credential_id, operation, target_url, target_host, justification, requested_duration_seconds,
-         correlation_id, fingerprint, reviewed_by, reviewed_at, review_note,
+         correlation_id, fingerprint, required_approvals, approval_count, denial_count, reviews, reviewed_by, reviewed_at, review_note,
          revoked_by, revoked_at, revoke_note
        ) VALUES (
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11, $12,
-         $13, $14, $15, $16, $17,
-         $18, $19, $20
+         $13, $14, $15, $16, $17, $18, $19, $20, $21,
+         $22, $23, $24
        )`,
       [
         parsed.id,
@@ -90,6 +100,10 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
         parsed.requestedDurationSeconds,
         parsed.correlationId,
         parsed.fingerprint,
+        parsed.requiredApprovals,
+        parsed.approvalCount,
+        parsed.denialCount,
+        JSON.stringify(parsed.reviews),
         parsed.reviewedBy ?? null,
         parsed.reviewedAt ?? null,
         parsed.reviewNote ?? null,
@@ -155,14 +169,65 @@ export class PgBreakGlassRepository implements BreakGlassRepository {
       reviewNote?: string;
     },
   ): Promise<BreakGlassRequest | undefined> {
-    const result = await this.database.query<BreakGlassRow>(
-      `UPDATE break_glass_requests
-       SET status = $2, reviewed_by = $3, reviewed_at = NOW(), review_note = $4
-       WHERE id = $1 AND status = 'pending'
-       RETURNING *`,
-      [id, update.status, update.reviewedBy, update.reviewNote ?? null],
-    );
-    return result.rows[0] ? mapRow(result.rows[0]) : undefined;
+    return this.database.withTransaction(async (client) => {
+      const currentResult = await client.query<BreakGlassRow>(
+        "SELECT * FROM break_glass_requests WHERE id = $1 FOR UPDATE",
+        [id],
+      );
+      const current = currentResult.rows[0];
+      if (!current) {
+        return undefined;
+      }
+
+      const parsed = mapRow(current);
+      if (parsed.status !== "pending") {
+        return undefined;
+      }
+
+      if (parsed.reviews.some((review) => review.reviewedBy === update.reviewedBy)) {
+        throw new Error("Reviewer has already reviewed this request.");
+      }
+
+      const review = {
+        reviewId: randomUUID(),
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: update.reviewedBy,
+        decision: update.status === "active" ? "approved" : "denied",
+        note: update.reviewNote,
+      } as const;
+      const reviews = [...parsed.reviews, review];
+      const approvalCount = parsed.approvalCount + (update.status === "active" ? 1 : 0);
+      const denialCount = parsed.denialCount + (update.status === "denied" ? 1 : 0);
+      const nextStatus =
+        denialCount > 0
+          ? "denied"
+          : approvalCount >= parsed.requiredApprovals
+            ? "active"
+            : "pending";
+
+      const result = await client.query<BreakGlassRow>(
+        `UPDATE break_glass_requests
+         SET status = $2,
+             approval_count = $3,
+             denial_count = $4,
+             reviews = $5::jsonb,
+             reviewed_by = $6,
+             reviewed_at = NOW(),
+             review_note = $7
+         WHERE id = $1
+         RETURNING *`,
+        [
+          id,
+          nextStatus,
+          approvalCount,
+          denialCount,
+          JSON.stringify(reviews),
+          update.reviewedBy,
+          update.reviewNote ?? null,
+        ],
+      );
+      return result.rows[0] ? mapRow(result.rows[0]) : undefined;
+    });
   }
 
   public async revoke(

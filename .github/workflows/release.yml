@@ -46,6 +46,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate Helm chart
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 sh ./scripts/helm-validate.sh
+
       - name: Package Helm chart
         run: |
           mkdir -p dist/release
