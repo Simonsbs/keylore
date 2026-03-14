@@ -70,6 +70,8 @@ The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc4` delivery
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
 
+The active post-`v1.0.0-rc4` refocus is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md): make the default user journey "add secret, add context, connect MCP, use it" and push broader operator features behind an advanced path.
+
 ## Quick start
 
 1. Install dependencies:

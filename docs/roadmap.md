@@ -1,5 +1,16 @@
 # Roadmap
 
+## Product direction
+
+KeyLore's root goal is credential brokering for LLM coding tools:
+
+- store the real secret in a secret backend
+- store separate LLM-friendly context that references the secret by credential id
+- let the agent discover the context, not the secret
+- let the broker use the secret on the agent's behalf
+
+The active follow-on plan after `v1.0.0-rc4` is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md). That plan makes zero-config local use the default path and treats the broader operator platform as advanced scope.
+
 ## v0.3
 
 - completed:
@@ -128,3 +139,14 @@
 ## v1.0
 
 - finalize public release polish and operator-facing documentation
+
+## v1.1
+
+- active:
+- refocus the product around `core` mode:
+  - zero-config local startup
+  - secret onboarding
+  - LLM-friendly context authoring
+  - brokered test flow
+  - Codex/Gemini MCP connection flow
+- move the broader platform behind `advanced` mode
