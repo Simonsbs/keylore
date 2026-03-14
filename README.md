@@ -88,6 +88,14 @@ npm install
 npm run quickstart
 ```
 
+To simulate a brand-new user install on the same machine without reusing your normal checkout or shell environment:
+
+```bash
+npm run ops:fresh-user-env
+```
+
+That launches an isolated disposable user, a fresh clone, and a separate KeyLore UI port for onboarding and MCP testing. By default it clones from the current local repo source so it also works while the repo is private.
+
 This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://127.0.0.1:8787`.
 If KeyLore is already running locally on that port, the command reuses the existing instance instead of failing.
 

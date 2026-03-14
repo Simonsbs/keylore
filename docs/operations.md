@@ -15,6 +15,30 @@ That path is intentionally `core` mode. When you outgrow it, use [docs/productio
 
 If you want to override defaults, create `.env` from `.env.example`. KeyLore auto-loads `.env` on startup; you do not need to export it manually.
 
+## Fresh-user install simulation
+
+If you want to simulate a real new user on the same machine without reusing your current checkout or shell environment, use the disposable fresh-user path:
+
+```bash
+npm run ops:fresh-user-env
+```
+
+That flow:
+
+1. creates an isolated OS user
+2. clones KeyLore fresh into that user's home
+3. installs dependencies with a clean `HOME` and empty environment
+4. starts a dedicated PostgreSQL container on an isolated port
+5. starts KeyLore on a separate HTTP port so you can open the UI and connect Gemini or Codex there
+
+By default it clones from your current local repo source, which works even while the repository is private. If you want to force a remote clone instead, set `KEYLORE_FRESH_REPO_URL` before running it.
+
+Clean it up afterward:
+
+```bash
+npm run ops:fresh-user-env:cleanup
+```
+
 Start only the local PostgreSQL dependency:
 
 ```bash

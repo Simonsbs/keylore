@@ -37,6 +37,8 @@
     "dev:stdio": "tsx src/index.ts --transport stdio",
     "dev:cli": "tsx src/cli.ts",
     "ops:container-smoke": "bash ./scripts/container-smoke.sh",
+    "ops:fresh-user-env": "sudo bash ./scripts/fresh-user-env.sh",
+    "ops:fresh-user-env:cleanup": "sudo bash ./scripts/fresh-user-env-cleanup.sh",
     "ops:helm-validate": "bash ./scripts/helm-validate.sh",
     "ops:release-verify": "bash ./scripts/release-verify.sh",
     "ops:restore-drill": "bash ./scripts/restore-drill.sh",
