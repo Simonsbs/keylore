@@ -55,6 +55,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Container smoke
+        run: npm run ops:container-smoke
+
       - name: Validate Helm chart
         run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 sh ./scripts/helm-validate.sh
 

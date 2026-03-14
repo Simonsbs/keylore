@@ -1,6 +1,6 @@
 # Deployment
 
-`v1.0.0-rc2` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, and now serves the minimal admin UI from the same HTTP service.
+`v1.0.0-rc3` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, serves the minimal admin UI from the same HTTP service, and adds an explicit container smoke path for `/admin`.
 
 ## Helm chart
 
@@ -18,6 +18,14 @@ Environment profiles:
 ## Example install
 
 After deployment, the operator UI is available at `/admin` on the same origin as the REST API.
+
+## Container smoke
+
+Run the shipped image smoke test to verify the built container serves `/admin`, `/healthz`, and token-backed admin routes against a disposable PostgreSQL instance:
+
+```bash
+npm run ops:container-smoke
+```
 
 Development-style install:
 
@@ -86,8 +94,22 @@ npm run ops:helm-validate
 For production rollouts:
 
 - validate `values.yaml` plus your environment override with `ops:helm-validate`
-- run `npm run test:contracts`, `npm run test:conformance`, and `npm run test:hardening` before promoting a release candidate
+- run `npm run test:contracts`, `npm run test:conformance`, `npm run test:hardening`, and `npm run ops:container-smoke` before promoting a release candidate
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
 - for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings
 - treat tenant bootstrap data as application data, not Helm values; tenant-bound records now live in PostgreSQL and are preserved by logical backups
+
+## Upgrade sequence
+
+1. export a logical backup from the current release
+2. validate the incoming chart and values set
+3. run the container smoke path on the candidate image
+4. perform `helm upgrade --install`
+5. verify `/healthz`, `/readyz`, `/admin`, and one token-backed operator action
+
+## Rollback sequence
+
+1. use `helm rollback` to the previous release revision
+2. verify `/healthz`, `/readyz`, and `/admin`
+3. if the rollback exposed data issues rather than chart issues, use logical backup inspection and restore procedures before retrying the upgrade

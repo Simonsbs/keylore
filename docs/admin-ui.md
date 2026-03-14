@@ -30,6 +30,14 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 3. Use an existing operator OAuth client or paste an already minted bearer token.
 4. Work through the tenant, auth, review, backup, audit, and system panels.
 
+## Validation
+
+Use the shipped container smoke path to confirm the UI is reachable through the built image:
+
+```bash
+npm run ops:container-smoke
+```
+
 ## Operator notes
 
 - The page itself is public, but every data read and action still goes through the existing authenticated REST endpoints.

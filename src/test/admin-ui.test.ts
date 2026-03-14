@@ -23,7 +23,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Open operator session/);
     assert.match(html, /Refresh everything/);
-    assert.match(html, /1\.0\.0-rc2/);
+    assert.match(html, /1\.0\.0-rc3/);
   } finally {
     await server.close();
     await close();

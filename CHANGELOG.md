@@ -6,6 +6,17 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc3] - 2026-03-14
+
+### Added
+
+- Live Docker-based smoke test for `/admin`, health, and token-backed operator access.
+- Release checklist covering verification, upgrade, rollback, and recovery.
+
+### Changed
+
+- Tightened deployment and operator documentation for the final release path.
+
 ## [1.0.0-rc2] - 2026-03-14
 
 ### Added

@@ -521,4 +521,6 @@ KeyLore also exposes a local operator CLI documented in [docs/cli.md](/home/simo
 
 For the operator UI itself, see [docs/admin-ui.md](/home/simon/keylore/docs/admin-ui.md).
 
+For release readiness and rollout verification, see [docs/release-checklist.md](/home/simon/keylore/docs/release-checklist.md).
+
 For deployment and release packaging, see [docs/deployment.md](/home/simon/keylore/docs/deployment.md).

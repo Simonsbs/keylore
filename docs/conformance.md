@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc2` continues the three release-candidate gates for KeyLore: contract, conformance, and hardening.
+`v1.0.0-rc3` continues the three release-candidate gates for KeyLore: contract, conformance, and hardening, and adds a live container smoke check to the recommended release flow.
 
 ## Purpose
 

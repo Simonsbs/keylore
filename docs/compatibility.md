@@ -1,6 +1,6 @@
 # Compatibility
 
-`v1.0.0-rc1` froze the current public contract. `v1.0.0-rc2` adds the operator UI on top of that surface without changing the underlying REST, OAuth, or MCP compatibility guarantees.
+`v1.0.0-rc1` froze the current public contract. `v1.0.0-rc2` added the operator UI on top of that surface, and `v1.0.0-rc3` tightens release verification without changing the underlying REST, OAuth, or MCP compatibility guarantees.
 
 ## Frozen surface
 

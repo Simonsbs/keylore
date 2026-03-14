@@ -112,6 +112,13 @@
 - cover the UI route with focused HTTP regression coverage
 - expose tenant, auth-client, approval, break-glass, backup, audit, and system panels for operators
 
+## v1.0-rc3
+
+- completed:
+- add a live container smoke path for `/admin`, health, and token-backed operator access
+- tighten install, upgrade, rollback, and recovery documentation for the final release path
+- add an explicit release checklist for final promotion
+
 ## v1.0
 
 - finalize public release polish and operator-facing documentation
