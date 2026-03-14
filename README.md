@@ -89,6 +89,7 @@ npm run quickstart
 ```
 
 This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://127.0.0.1:8787`.
+If KeyLore is already running locally on that port, the command reuses the existing instance instead of failing.
 
 3. Open KeyLore in your browser:
 
