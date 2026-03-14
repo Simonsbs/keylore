@@ -99,17 +99,24 @@ KeyLore now redirects `/` to `/admin` and automatically opens a local operator s
 
 If that local session bootstrap fails for any reason, use `Start working locally` or the manual sign-in form shown on the page.
 
-4. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then paste the token into `Paste token`.
+4. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
+- `Name shown in KeyLore`
+- `Token key`
+- `Paste token`
+- `Where can it be used?`
+- `Tell the AI when to use this token`
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
-5. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, or write access.
+5. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
 
-6. In `Test credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
+6. In `Saved tokens`, look under `Your tokens` for the ones you added yourself. `Included examples` are seeded local records and are shown separately so they do not get confused with your own tokens.
 
-The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
+7. In `Test credential`, choose `Token to check`, set the `URL to call with this token`, and run the check.
 
-7. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
+The check makes a real brokered `http.get` call with that token and URL. Success means the token, the target domain, and KeyLore policy all allowed the request.
+
+8. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 

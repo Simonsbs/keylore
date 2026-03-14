@@ -29,6 +29,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Start here/);
     assert.match(html, /Save token/);
+    assert.match(html, /Token key/);
     assert.match(html, /Test credential/);
     assert.match(html, /What the AI will see/);
     assert.match(html, /Writing help/);
@@ -42,6 +43,9 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Inspect or edit AI-facing context/);
     assert.match(html, /Current AI-visible record/);
     assert.match(html, /Save context changes/);
+    assert.match(html, /Token to check/);
+    assert.match(html, /URL to call with this token/);
+    assert.match(html, /Check this token/);
     assert.match(html, /First prompt to try in Codex/);
     assert.match(html, /First prompt to try in Gemini/);
     assert.match(html, /More actions/);

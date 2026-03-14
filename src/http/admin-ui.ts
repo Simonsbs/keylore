@@ -737,11 +737,14 @@ const state = {
   lastClientSecret: null,
   lastResponse: null,
   lastCredentialTest: null,
+  lastCredentialTestContext: null,
+  lastCreatedCredentialId: '',
   selectedCredentialId: '',
   currentCredentialContext: null,
   lastMcpConnection: null,
   mcpToken: '',
-  advancedVisible: false
+  advancedVisible: false,
+  credentialIdManuallyEdited: false
 };
 
 const storageKey = 'keylore-admin-session';
@@ -800,6 +803,16 @@ function defaultTestUrlForCredential(credential) {
     return 'https://' + credential.allowedDomains[0];
   }
   return '';
+}
+
+function slugifyTokenKey(value) {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return normalized || 'token';
 }
 
 function firstPromptForClient(clientName) {
@@ -933,11 +946,14 @@ function clearSession() {
   state.lastClientSecret = null;
   state.lastResponse = null;
   state.lastCredentialTest = null;
+  state.lastCredentialTestContext = null;
+  state.lastCreatedCredentialId = '';
   state.selectedCredentialId = '';
   state.currentCredentialContext = null;
   state.lastMcpConnection = null;
   state.mcpToken = '';
   state.advancedVisible = false;
+  state.credentialIdManuallyEdited = false;
   localStorage.removeItem(storageKey);
   syncSessionFields();
   renderAll();
@@ -1112,7 +1128,7 @@ function renderCoreJourney() {
       : !hasTest
         ? 'Run Test Credential to verify the broker path.'
         : !hasConnection
-          ? 'Open Connect MCP, copy a snippet, and try the first prompt.'
+          ? 'Open Connect your AI tool, copy a snippet, and try the first prompt.'
           : 'Restart your MCP client and try the suggested first prompt.';
 
   node.innerHTML = [
@@ -1133,12 +1149,14 @@ function renderCredentials() {
       return '<div class="empty-state">No credentials are visible yet. Start with a template, save a token, then use Test Credential as the next step.</div>';
     }
 
-    return payload.credentials.map(function(credential) {
+    function renderCredentialCard(credential) {
       const nextStatus = credential.status === 'active' ? 'disabled' : 'active';
       const statusActionLabel = credential.status === 'active' ? 'Archive' : 'Restore';
+      const isNew = credential.id === state.lastCreatedCredentialId;
+      const isSelected = credential.id === state.selectedCredentialId;
       return [
         '<article class="list-card">',
-        '<div class="toolbar"><div><h3>' + escapeHtml(credential.displayName) + '</h3><p class="mono">' + escapeHtml(credential.id) + '</p></div><span class="' + (credential.status === 'active' ? 'state-active' : 'state-disabled') + '">' + escapeHtml(credential.status) + '</span></div>',
+        '<div class="toolbar"><div><h3>' + escapeHtml(credential.displayName) + '</h3><p class="mono"><strong>Token key:</strong> ' + escapeHtml(credential.id) + '</p></div><div class="panel-actions">' + (isNew ? '<span class="state-active">Just added</span>' : '') + (isSelected ? '<span class="state-ok">Selected</span>' : '') + '<span class="' + (credential.status === 'active' ? 'state-active' : 'state-disabled') + '">' + escapeHtml(credential.status) + '</span></div></div>',
         '<div class="list-meta">',
         '<span class="pill"><strong>Service</strong> ' + escapeHtml(credential.service) + '</span>',
         '<span class="pill"><strong>Scope</strong> ' + escapeHtml(credential.scopeTier) + '</span>',
@@ -1150,7 +1168,39 @@ function renderCredentials() {
         '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button></div></details>',
         '</article>'
       ].join('');
-    }).join('');
+    }
+
+    const ownCredentials = payload.credentials.filter(function(credential) {
+      return credential.owner === 'local';
+    }).sort(function(left, right) {
+      if (left.id === state.lastCreatedCredentialId) {
+        return -1;
+      }
+      if (right.id === state.lastCreatedCredentialId) {
+        return 1;
+      }
+      if (left.id === state.selectedCredentialId) {
+        return -1;
+      }
+      if (right.id === state.selectedCredentialId) {
+        return 1;
+      }
+      return left.displayName.localeCompare(right.displayName);
+    });
+    const starterCredentials = payload.credentials.filter(function(credential) {
+      return credential.owner !== 'local';
+    }).sort(function(left, right) {
+      return left.displayName.localeCompare(right.displayName);
+    });
+
+    return [
+      ownCredentials.length
+        ? '<div class="stack-tight"><div><h3 style="margin:0 0 8px;">Your tokens</h3><p class="panel-footnote" style="margin-top:0;">These are the tokens you added yourself.</p></div>' + ownCredentials.map(renderCredentialCard).join('') + '</div>'
+        : '<div class="empty-state">You have not added a token yet. When you save one, it will appear here with a clear token key.</div>',
+      starterCredentials.length
+        ? '<div class="stack-tight" style="margin-top:16px;"><div><h3 style="margin:0 0 8px;">Included examples</h3><p class="panel-footnote" style="margin-top:0;">These example entries ship with the local setup. They are not the tokens you just added.</p></div>' + starterCredentials.map(renderCredentialCard).join('') + '</div>'
+        : ''
+    ].join('');
   });
 
   if (!state.data.credentials) {
@@ -1158,14 +1208,47 @@ function renderCredentials() {
   } else if (!state.data.credentials.ok) {
     byId('credential-test-id').innerHTML = '<option value="">Credentials unavailable</option>';
   } else {
-    byId('credential-test-id').innerHTML = state.data.credentials.data.credentials.map(function(credential) {
-      return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
-    }).join('');
+    const ownCredentials = state.data.credentials.data.credentials.filter(function(credential) {
+      return credential.owner === 'local';
+    });
+    const starterCredentials = state.data.credentials.data.credentials.filter(function(credential) {
+      return credential.owner !== 'local';
+    });
+    byId('credential-test-id').innerHTML = [
+      ownCredentials.length
+        ? '<optgroup label="Your tokens">' + ownCredentials.map(function(credential) {
+            return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
+          }).join('') + '</optgroup>'
+        : '',
+      starterCredentials.length
+        ? '<optgroup label="Included examples">' + starterCredentials.map(function(credential) {
+            return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
+          }).join('') + '</optgroup>'
+        : ''
+    ].join('');
   }
 
-  byId('credential-test-result').innerHTML = state.lastCredentialTest
-    ? '<pre>' + escapeHtml(prettyJson(state.lastCredentialTest)) + '</pre>'
-    : '<div class="empty-state">Next step: run a brokered test here after you save a credential. This confirms the token works without exposing it.</div>';
+  if (state.lastCredentialTest) {
+    const lastCredential = visibleCredentials().find(function(credential) {
+      return credential.id === state.lastCredentialTestContext?.credentialId;
+    });
+    const summary = [
+      '<div class="list-card">',
+      '<h3 style="margin:0 0 8px;">What this check did</h3>',
+      '<p>KeyLore tried a real <span class="mono">http.get</span> using <strong>' + escapeHtml(lastCredential ? lastCredential.displayName : (state.lastCredentialTestContext?.credentialId || 'the selected token')) + '</strong> against <span class="mono">' + escapeHtml(state.lastCredentialTestContext?.targetUrl || 'the selected URL') + '</span>.</p>',
+      '<div class="list-meta">',
+      '<span class="' + (state.lastCredentialTest.decision === 'allowed' ? 'state-active' : state.lastCredentialTest.decision === 'approval_required' ? 'state-warning' : 'state-disabled') + '">' + escapeHtml(state.lastCredentialTest.decision.replace('_', ' ')) + '</span>',
+      '<span class="pill"><strong>Reason</strong> ' + escapeHtml(state.lastCredentialTest.reason || 'n/a') + '</span>',
+      state.lastCredentialTest.httpResult ? '<span class="pill"><strong>HTTP status</strong> ' + escapeHtml(String(state.lastCredentialTest.httpResult.status)) + '</span>' : '',
+      '</div>',
+      state.lastCredentialTest.httpResult ? '<pre style="margin-top:12px;">' + escapeHtml(state.lastCredentialTest.httpResult.bodyPreview) + '</pre>' : '',
+      '<div class="panel-footnote">Success means the token, the target domain, and KeyLore policy all allowed the request. Failure means one of those checks blocked it.</div>',
+      '</div>'
+    ].join('');
+    byId('credential-test-result').innerHTML = summary;
+  } else {
+    byId('credential-test-result').innerHTML = '<div class="empty-state">This check makes a real brokered <span class="mono">http.get</span> call with the selected token and URL. Use it to confirm the token, target domain, and policy all work together.</div>';
+  }
 
   renderCredentialContextManager();
 }
@@ -1682,8 +1765,8 @@ function serializeAuthClientForm() {
 
 function applyCredentialTemplate() {
   const template = byId('credential-template').value;
+  state.credentialIdManuallyEdited = false;
   if (template === 'github-readonly') {
-    byId('credential-id').value = 'github-readonly-local';
     byId('credential-name').value = 'GitHub Read-Only Token';
     byId('credential-service').value = 'github';
     byId('credential-operations').value = 'http.get';
@@ -1696,7 +1779,6 @@ function applyCredentialTemplate() {
   }
 
   if (template === 'github-write') {
-    byId('credential-id').value = 'github-write-local';
     byId('credential-name').value = 'GitHub Write Token';
     byId('credential-service').value = 'github';
     byId('credential-operations').value = 'http.get,http.post';
@@ -1709,7 +1791,6 @@ function applyCredentialTemplate() {
   }
 
   if (template === 'npm-readonly') {
-    byId('credential-id').value = 'npm-readonly-local';
     byId('credential-name').value = 'npm Read-Only Token';
     byId('credential-service').value = 'npm';
     byId('credential-operations').value = 'http.get';
@@ -1722,7 +1803,6 @@ function applyCredentialTemplate() {
   }
 
   if (template === 'internal-service') {
-    byId('credential-id').value = 'internal-service-local';
     byId('credential-name').value = 'Internal Service Token';
     byId('credential-service').value = 'internal_api';
     byId('credential-operations').value = 'http.get,http.post';
@@ -1745,6 +1825,20 @@ function applyCredentialTemplate() {
     byId('credential-sensitivity').value = 'moderate';
     renderCredentialPreview();
   }
+
+  syncCredentialIdFromName(true);
+}
+
+function syncCredentialIdFromName(force) {
+  if (state.credentialIdManuallyEdited && !force) {
+    return;
+  }
+
+  const name = byId('credential-name').value.trim();
+  const template = byId('credential-template').value;
+  const fallback = template === 'generic-bearer' ? 'token' : template.replace(/[^a-z0-9]+/g, '-');
+  byId('credential-id').value = slugifyTokenKey(name || fallback) + '-local';
+  renderCredentialPreview();
 }
 
 function syncCredentialSourceFields() {
@@ -1793,6 +1887,10 @@ function syncCredentialTestDefaults(force) {
   const selectedId = byId('credential-test-id').value;
   const selected = credentials.find(function(credential) {
     return credential.id === selectedId;
+  }) || credentials.find(function(credential) {
+    return credential.id === state.lastCreatedCredentialId;
+  }) || credentials.find(function(credential) {
+    return credential.id === state.selectedCredentialId;
   }) || credentials[0];
   if (force || !byId('credential-test-id').value) {
     byId('credential-test-id').value = selected.id;
@@ -1863,16 +1961,26 @@ async function handleCreateCredential(event) {
     return;
   }
   const result = await withAction('Credential created. Next: run Test Credential or inspect the saved context.', async function() {
-    return fetchJson('/v1/core/credentials', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    try {
+      return await fetchJson('/v1/core/credentials', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('already exists')) {
+        throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+      }
+      throw error;
+    }
   });
+  state.lastCreatedCredentialId = result.credential.id;
   state.selectedCredentialId = result.credential.id;
   state.currentCredentialContext = result.credential;
+  state.credentialIdManuallyEdited = false;
   byId('credential-form').reset();
   byId('credential-template').value = 'github-readonly';
   byId('credential-storage').value = 'local';
@@ -1886,7 +1994,7 @@ async function handleCredentialTest(event) {
   event.preventDefault();
   const credentialId = byId('credential-test-id').value.trim();
   const targetUrl = byId('credential-test-url').value.trim();
-  const result = await withAction('Credential test completed. Next: open Connect MCP and try the suggested first prompt.', async function() {
+  const result = await withAction('Token check completed. Review the summary below, then connect your AI tool.', async function() {
     return fetchJson('/v1/access/request', {
       method: 'POST',
       headers: {
@@ -1899,6 +2007,10 @@ async function handleCredentialTest(event) {
       })
     });
   });
+  state.lastCredentialTestContext = {
+    credentialId: credentialId,
+    targetUrl: targetUrl
+  };
   state.lastCredentialTest = result;
   renderCredentials();
 }
@@ -2331,6 +2443,13 @@ async function initialize() {
   byId('credential-context-form').addEventListener('submit', handleCredentialContextSave);
   byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
+  byId('credential-name').addEventListener('input', function() {
+    syncCredentialIdFromName(false);
+  });
+  byId('credential-id').addEventListener('input', function() {
+    state.credentialIdManuallyEdited = true;
+    renderCredentialPreview();
+  });
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
   byId('credential-form').addEventListener('input', renderCredentialPreview);
   byId('credential-form').addEventListener('change', renderCredentialPreview);
@@ -2570,6 +2689,8 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                 <form id="credential-form" class="form-grid">
                   <div class="field-wide"><label for="credential-template">What is this token for?</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
                   <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /></div>
+                  <div class="field"><label for="credential-id">Token key</label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /></div>
+                  <div class="field-wide panel-footnote" style="margin-top:-4px;">This is the unique key for the token. It appears in the saved-token list and is what you change if KeyLore says a token key already exists.</div>
                   <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
                   <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
                   <div class="field-wide"><label for="credential-notes">Tell the AI when to use this token</label><textarea id="credential-notes" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
@@ -2586,7 +2707,6 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <summary>Advanced token settings</summary>
                     <div class="form-grid">
                       <div class="field"><label for="credential-storage">Where to store the token</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
-                      <div class="field"><label for="credential-id">Internal ID</label><input id="credential-id" type="text" required /></div>
                       <div class="field"><label for="credential-service">Service name</label><input id="credential-service" type="text" required /></div>
                       <div class="field"><label for="credential-sensitivity">Risk level</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
                       <div class="field"><label for="credential-operations">Allow writes?</label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
@@ -2611,13 +2731,14 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="section-heading">
                     <div>
                       <h2 style="font-size:1.4rem;">Test credential</h2>
-                      <p>Run a safe brokered check. This confirms the token works without exposing the raw secret.</p>
+                      <p>Run a real safe check. KeyLore will make an <code>http.get</code> call with the selected token and URL, without exposing the raw secret.</p>
                     </div>
                   </div>
                   <form id="credential-test-form" class="form-grid">
-                    <div class="field"><label for="credential-test-id">Credential</label><select id="credential-test-id"></select></div>
-                    <div class="field-wide"><label for="credential-test-url">Test URL</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
-                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Test credential">Test credential</button></div>
+                    <div class="field"><label for="credential-test-id">Token to check</label><select id="credential-test-id"></select></div>
+                    <div class="field-wide"><label for="credential-test-url">URL to call with this token</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
+                    <div class="panel-footnote field-wide" style="margin-top:-4px;">Success means the token, the target domain, and KeyLore policy all allowed the request.</div>
+                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Check this token">Check this token</button></div>
                   </form>
                   <div id="credential-test-result" style="margin-top: 18px;"></div>
                 </div>
