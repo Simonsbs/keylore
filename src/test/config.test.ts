@@ -76,6 +76,31 @@ test("loadConfig enables loopback local quickstart defaults when bootstrap secre
 
     assert.equal(config.databaseUrl, "postgresql://keylore:keylore@127.0.0.1:5432/keylore");
     assert.equal(config.localQuickstartEnabled, true);
+    assert.deepEqual(config.localQuickstartBootstrap, {
+      clientId: "keylore-admin-local",
+      clientSecret: "keylore-local-admin",
+      scopes: [
+        "catalog:read",
+        "catalog:write",
+        "admin:read",
+        "admin:write",
+        "auth:read",
+        "auth:write",
+        "broker:use",
+        "sandbox:run",
+        "audit:read",
+        "approval:read",
+        "approval:review",
+        "system:read",
+        "system:write",
+        "backup:read",
+        "backup:write",
+        "breakglass:request",
+        "breakglass:read",
+        "breakglass:review",
+        "mcp:use",
+      ],
+    });
     assert.deepEqual(config.localAdminBootstrap, {
       clientId: "keylore-admin-local",
       clientSecret: "keylore-local-admin",
@@ -121,6 +146,31 @@ test("loadConfig does not expose a UI quickstart secret when a custom bootstrap 
     const config = loadConfig("/tmp/keylore-config-test-custom-secret");
 
     assert.equal(config.localQuickstartEnabled, true);
+    assert.deepEqual(config.localQuickstartBootstrap, {
+      clientId: "keylore-admin-local",
+      clientSecret: "custom-admin-secret",
+      scopes: [
+        "catalog:read",
+        "catalog:write",
+        "admin:read",
+        "admin:write",
+        "auth:read",
+        "auth:write",
+        "broker:use",
+        "sandbox:run",
+        "audit:read",
+        "approval:read",
+        "approval:review",
+        "system:read",
+        "system:write",
+        "backup:read",
+        "backup:write",
+        "breakglass:request",
+        "breakglass:read",
+        "breakglass:review",
+        "mcp:use",
+      ],
+    });
     assert.equal(config.localAdminBootstrap, undefined);
   } finally {
     process.env = originalEnv;

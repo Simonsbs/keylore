@@ -67,6 +67,13 @@ export interface KeyLoreConfig {
   traceExportTimeoutMs: number;
   rotationPlanningHorizonDays: number;
   localQuickstartEnabled: boolean;
+  localQuickstartBootstrap:
+    | {
+        clientId: string;
+        clientSecret: string;
+        scopes: string[];
+      }
+    | undefined;
   localAdminBootstrap:
     | {
         clientId: string;
@@ -213,6 +220,8 @@ const envSchema = z.object({
   KEYLORE_ENVIRONMENT: z.string().default("development"),
   KEYLORE_DEFAULT_PRINCIPAL: z.string().default("local-operator"),
   KEYLORE_LOG_LEVEL: z.string().default("info"),
+  KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET: z.string().optional(),
+  KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET: z.string().optional(),
   KEYLORE_BOOTSTRAP_FROM_FILES: z
     .string()
     .transform((value) => value !== "false")
@@ -365,6 +374,13 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     traceExportTimeoutMs: env.KEYLORE_TRACE_EXPORT_TIMEOUT_MS,
     rotationPlanningHorizonDays: env.KEYLORE_ROTATION_PLANNING_HORIZON_DAYS,
     localQuickstartEnabled,
+    localQuickstartBootstrap: localQuickstartEnabled
+      ? {
+          clientId: LOCAL_ADMIN_CLIENT_ID,
+          clientSecret: env.KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET ?? LOCAL_ADMIN_CLIENT_SECRET,
+          scopes: [...LOCAL_ADMIN_SCOPES],
+        }
+      : undefined,
     localAdminBootstrap: hydrated.localAdminBootstrapAvailable
       ? {
           clientId: LOCAL_ADMIN_CLIENT_ID,

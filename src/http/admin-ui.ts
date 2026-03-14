@@ -725,6 +725,7 @@ const config = window.__KEYLORE_ADMIN_CONFIG__;
 const state = {
   baseUrl: config.baseUrl,
   resource: config.baseUrl.replace(/\/$/, '') + '/v1',
+  localQuickstartEnabled: config.localQuickstartEnabled === true,
   localAdminBootstrap: config.localAdminBootstrap || null,
   token: '',
   sessionClientId: '',
@@ -1831,9 +1832,25 @@ async function handleLogin(event) {
 }
 
 async function handleLocalQuickstartLogin() {
-  populateLoginDefaults(true);
-  byId('pasted-token').value = '';
-  await handleLogin();
+  setBusy(true);
+  clearNotice();
+
+  try {
+    const payload = await fetchJson('/v1/core/local-session', {
+      method: 'POST'
+    });
+    state.token = payload.access_token;
+    state.sessionClientId = payload.clientId || 'keylore-admin-local';
+    state.sessionScopes = payload.scope || 'catalog:read';
+    state.resource = payload.resource || (state.baseUrl.replace(/\/$/, '') + '/v1');
+    persistSession();
+    renderAll();
+    setNotice('info', 'Local session established. Next: save a token.');
+    await refreshDashboard();
+  } catch (error) {
+    setBusy(false);
+    setNotice('error', error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function handleCreateCredential(event) {
@@ -2387,8 +2404,9 @@ async function initialize() {
     applyCredentialTemplate();
     syncCredentialSourceFields();
     renderCredentialPreview();
-    if (state.localAdminBootstrap) {
-      setNotice('info', 'Local quickstart is enabled. Use the shortcut to open an admin session immediately.');
+    if (state.localQuickstartEnabled) {
+      setNotice('info', 'Starting local quickstart session...');
+      await handleLocalQuickstartLogin();
     }
   }
 }
@@ -2401,6 +2419,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
   const config = {
     version: app.config.version,
     baseUrl: app.config.publicBaseUrl,
+    localQuickstartEnabled: app.config.localQuickstartEnabled,
     localAdminBootstrap: app.config.localAdminBootstrap,
     stdioEntryPath,
     stdioAvailable: fs.existsSync(stdioEntryPath),
@@ -2470,10 +2489,10 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             </div>
           </div>
           ${
-            app.config.localAdminBootstrap
-              ? `<div class="panel-footnote" style="margin-bottom: 16px;">Local quickstart is enabled on this loopback development instance. Use the shortcut below to open the built-in admin session without editing any configuration.</div>
+            app.config.localQuickstartEnabled
+              ? `<div class="panel-footnote" style="margin-bottom: 16px;">Local quickstart is enabled on this loopback development instance. KeyLore will try to open a local session automatically. If that fails, use the fallback button or the manual sign-in form below.</div>
           <div class="form-actions" style="margin-bottom: 16px;">
-            <button class="button-secondary" id="local-login-submit" type="button" data-busy-label="Opening local session..." data-idle-label="Use local admin quickstart">Use local admin quickstart</button>
+            <button class="button-secondary" id="local-login-submit" type="button" data-busy-label="Opening local session..." data-idle-label="Start working locally">Start working locally</button>
           </div>
           <details class="disclosure">
             <summary>Manual sign-in options</summary>`
@@ -2508,7 +2527,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <button class="button" id="login-submit" type="submit" data-busy-label="Opening session..." data-idle-label="Open operator session">Open operator session</button>
             </div>
           </form>
-          ${app.config.localAdminBootstrap ? '</details>' : ''}
+          ${app.config.localQuickstartEnabled ? '</details>' : ''}
         </section>
 
         <div id="dashboard" class="dashboard" hidden>

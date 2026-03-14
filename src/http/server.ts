@@ -75,6 +75,11 @@ function respondHtml(res: ServerResponse, statusCode: number, body: string): voi
   res.end(body);
 }
 
+function respondRedirect(res: ServerResponse, location: string): void {
+  res.writeHead(302, { location });
+  res.end();
+}
+
 async function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
   const contentLengthHeader = req.headers["content-length"];
   const contentLength =
@@ -123,6 +128,15 @@ function routeParam(pathname: string, prefix: string): string | undefined {
 
 function clientKey(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? "unknown";
+}
+
+function isLoopbackRequest(req: IncomingMessage): boolean {
+  const remoteAddress = req.socket.remoteAddress;
+  return (
+    remoteAddress === "127.0.0.1" ||
+    remoteAddress === "::1" ||
+    remoteAddress === "::ffff:127.0.0.1"
+  );
 }
 
 function traceIdFromRequest(req: IncomingMessage): string {
@@ -358,6 +372,11 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
             return;
           }
 
+          if (url.pathname === "/" && req.method === "GET") {
+            respondRedirect(res, "/admin");
+            return;
+          }
+
           if ((url.pathname === "/admin" || url.pathname === "/admin/") && req.method === "GET") {
             respondHtml(res, 200, renderAdminPage(app));
             return;
@@ -573,6 +592,33 @@ async function handleApiRequest(
   res: ServerResponse,
   url: URL,
 ): Promise<void> {
+  if (url.pathname === "/v1/core/local-session" && req.method === "POST") {
+    if (!app.config.localQuickstartEnabled || !app.config.localQuickstartBootstrap) {
+      respondJson(res, 404, { error: "Local quickstart is not enabled." });
+      return;
+    }
+    if (!isLoopbackRequest(req)) {
+      respondJson(res, 403, { error: "Local quickstart is only available from loopback." });
+      return;
+    }
+
+    const token = await app.auth.issueToken({
+      clientId: app.config.localQuickstartBootstrap.clientId,
+      clientSecret: app.config.localQuickstartBootstrap.clientSecret,
+      grantType: "client_credentials",
+      scope: [...app.config.localQuickstartBootstrap.scopes] as AccessScope[],
+      resource: `${app.config.publicBaseUrl}/v1`,
+    });
+
+    respondJson(res, 200, {
+      ...token,
+      clientId: app.config.localQuickstartBootstrap.clientId,
+      resource: `${app.config.publicBaseUrl}/v1`,
+      quickstart: true,
+    });
+    return;
+  }
+
   if (url.pathname === "/v1/core/mcp/check" && req.method === "POST") {
     const context = await authenticateRequest(
       app,

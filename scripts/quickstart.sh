@@ -27,7 +27,7 @@ if [[ -z "$container_id" ]] || ! docker exec "$container_id" pg_isready -U keylo
 fi
 
 echo "KeyLore local quickstart is ready."
-echo "Open http://127.0.0.1:8787/admin."
-echo "If the local admin quickstart button is shown, use it. Otherwise sign in with your configured operator client."
+echo "Open http://127.0.0.1:8787/."
+echo "KeyLore will redirect to /admin and try to open a local session automatically."
 
 exec npm run dev:http

@@ -52,7 +52,8 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Advanced mode is optional/);
     assert.match(html, /Local encrypted store/);
     assert.match(html, /Open operator session/);
-    assert.match(html, /Use local admin quickstart/);
+    assert.match(html, /Start working locally/);
+    assert.match(html, /open a local session automatically/);
     assert.match(html, /Manual sign-in options/);
     assert.match(html, /Remote or advanced connection options/);
     assert.match(html, /Refresh everything/);

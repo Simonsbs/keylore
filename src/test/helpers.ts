@@ -186,6 +186,7 @@ export async function makeTestApp(options?: {
     traceExportTimeoutMs: 1000,
     rotationPlanningHorizonDays: 14,
     localQuickstartEnabled: false,
+    localQuickstartBootstrap: undefined,
     localAdminBootstrap: undefined,
     ...options?.configOverrides,
   };

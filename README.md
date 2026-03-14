@@ -90,25 +90,25 @@ npm run quickstart
 
 This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://127.0.0.1:8787`.
 
-3. Open the admin UI:
+3. Open KeyLore in your browser:
 
-`http://127.0.0.1:8787/admin`
+`http://127.0.0.1:8787/`
 
-4. Click `Use local admin quickstart`.
+KeyLore now redirects `/` to `/admin` and automatically opens a local operator session on loopback development installs.
 
-That uses the built-in loopback-only development bootstrap client and gets you into the operator UI without editing any config.
+If that local session bootstrap fails for any reason, use `Start working locally` or the manual sign-in form shown on the page.
 
-5. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then paste the token into `Paste token`.
+4. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then paste the token into `Paste token`.
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
-6. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, or write access.
+5. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, or write access.
 
-7. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
+6. In `Test credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
 
 The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
 
-8. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
+7. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 

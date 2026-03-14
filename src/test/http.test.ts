@@ -96,6 +96,71 @@ test("http server returns 413 for oversized request bodies", async () => {
   await close();
 });
 
+test("root path redirects to the admin ui", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8869,
+      publicBaseUrl: "http://127.0.0.1:8869",
+      oauthIssuerUrl: "http://127.0.0.1:8869/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  try {
+    const response = await fetch("http://127.0.0.1:8869/", {
+      redirect: "manual",
+    });
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "/admin");
+  } finally {
+    await server.close();
+    await close();
+  }
+});
+
+test("local quickstart session can be opened server-side without exposing the bootstrap secret", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8870,
+      publicBaseUrl: "http://127.0.0.1:8870",
+      oauthIssuerUrl: "http://127.0.0.1:8870/oauth",
+      localQuickstartEnabled: true,
+      localQuickstartBootstrap: {
+        clientId: "admin-client",
+        clientSecret: "admin-secret",
+        scopes: ["catalog:read", "admin:read", "broker:use"],
+      },
+      localAdminBootstrap: undefined,
+    },
+  });
+  const server = await startHttpServer(app);
+
+  try {
+    const response = await fetch("http://127.0.0.1:8870/v1/core/local-session", {
+      method: "POST",
+    });
+
+    assert.equal(response.status, 200);
+    const payload = (await response.json()) as Record<string, string | boolean>;
+    assert.equal(payload.quickstart, true);
+    assert.equal(payload.clientId, "admin-client");
+    assert.equal(payload.resource, "http://127.0.0.1:8870/v1");
+    assert.match(String(payload.access_token), /^[A-Za-z0-9_-]+$/);
+
+    const catalogResponse = await fetch("http://127.0.0.1:8870/v1/catalog/credentials", {
+      headers: {
+        authorization: `Bearer ${String(payload.access_token)}`,
+      },
+    });
+
+    assert.equal(catalogResponse.status, 200);
+  } finally {
+    await server.close();
+    await close();
+  }
+});
+
 test("proxy responses are redacted and truncated", async () => {
   process.env.KEYLORE_TEST_SECRET = "super-secret-value";
   const target = await startLocalTargetServer((_req, res) => {

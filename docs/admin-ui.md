@@ -35,28 +35,29 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 ## Usage
 
 1. For local use, run `npm run quickstart`.
-2. Open `<publicBaseUrl>/admin`.
-3. On the local loopback quickstart path, click `Use local admin quickstart`.
-4. Use `Save token` for the beginner path:
+2. Open `<publicBaseUrl>/`.
+3. KeyLore redirects `/` to `/admin` and automatically opens a local operator session on loopback development installs.
+4. If that local bootstrap fails, use `Start working locally` or the manual sign-in form.
+5. Use `Save token` for the beginner path:
    - choose a template
    - name the token
    - paste the token
    - say when the AI should use it
-5. Start from a stronger template when possible:
+6. Start from a stronger template when possible:
    - `GitHub read-only`
    - `GitHub write-capable`
    - `npm read-only`
    - `Internal service token`
    - `Generic bearer API`
-6. Review `What the AI will see` to confirm the agent-facing record is useful and contains no secret material.
-7. Use `Writing help` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
-8. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, service name, tags, or write access.
-9. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-10. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
-11. Use the built-in `First prompt to try` examples after restarting the MCP client.
-12. Open `Remote or advanced connection options` only if you need HTTP MCP.
-13. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-14. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+7. Review `What the AI will see` to confirm the agent-facing record is useful and contains no secret material.
+8. Use `Writing help` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
+9. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, service name, tags, or write access.
+10. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+11. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
+12. Use the built-in `First prompt to try` examples after restarting the MCP client.
+13. Open `Remote or advanced connection options` only if you need HTTP MCP.
+14. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+15. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Context editing
 
