@@ -41,6 +41,11 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Inspect \/ edit context/);
     assert.match(html, /Current MCP-visible record/);
     assert.match(html, /Save context changes/);
+    assert.match(html, /First prompt to try in Codex/);
+    assert.match(html, /First prompt to try in Gemini/);
+    assert.match(html, /Rename/);
+    assert.match(html, /Retag/);
+    assert.match(html, /Archive/);
     assert.match(html, /Show advanced controls/);
     assert.match(html, /Advanced mode is optional/);
     assert.match(html, /Local encrypted store/);

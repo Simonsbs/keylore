@@ -925,10 +925,11 @@ test("core credential context endpoints inspect and update metadata without expo
     );
     assert.equal(patchResponse.status, 200);
     const patchPayload = (await patchResponse.json()) as {
-      credential: { selectionNotes: string; tags: string[] };
+      credential: { selectionNotes: string; tags: string[]; status: string };
     };
     assert.match(patchPayload.credential.selectionNotes, /Avoid write actions/);
     assert.deepEqual(patchPayload.credential.tags, ["github", "readonly", "managed"]);
+    assert.equal(patchPayload.credential.status, "active");
   } finally {
     await server.close();
     await close();

@@ -11,6 +11,7 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 - get template-specific context guidance and inline validation before saving
 - inspect and update MCP-visible context after creation without touching the stored secret
 - test credentials through brokered access from the UI
+- get built-in first-prompt examples for Codex and Gemini after MCP setup
 - generate Codex and Gemini CLI MCP connection snippets
 - mint and verify a remote HTTP MCP token from the UI
 - open an operator session with `client_credentials` or a pasted bearer token
@@ -50,8 +51,9 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 8. Use `Permitted Operations` to keep the credential read-only unless the workflow truly needs writes.
 9. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
 10. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
-11. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-12. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+11. Use the built-in `First prompt to try` examples after restarting the MCP client.
+12. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+13. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Context editing
 
@@ -59,6 +61,7 @@ Inside `Credentials`, use `Inspect / edit context` to:
 
 - inspect the current MCP-visible record for a saved credential
 - update display name, service, sensitivity, domains, tags, operations, and `selectionNotes`
+- apply lightweight lifecycle actions such as rename, retag, archive, and restore
 - keep secret storage and binding details out of the edit path entirely
 
 This flow is intentionally metadata-only. It does not display or mutate the stored secret.

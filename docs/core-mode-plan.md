@@ -162,6 +162,7 @@ Status:
   - templates now prefill the intended read or read/write operation profile instead of forcing every credential into `http.get`
   - template-specific guidance and submit-time validation now push users away from vague or secret-like `selectionNotes`
   - saved credentials can now be inspected and edited through a context-only flow without re-entering or exposing the stored secret
+  - the UI now provides explicit next-step guidance, built-in first prompts for Codex and Gemini, and lightweight rename/retag/archive actions in core mode
 
 ## Core-5
 

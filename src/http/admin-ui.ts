@@ -726,6 +726,19 @@ function defaultTestUrlForCredential(credential) {
   return '';
 }
 
+function firstPromptForClient(clientName) {
+  const credential = state.currentCredentialContext || selectedCredentialSummary() || visibleCredentials()[0];
+  if (!credential) {
+    return 'After you create a credential, ask ' + clientName + ': "Search KeyLore for the best credential for the target service, explain why you chose it, and use it through the broker without exposing the raw token."';
+  }
+
+  const domain = credential.allowedDomains && credential.allowedDomains.length > 0
+    ? credential.allowedDomains[0]
+    : 'target-service.example.com';
+  const targetUrl = defaultTestUrlForCredential(credential) || ('https://' + domain);
+  return 'Ask ' + clientName + ': "Search KeyLore for the best credential for ' + credential.service + ' on ' + domain + '. Explain why you chose it, then use it through KeyLore to fetch ' + targetUrl + ' without exposing the raw token."';
+}
+
 function mcpHttpTokenValue() {
   return state.mcpToken || 'REPLACE_ME_MCP_TOKEN';
 }
@@ -1007,13 +1020,49 @@ function renderOverview() {
     : '<div class="empty-state">Fresh token issues and admin actions are echoed here for quick operator inspection.</div>';
 }
 
+function renderCoreJourney() {
+  const node = byId('core-journey');
+  if (!node) {
+    return;
+  }
+
+  const credentials = visibleCredentials();
+  const hasCredential = credentials.length > 0;
+  const hasTest = !!state.lastCredentialTest;
+  const hasConnection = !!state.lastMcpConnection;
+  const nextAction = !state.token
+    ? 'Open a local admin session first.'
+    : !hasCredential
+      ? 'Create your first credential from a template.'
+      : !hasTest
+        ? 'Run Test Credential to verify the broker path.'
+        : !hasConnection
+          ? 'Open Connect MCP, copy a snippet, and try the first prompt.'
+          : 'Restart your MCP client and try the suggested first prompt.';
+
+  node.innerHTML = [
+    '<div class="list-card">',
+    '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Use the shortest path to get from saved token to working MCP workflow.</p></div></div>',
+    '<div class="list-meta">',
+    '<span class="' + (state.token ? 'state-active' : 'state-warning') + '">1. Session</span>',
+    '<span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">2. Credential</span>',
+    '<span class="' + (hasTest ? 'state-active' : 'state-warning') + '">3. Broker test</span>',
+    '<span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">4. MCP connect</span>',
+    '</div>',
+    '<p class="panel-footnote" style="margin-top:12px;"><strong>Next:</strong> ' + escapeHtml(nextAction) + '</p>',
+    '</div>'
+  ].join('');
+}
+
 function renderCredentials() {
   byId('credential-list').innerHTML = renderResultState(state.data.credentials, function(payload) {
     if (!payload.credentials.length) {
-      return '<div class="empty-state">No credentials are visible yet. Create one below.</div>';
+      return '<div class="empty-state">No credentials are visible yet. Start with a template, save a token, then use Test Credential as the next step.</div>';
     }
 
     return payload.credentials.map(function(credential) {
+      const nextStatus = credential.status === 'active' ? 'disabled' : 'active';
+      const statusActionLabel = credential.status === 'active' ? 'Archive' : 'Restore';
       return [
         '<article class="list-card">',
         '<div class="toolbar"><div><h3>' + escapeHtml(credential.displayName) + '</h3><p class="mono">' + escapeHtml(credential.id) + '</p></div><span class="' + (credential.status === 'active' ? 'state-active' : 'state-disabled') + '">' + escapeHtml(credential.status) + '</span></div>',
@@ -1024,7 +1073,7 @@ function renderCredentials() {
         '</div>',
         '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
-        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Inspect / edit context</button></div>',
+        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Inspect / edit context</button><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button></div>',
         '</article>'
       ].join('');
     }).join('');
@@ -1042,7 +1091,7 @@ function renderCredentials() {
 
   byId('credential-test-result').innerHTML = state.lastCredentialTest
     ? '<pre>' + escapeHtml(prettyJson(state.lastCredentialTest)) + '</pre>'
-    : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
+    : '<div class="empty-state">Next step: run a brokered test here after you save a credential. This confirms the token works without exposing it.</div>';
 
   renderCredentialContextManager();
 }
@@ -1228,6 +1277,7 @@ function populateCredentialContextForm(credential) {
   byId('credential-context-display-name').value = credential.displayName;
   byId('credential-context-service').value = credential.service;
   byId('credential-context-sensitivity').value = credential.sensitivity;
+  byId('credential-context-status').value = credential.status;
   byId('credential-context-operations').value = credential.permittedOperations.includes('http.post')
     ? 'http.get,http.post'
     : 'http.get';
@@ -1243,6 +1293,7 @@ function serializeCredentialContextForm() {
     service: byId('credential-context-service').value.trim(),
     scopeTier: operations.includes('http.post') ? 'read_write' : 'read_only',
     sensitivity: byId('credential-context-sensitivity').value,
+    status: byId('credential-context-status').value,
     allowedDomains: splitList(byId('credential-context-domains').value),
     permittedOperations: operations.length ? operations : ['http.get'],
     selectionNotes: byId('credential-context-notes').value.trim(),
@@ -1259,7 +1310,7 @@ function renderCredentialContextManager() {
 
   const selected = state.currentCredentialContext || selectedCredentialSummary();
   if (!selected) {
-    currentNode.innerHTML = '<div class="empty-state">Select a credential from the list to inspect or edit its MCP-visible context.</div>';
+    currentNode.innerHTML = '<div class="empty-state">Select a credential from the list to inspect or edit its MCP-visible context. Secret storage stays out of this flow.</div>';
     formNode.hidden = true;
     return;
   }
@@ -1298,9 +1349,11 @@ function renderConnect() {
   byId('connect-stdio-status').innerHTML = config.stdioAvailable
     ? '<div class="state-active">stdio entry is available at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span></div>'
     : '<div class="error-state">The stdio entry point was not found at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span>.</div>';
+  byId('codex-first-prompt').value = firstPromptForClient('Codex');
+  byId('gemini-first-prompt').value = firstPromptForClient('Gemini');
   byId('connect-result').innerHTML = state.lastMcpConnection
     ? '<pre>' + escapeHtml(prettyJson(state.lastMcpConnection)) + '</pre>'
-    : '<div class="empty-state">Run the MCP connection check to mint and validate a remote MCP token.</div>';
+    : '<div class="empty-state">For local use, copy a stdio snippet and restart your MCP client. For remote HTTP MCP, run the connection check here first.</div>';
 }
 
 function renderTenants() {
@@ -1464,6 +1517,7 @@ function renderBackups() {
 function renderAll() {
   syncSessionFields();
   renderAdvancedMode();
+  renderCoreJourney();
   renderCredentials();
   renderConnect();
   renderOverview();
@@ -1718,7 +1772,7 @@ async function handleCreateCredential(event) {
     setNotice('error', assessment.errors[0]);
     return;
   }
-  const result = await withAction('Credential created.', async function() {
+  const result = await withAction('Credential created. Next: run Test Credential or inspect the saved context.', async function() {
     return fetchJson('/v1/core/credentials', {
       method: 'POST',
       headers: {
@@ -1742,7 +1796,7 @@ async function handleCredentialTest(event) {
   event.preventDefault();
   const credentialId = byId('credential-test-id').value.trim();
   const targetUrl = byId('credential-test-url').value.trim();
-  const result = await withAction('Credential test completed.', async function() {
+  const result = await withAction('Credential test completed. Next: open Connect MCP and try the suggested first prompt.', async function() {
     return fetchJson('/v1/access/request', {
       method: 'POST',
       headers: {
@@ -1769,11 +1823,75 @@ async function handleCredentialContextAction(event) {
   }
 
   try {
-    setBusy(true);
-    clearNotice();
-    await openCredentialContext(button.dataset.credentialContextId);
-    setNotice('info', 'Loaded the current MCP-visible context. Secret storage remains separate.');
-    setBusy(false);
+    const credentialId = button.dataset.credentialContextId;
+    const action = button.dataset.credentialContextAction;
+    if (action === 'open') {
+      setBusy(true);
+      clearNotice();
+      await openCredentialContext(credentialId);
+      setNotice('info', 'Loaded the current MCP-visible context. Secret storage remains separate.');
+      setBusy(false);
+      return;
+    }
+
+    if (action === 'rename') {
+      const nextName = window.prompt('New display name', button.dataset.credentialContextName || '');
+      if (!nextName || !nextName.trim()) {
+        return;
+      }
+      const result = await withAction('Credential renamed. Next: verify the MCP-visible record still reads clearly.', async function() {
+        return fetchJson('/v1/core/credentials/' + encodeURIComponent(credentialId) + '/context', {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ displayName: nextName.trim() })
+        });
+      });
+      state.currentCredentialContext = result.credential;
+      state.selectedCredentialId = credentialId;
+      renderCredentialContextManager();
+      return;
+    }
+
+    if (action === 'retag') {
+      const nextTags = window.prompt('Comma-separated tags', button.dataset.credentialContextTags || '');
+      if (nextTags === null) {
+        return;
+      }
+      const result = await withAction('Credential tags updated. Next: confirm the tags help the agent choose the right record.', async function() {
+        return fetchJson('/v1/core/credentials/' + encodeURIComponent(credentialId) + '/context', {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ tags: splitList(nextTags) })
+        });
+      });
+      state.currentCredentialContext = result.credential;
+      state.selectedCredentialId = credentialId;
+      renderCredentialContextManager();
+      return;
+    }
+
+    if (action === 'status') {
+      const result = await withAction(button.dataset.credentialContextStatus === 'disabled'
+        ? 'Credential archived. Next: restore it when the agent should use it again.'
+        : 'Credential restored. Next: rerun Test Credential if you want to confirm the live path.'
+      , async function() {
+        return fetchJson('/v1/core/credentials/' + encodeURIComponent(credentialId) + '/context', {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ status: button.dataset.credentialContextStatus })
+        });
+      });
+      state.currentCredentialContext = result.credential;
+      state.selectedCredentialId = credentialId;
+      renderCredentialContextManager();
+      return;
+    }
   } catch (error) {
     setBusy(false);
     setNotice('error', error instanceof Error ? error.message : String(error));
@@ -1799,7 +1917,7 @@ async function handleCredentialContextSave(event) {
     return;
   }
 
-  const result = await withAction('Credential context updated.', async function() {
+  const result = await withAction('Credential context updated. Next: rerun Test Credential if you changed domains or operations.', async function() {
     return fetchJson('/v1/core/credentials/' + encodeURIComponent(state.selectedCredentialId) + '/context', {
       method: 'PATCH',
       headers: {
@@ -1862,7 +1980,7 @@ async function handleMcpConnectionCheck(event) {
       tokenType: tokenPayload.token_type || 'Bearer',
       verification: checkResult
     };
-    setNotice('info', 'HTTP MCP token minted and verified.');
+    setNotice('info', 'HTTP MCP token minted and verified. Next: export the token, restart the client, and try the first prompt below.');
     renderConnect();
     setBusy(false);
   } catch (error) {
@@ -2321,6 +2439,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
               <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
             </div>
+            <div id="core-journey" style="margin-top: 18px;"></div>
             <div id="advanced-summary" class="advanced-summary"></div>
           </section>
 
@@ -2379,6 +2498,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                         <div class="field"><label for="credential-context-display-name">Display Name</label><input id="credential-context-display-name" type="text" required /></div>
                         <div class="field"><label for="credential-context-service">Service</label><input id="credential-context-service" type="text" required /></div>
                         <div class="field"><label for="credential-context-sensitivity">Sensitivity</label><select id="credential-context-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                        <div class="field"><label for="credential-context-status">Lifecycle</label><select id="credential-context-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
                         <div class="field"><label for="credential-context-operations">Permitted Operations</label><select id="credential-context-operations"><option value="http.get">Read only (http.get)</option><option value="http.get,http.post">Read and write (http.get, http.post)</option></select></div>
                         <div class="field-wide"><label for="credential-context-domains">Allowed Domains</label><textarea id="credential-context-domains"></textarea></div>
                         <div class="field-wide"><label for="credential-context-notes">LLM Usage Notes</label><textarea id="credential-context-notes"></textarea></div>
@@ -2427,6 +2547,14 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                 <div class="panel">
                   <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini stdio</h2></div></div>
                   <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">First prompt to try in Codex</h2></div></div>
+                  <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">First prompt to try in Gemini</h2></div></div>
+                  <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
                 <div class="panel">
                   <div class="section-heading"><div><h2 style="font-size:1.4rem;">stdio check</h2></div></div>

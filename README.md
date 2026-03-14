@@ -108,11 +108,11 @@ That stores the raw token outside the searchable catalogue and keeps only the LL
 
 The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
 
-8. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
+8. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
-After creation, use `Inspect / edit context` inside `Credentials` if you need to refine the MCP-visible metadata without re-entering or exposing the stored secret.
+After creation, use `Inspect / edit context` inside `Credentials` if you need to refine the MCP-visible metadata without re-entering or exposing the stored secret. The same area now also supports lightweight lifecycle actions such as rename, retag, and archive/restore.
 
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 
