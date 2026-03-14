@@ -1,5 +1,5 @@
 {
-  "name": "keylore",
+  "name": "@simonsbs/keylore",
   "version": "1.0.0-rc4",
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",

@@ -91,7 +91,7 @@ npm run quickstart
 For a clean Linux VM install from npm instead of cloning the repo:
 
 ```bash
-npm install -g keylore
+npm install -g @simonsbs/keylore@next
 keylore-http
 ```
 
