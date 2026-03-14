@@ -27,22 +27,24 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
 
     const html = await response.text();
     assert.match(html, /KeyLore Admin/);
-    assert.match(html, /Create credential/);
+    assert.match(html, /Start here/);
+    assert.match(html, /Save token/);
     assert.match(html, /Test credential/);
-    assert.match(html, /MCP-visible metadata preview/);
-    assert.match(html, /Context guidance/);
-    assert.match(html, /Connect MCP/);
-    assert.match(html, /Codex stdio/);
-    assert.match(html, /Gemini stdio/);
+    assert.match(html, /What the AI will see/);
+    assert.match(html, /Writing help/);
+    assert.match(html, /Connect your AI tool/);
+    assert.match(html, /Codex local setup/);
+    assert.match(html, /Gemini local setup/);
     assert.match(html, /GitHub write-capable/);
     assert.match(html, /npm read-only/);
     assert.match(html, /Internal service token/);
-    assert.match(html, /Permitted Operations/);
-    assert.match(html, /Inspect \/ edit context/);
-    assert.match(html, /Current MCP-visible record/);
+    assert.match(html, /Advanced token settings/);
+    assert.match(html, /Inspect or edit AI-facing context/);
+    assert.match(html, /Current AI-visible record/);
     assert.match(html, /Save context changes/);
     assert.match(html, /First prompt to try in Codex/);
     assert.match(html, /First prompt to try in Gemini/);
+    assert.match(html, /More actions/);
     assert.match(html, /Rename/);
     assert.match(html, /Retag/);
     assert.match(html, /Archive/);
@@ -51,6 +53,8 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Local encrypted store/);
     assert.match(html, /Open operator session/);
     assert.match(html, /Use local admin quickstart/);
+    assert.match(html, /Manual sign-in options/);
+    assert.match(html, /Remote or advanced connection options/);
     assert.match(html, /Refresh everything/);
     assert.match(html, /1\.0\.0-rc4/);
   } finally {

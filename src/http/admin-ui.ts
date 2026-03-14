@@ -298,6 +298,43 @@ textarea {
   margin-top: 24px;
 }
 
+.step-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.step-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(23, 33, 31, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.step-card h3 {
+  margin: 10px 0 6px;
+  font-size: 1rem;
+}
+
+.step-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(19, 93, 74, 0.1);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .advanced-shell[hidden],
 .advanced-nav[hidden] {
   display: none;
@@ -327,6 +364,10 @@ textarea {
 
 .panel {
   padding: 20px;
+}
+
+.panel > details.disclosure:first-child {
+  margin-top: 0;
 }
 
 .panel-grid {
@@ -410,6 +451,7 @@ textarea {
 }
 
 .field input,
+.field textarea,
 .field select,
 .field-wide textarea,
 .field-wide input {
@@ -421,6 +463,7 @@ textarea {
   color: var(--ink);
 }
 
+.field textarea,
 .field-wide textarea {
   min-height: 116px;
   resize: vertical;
@@ -602,6 +645,33 @@ pre {
   font-size: 0.9rem;
 }
 
+.disclosure {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(23, 33, 31, 0.08);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.disclosure summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure[open] summary {
+  margin-bottom: 12px;
+}
+
+.stack-tight {
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 1120px) {
   .page-shell {
     grid-template-columns: 1fr;
@@ -615,6 +685,10 @@ pre {
   }
 
   .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .step-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -638,6 +712,7 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .step-grid,
   .metric-grid,
   .form-grid {
     grid-template-columns: 1fr;
@@ -870,7 +945,6 @@ function clearSession() {
 function syncSessionFields() {
   byId('base-url').value = state.baseUrl;
   byId('resource').value = state.resource;
-  byId('session-token').value = state.token;
   byId('session-client-id').textContent = state.sessionClientId || 'anonymous token';
   byId('session-scopes').textContent = state.sessionScopes || 'not loaded';
   byId('session-tenant').textContent = state.sessionTenantId || 'global operator';
@@ -1041,16 +1115,14 @@ function renderCoreJourney() {
           : 'Restart your MCP client and try the suggested first prompt.';
 
   node.innerHTML = [
-    '<div class="list-card">',
-    '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Use the shortest path to get from saved token to working MCP workflow.</p></div></div>',
-    '<div class="list-meta">',
-    '<span class="' + (state.token ? 'state-active' : 'state-warning') + '">1. Session</span>',
-    '<span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">2. Credential</span>',
-    '<span class="' + (hasTest ? 'state-active' : 'state-warning') + '">3. Broker test</span>',
-    '<span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">4. MCP connect</span>',
+    '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Follow the short path. Everything else can wait until later.</p></div></div>',
+    '<div class="step-grid">',
+    '<article class="step-card"><span class="' + (state.token ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="' + escapeHtml(state.token ? 'session-section' : 'login-panel') + '">Go there</button></div></article>',
+    '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Save a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open tokens</button></div></article>',
+    '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
+    '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
     '</div>',
-    '<p class="panel-footnote" style="margin-top:12px;"><strong>Next:</strong> ' + escapeHtml(nextAction) + '</p>',
-    '</div>'
+    '<p class="panel-footnote" style="margin-top:12px;"><strong>Next:</strong> ' + escapeHtml(nextAction) + '</p>'
   ].join('');
 }
 
@@ -1073,7 +1145,8 @@ function renderCredentials() {
         '</div>',
         '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
-        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Inspect / edit context</button><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button></div>',
+        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit AI notes</button></div>',
+        '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button></div></details>',
         '</article>'
       ].join('');
     }).join('');
@@ -2193,12 +2266,16 @@ function bindNavigation() {
         node.classList.remove('is-active');
       });
       button.classList.add('is-active');
-      const target = byId(button.dataset.section);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      openSection(button.dataset.section);
     });
   });
+}
+
+function openSection(sectionId) {
+  const target = byId(sectionId);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 async function initialize() {
@@ -2275,8 +2352,18 @@ async function initialize() {
     persistSession();
     renderAdvancedMode();
     if (state.advancedVisible) {
-      byId('overview-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      openSection('overview-section');
     }
+  });
+  document.body.addEventListener('click', function(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const button = event.target.closest('[data-nav-target]');
+    if (!button) {
+      return;
+    }
+    openSection(button.dataset.navTarget);
   });
   byId('run-maintenance').addEventListener('click', function() {
     withAction('Maintenance run completed.', function() {
@@ -2332,13 +2419,13 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
       <aside class="sidebar">
         <p class="eyebrow">KeyLore Control Plane</p>
         <h1 class="brand">KeyLore<br />Admin</h1>
-        <p class="brand-subtitle">The default path is now core mode: add a secret, add LLM-facing context, test it, and connect your MCP client without surfacing the raw token.</p>
-        <p class="sidebar-section-label">Core</p>
+        <p class="brand-subtitle">Start with one short path: save a token, tell the AI when to use it, test it, and connect your tool. Everything technical stays out of the way unless you ask for it.</p>
+        <p class="sidebar-section-label">Start Here</p>
         <nav class="nav-group">
-          <button class="nav-button is-active" data-section="credentials-section" type="button">Credentials</button>
-          <button class="nav-button" data-section="connect-section" type="button">Connect MCP</button>
+          <button class="nav-button is-active" data-section="credentials-section" type="button">Save Token</button>
+          <button class="nav-button" data-section="connect-section" type="button">Connect AI Tool</button>
         </nav>
-        <p class="sidebar-section-label">Advanced</p>
+        <p class="sidebar-section-label">More Options</p>
         <div class="nav-group" style="margin-top: 0;">
           <button class="button-secondary" id="advanced-toggle" type="button">Show advanced controls</button>
         </div>
@@ -2352,14 +2439,14 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
           <button class="nav-button" data-section="audit-section" type="button">Audit</button>
           <button class="nav-button" data-section="system-section" type="button">System</button>
         </nav>
-        <p class="helper-copy">Use local quickstart for the shortest path. Advanced mode keeps the existing operator controls available later without crowding first-run setup.</p>
+        <p class="helper-copy">Use local quickstart for the shortest path. Advanced mode keeps the full operator console available later without crowding first-run setup.</p>
       </aside>
       <main class="content">
         <section class="hero">
           <div>
             <span class="eyebrow">Core Mode</span>
-            <h1>Add a secret, add context, and broker it safely.</h1>
-            <p class="hero-copy">The primary workflow is now credential onboarding. Store a token through KeyLore, write LLM-facing usage notes, and keep the raw secret out of model-visible context.</p>
+            <h1>Save a token. Teach the AI when to use it. Keep the secret hidden.</h1>
+            <p class="hero-copy">KeyLore is now centered on one beginner-friendly workflow: save a token, describe it in plain language, test it safely, and connect Codex or Gemini without putting the raw secret into model-visible context.</p>
           </div>
           <div class="hero-meta">
             <div class="meta-card">
@@ -2378,8 +2465,8 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         <section id="login-panel" class="panel" style="margin-top: 24px;">
           <div class="section-heading">
             <div>
-              <h2>Session</h2>
-              <p>Mint an operator token with existing OAuth clients or paste a bearer token directly.</p>
+              <h2>Start here</h2>
+              <p>For most local users, one click is enough. Manual sign-in is still available when you need it.</p>
             </div>
           </div>
           ${
@@ -2387,7 +2474,9 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               ? `<div class="panel-footnote" style="margin-bottom: 16px;">Local quickstart is enabled on this loopback development instance. Use the shortcut below to open the built-in admin session without editing any configuration.</div>
           <div class="form-actions" style="margin-bottom: 16px;">
             <button class="button-secondary" id="local-login-submit" type="button" data-busy-label="Opening local session..." data-idle-label="Use local admin quickstart">Use local admin quickstart</button>
-          </div>`
+          </div>
+          <details class="disclosure">
+            <summary>Manual sign-in options</summary>`
               : ""
           }
           <form id="login-form" class="form-grid">
@@ -2419,14 +2508,15 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <button class="button" id="login-submit" type="submit" data-busy-label="Opening session..." data-idle-label="Open operator session">Open operator session</button>
             </div>
           </form>
+          ${app.config.localAdminBootstrap ? '</details>' : ''}
         </section>
 
         <div id="dashboard" class="dashboard" hidden>
           <section id="session-section" class="panel">
             <div class="section-heading">
               <div>
-                <h2>Session</h2>
-                <p>The core workflow only needs a live operator session plus credential onboarding and MCP connection.</p>
+                <h2>You&apos;re connected</h2>
+                <p>The only things you need next are save token, test token, and connect your AI tool.</p>
               </div>
               <div class="toolbar">
                 <button class="button-secondary" id="refresh-dashboard" type="button" data-busy-label="Refreshing..." data-idle-label="Refresh everything">Refresh everything</button>
@@ -2435,10 +2525,16 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             </div>
             <div class="session-line">
               <span id="session-status" class="state-warning">Not connected</span>
-              <span class="pill"><strong>Client</strong> <span id="session-client-id">anonymous token</span></span>
-              <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
-              <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
+              <span class="pill"><strong>Current path</strong> Core onboarding</span>
             </div>
+            <details class="disclosure">
+              <summary>Session details</summary>
+              <div class="list-meta">
+                <span class="pill"><strong>Client</strong> <span id="session-client-id">anonymous token</span></span>
+                <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
+                <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
+              </div>
+            </details>
             <div id="core-journey" style="margin-top: 18px;"></div>
             <div id="advanced-summary" class="advanced-summary"></div>
           </section>
@@ -2446,78 +2542,57 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
           <section id="credentials-section" class="panel">
             <div class="section-heading">
               <div>
-                <h2>Credentials</h2>
-                <p>Create the secret binding and the LLM-facing context in one flow. Local storage keeps the raw token out of the catalogue.</p>
+                <h2>Save a token</h2>
+                <p>Start with the basics. Paste the token, say when the AI should use it, and let KeyLore keep the raw secret out of the catalogue.</p>
               </div>
             </div>
             <div class="panel-grid">
-              <div class="span-5 panel">
+              <div class="span-7 panel">
                 <form id="credential-form" class="form-grid">
-                  <div class="field"><label for="credential-template">Template</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
-                  <div class="field"><label for="credential-storage">Secret Storage</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
-                  <div class="field"><label for="credential-id">Credential ID</label><input id="credential-id" type="text" required /></div>
-                  <div class="field"><label for="credential-name">Display Name</label><input id="credential-name" type="text" required /></div>
-                  <div class="field"><label for="credential-service">Service</label><input id="credential-service" type="text" required /></div>
-                  <div class="field"><label for="credential-sensitivity">Sensitivity</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
-                  <div class="field"><label for="credential-operations">Permitted Operations</label><select id="credential-operations"><option value="http.get">Read only (http.get)</option><option value="http.get,http.post">Read and write (http.get, http.post)</option></select></div>
-                  <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Token / Secret Value</label><textarea id="credential-secret" placeholder="Paste the raw token here. It will be stored outside the metadata catalogue."></textarea></div>
-                  <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment Variable Name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
-                  <div class="field-wide"><label for="credential-domains">Allowed Domains</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
-                  <div class="field-wide"><label for="credential-notes">LLM Usage Notes</label><textarea id="credential-notes" placeholder="Explain when the coding agent should choose this credential."></textarea></div>
-                  <div class="field-wide"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="field-wide"><label for="credential-template">What is this token for?</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
+                  <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /></div>
+                  <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
+                  <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
+                  <div class="field-wide"><label for="credential-notes">Tell the AI when to use this token</label><textarea id="credential-notes" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
                   <div class="field-wide">
-                    <label for="credential-guidance">Context guidance</label>
+                    <label for="credential-guidance">Writing help</label>
                     <div id="credential-guidance"></div>
                   </div>
                   <div class="field-wide">
-                    <label for="credential-mcp-preview">MCP-visible metadata preview</label>
+                    <label for="credential-mcp-preview">What the AI will see</label>
                     <div id="credential-preview-warnings" style="margin-bottom: 12px;"></div>
                     <div id="credential-mcp-preview"></div>
                   </div>
-                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating credential..." data-idle-label="Create credential">Create credential</button></div>
+                  <details class="disclosure field-wide">
+                    <summary>Advanced token settings</summary>
+                    <div class="form-grid">
+                      <div class="field"><label for="credential-storage">Where to store the token</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
+                      <div class="field"><label for="credential-id">Internal ID</label><input id="credential-id" type="text" required /></div>
+                      <div class="field"><label for="credential-service">Service name</label><input id="credential-service" type="text" required /></div>
+                      <div class="field"><label for="credential-sensitivity">Risk level</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                      <div class="field"><label for="credential-operations">Allow writes?</label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
+                      <div class="field"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                      <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment variable name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
+                    </div>
+                  </details>
+                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Saving token..." data-idle-label="Save token">Save token</button></div>
                 </form>
               </div>
-              <div class="span-7 code-stack">
-                <div class="panel"><div id="credential-list"></div></div>
+              <div class="span-5 code-stack">
                 <div class="panel">
                   <div class="section-heading">
                     <div>
-                      <h2 style="font-size:1.4rem;">Inspect / edit context</h2>
-                      <p>Manage agent-facing metadata only. Secret storage and raw token values stay separate and are not shown here.</p>
+                      <h2 style="font-size:1.4rem;">Saved tokens</h2>
+                      <p>Use these after you save something. The main next step is usually Test credential.</p>
                     </div>
                   </div>
-                  <div class="panel-grid">
-                    <div class="span-6 panel">
-                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current MCP-visible record</h2></div></div>
-                      <div id="credential-context-current"></div>
-                    </div>
-                    <div class="span-6 panel">
-                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Context editor</h2></div></div>
-                      <form id="credential-context-form" class="form-grid" hidden>
-                        <div class="field"><label for="credential-context-id">Credential ID</label><input id="credential-context-id" type="text" readonly /></div>
-                        <div class="field"><label for="credential-context-display-name">Display Name</label><input id="credential-context-display-name" type="text" required /></div>
-                        <div class="field"><label for="credential-context-service">Service</label><input id="credential-context-service" type="text" required /></div>
-                        <div class="field"><label for="credential-context-sensitivity">Sensitivity</label><select id="credential-context-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
-                        <div class="field"><label for="credential-context-status">Lifecycle</label><select id="credential-context-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
-                        <div class="field"><label for="credential-context-operations">Permitted Operations</label><select id="credential-context-operations"><option value="http.get">Read only (http.get)</option><option value="http.get,http.post">Read and write (http.get, http.post)</option></select></div>
-                        <div class="field-wide"><label for="credential-context-domains">Allowed Domains</label><textarea id="credential-context-domains"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-notes">LLM Usage Notes</label><textarea id="credential-context-notes"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-tags">Tags</label><input id="credential-context-tags" type="text" /></div>
-                        <div class="field-wide">
-                          <label for="credential-context-preview">Updated MCP-visible preview</label>
-                          <div id="credential-context-preview-warnings" style="margin-bottom: 12px;"></div>
-                          <div id="credential-context-preview"></div>
-                        </div>
-                        <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Saving context..." data-idle-label="Save context changes">Save context changes</button></div>
-                      </form>
-                    </div>
-                  </div>
+                  <div id="credential-list"></div>
                 </div>
                 <div class="panel">
                   <div class="section-heading">
                     <div>
-                      <h2 style="font-size:1.4rem;">Test Credential</h2>
-                      <p>Run a brokered HTTP test and inspect the redacted result without exposing the raw token.</p>
+                      <h2 style="font-size:1.4rem;">Test credential</h2>
+                      <p>Run a safe brokered check. This confirms the token works without exposing the raw secret.</p>
                     </div>
                   </div>
                   <form id="credential-test-form" class="form-grid">
@@ -2527,6 +2602,36 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   </form>
                   <div id="credential-test-result" style="margin-top: 18px;"></div>
                 </div>
+                <details class="panel disclosure">
+                  <summary>Inspect or edit AI-facing context</summary>
+                  <div class="panel-footnote">This is metadata only. Secret storage and raw token values stay separate and are not shown here.</div>
+                  <div class="panel-grid" style="margin-top: 16px;">
+                    <div class="span-6 panel">
+                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current AI-visible record</h2></div></div>
+                      <div id="credential-context-current"></div>
+                    </div>
+                    <div class="span-6 panel">
+                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Context editor</h2></div></div>
+                      <form id="credential-context-form" class="form-grid" hidden>
+                        <div class="field"><label for="credential-context-id">Credential ID</label><input id="credential-context-id" type="text" readonly /></div>
+                        <div class="field"><label for="credential-context-display-name">Display Name</label><input id="credential-context-display-name" type="text" required /></div>
+                        <div class="field"><label for="credential-context-service">Service</label><input id="credential-context-service" type="text" required /></div>
+                        <div class="field"><label for="credential-context-sensitivity">Risk level</label><select id="credential-context-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                        <div class="field"><label for="credential-context-status">Lifecycle</label><select id="credential-context-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
+                        <div class="field"><label for="credential-context-operations">Allow writes?</label><select id="credential-context-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
+                        <div class="field-wide"><label for="credential-context-domains">Where can it be used?</label><textarea id="credential-context-domains"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-notes">Tell the AI when to use this token</label><textarea id="credential-context-notes"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-tags">Tags</label><input id="credential-context-tags" type="text" /></div>
+                        <div class="field-wide">
+                          <label for="credential-context-preview">Updated AI-visible preview</label>
+                          <div id="credential-context-preview-warnings" style="margin-bottom: 12px;"></div>
+                          <div id="credential-context-preview"></div>
+                        </div>
+                        <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Saving context..." data-idle-label="Save context changes">Save context changes</button></div>
+                      </form>
+                    </div>
+                  </div>
+                </details>
               </div>
             </div>
           </section>
@@ -2534,61 +2639,66 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
           <section id="connect-section" class="panel">
             <div class="section-heading">
               <div>
-                <h2>Connect MCP</h2>
-                <p>Use <code>stdio</code> for the easiest local setup. Use HTTP MCP only when you want a remote bearer-token flow.</p>
+                <h2>Connect your AI tool</h2>
+                <p>For most local users, copy the local snippet below, restart the AI tool, and try the suggested first prompt.</p>
               </div>
             </div>
             <div class="panel-grid">
               <div class="span-6 code-stack">
                 <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex stdio</h2></div></div>
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex local setup</h2><p>Recommended for local use.</p></div></div>
                   <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
-                </div>
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini stdio</h2></div></div>
-                  <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
-                </div>
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">First prompt to try in Codex</h2></div></div>
+                  <div class="panel-footnote">Local stdio uses the KeyLore process on this machine and avoids extra token setup.</div>
+                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Codex</h2></div></div>
                   <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
                 <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">First prompt to try in Gemini</h2></div></div>
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini local setup</h2><p>Recommended for local use.</p></div></div>
+                  <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
+                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Gemini</h2></div></div>
                   <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">stdio check</h2></div></div>
-                  <div id="connect-stdio-status"></div>
-                </div>
               </div>
-              <div class="span-6 code-stack">
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex HTTP</h2></div></div>
-                  <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
-                </div>
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini HTTP</h2></div></div>
-                  <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
-                </div>
-                <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Generic HTTP</h2></div></div>
-                  <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
-                </div>
+              <div class="span-6 panel">
+                <div class="section-heading"><div><h2 style="font-size:1.4rem;">Local connection check</h2></div></div>
+                <div id="connect-stdio-status"></div>
+                <div class="panel-footnote">If the local entry point is present, copy one of the local setup snippets above and restart your AI tool.</div>
               </div>
-              <div class="span-12 panel">
-                <div class="section-heading">
-                  <div>
-                    <h2 style="font-size:1.4rem;">HTTP MCP token and check</h2>
-                    <p>Mint a resource-bound token for <code>/mcp</code>, verify it against the MCP resource, and copy the export command if you want the HTTP transport.</p>
+              <div class="span-12">
+                <details class="panel disclosure">
+                  <summary>Remote or advanced connection options</summary>
+                  <div class="panel-grid" style="margin-top: 16px;">
+                    <div class="span-6 code-stack">
+                      <div class="panel">
+                        <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex HTTP</h2></div></div>
+                        <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
+                      </div>
+                      <div class="panel">
+                        <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini HTTP</h2></div></div>
+                        <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
+                      </div>
+                      <div class="panel">
+                        <div class="section-heading"><div><h2 style="font-size:1.4rem;">Generic HTTP</h2></div></div>
+                        <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
+                      </div>
+                    </div>
+                    <div class="span-6 panel">
+                      <div class="section-heading">
+                        <div>
+                          <h2 style="font-size:1.4rem;">HTTP MCP token and check</h2>
+                          <p>Use this only when you want a remote bearer-token connection to <code>/mcp</code>.</p>
+                        </div>
+                      </div>
+                      <form id="connect-form" class="form-grid">
+                        <div class="field"><label for="connect-client-id">Client ID</label><input id="connect-client-id" type="text" placeholder="keylore-admin-local" /></div>
+                        <div class="field"><label for="connect-client-secret">Client Secret</label><input id="connect-client-secret" type="password" placeholder="operator secret" /></div>
+                        <div class="field-wide"><label for="mcp-token-export">Export command</label><textarea id="mcp-token-export" style="width:100%; min-height: 90px;"></textarea></div>
+                        <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Checking MCP..." data-idle-label="Mint token and verify HTTP MCP">Mint token and verify HTTP MCP</button></div>
+                      </form>
+                      <div id="connect-result" style="margin-top: 18px;"></div>
+                    </div>
                   </div>
-                </div>
-                <form id="connect-form" class="form-grid">
-                  <div class="field"><label for="connect-client-id">Client ID</label><input id="connect-client-id" type="text" placeholder="keylore-admin-local" /></div>
-                  <div class="field"><label for="connect-client-secret">Client Secret</label><input id="connect-client-secret" type="password" placeholder="operator secret" /></div>
-                  <div class="field-wide"><label for="mcp-token-export">Export command</label><textarea id="mcp-token-export" style="width:100%; min-height: 90px;"></textarea></div>
-                  <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Checking MCP..." data-idle-label="Mint token and verify HTTP MCP">Mint token and verify HTTP MCP</button></div>
-                </form>
-                <div id="connect-result" style="margin-top: 18px;"></div>
+                </details>
               </div>
             </div>
           </section>

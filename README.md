@@ -98,21 +98,21 @@ This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://
 
 That uses the built-in loopback-only development bootstrap client and gets you into the operator UI without editing any config.
 
-5. In `Credentials`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then paste the token into `Local encrypted store`.
+5. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then paste the token into `Paste token`.
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
-6. Review `Context guidance` and `MCP-visible metadata preview` in the credential form to confirm the agent-facing record is specific, useful, and secret-free, and keep `Permitted Operations` read-only unless the workflow truly needs writes.
+6. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, or write access.
 
 7. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
 
 The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
 
-8. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
+8. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
-After creation, use `Inspect / edit context` inside `Credentials` if you need to refine the MCP-visible metadata without re-entering or exposing the stored secret. The same area now also supports lightweight lifecycle actions such as rename, retag, and archive/restore.
+After creation, use `Inspect or edit AI-facing context` inside `Save token` if you need to refine the metadata without re-entering or exposing the stored secret. Saved token cards also support lightweight lifecycle actions such as rename, retag, and archive/restore under `More actions`.
 
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 

@@ -6,15 +6,15 @@ KeyLore now ships a minimal operator UI at `/admin`.
 
 The UI is intentionally narrow and stays on top of the frozen REST contract:
 
-- create credentials through the new core onboarding flow
-- preview the exact MCP-visible credential metadata before saving
+- create credentials through a simplified `save token -> test token -> connect AI tool` flow
+- preview the exact AI-visible credential metadata before saving
 - get template-specific context guidance and inline validation before saving
 - inspect and update MCP-visible context after creation without touching the stored secret
 - test credentials through brokered access from the UI
 - get built-in first-prompt examples for Codex and Gemini after MCP setup
 - generate Codex and Gemini CLI MCP connection snippets
 - mint and verify a remote HTTP MCP token from the UI
-- open an operator session with `client_credentials` or a pasted bearer token
+- open an operator session with one-click local quickstart or with `client_credentials` / a pasted bearer token
 - keep the broader operator controls behind an explicit `Advanced` toggle:
   - inspect readiness and recent operator responses
   - create and toggle tenants
@@ -37,31 +37,34 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 1. For local use, run `npm run quickstart`.
 2. Open `<publicBaseUrl>/admin`.
 3. On the local loopback quickstart path, click `Use local admin quickstart`.
-4. Use `Credentials` to create a token-backed credential with either:
-   - `Local encrypted store`
-   - `Environment reference`
+4. Use `Save token` for the beginner path:
+   - choose a template
+   - name the token
+   - paste the token
+   - say when the AI should use it
 5. Start from a stronger template when possible:
    - `GitHub read-only`
    - `GitHub write-capable`
    - `npm read-only`
    - `Internal service token`
    - `Generic bearer API`
-6. Review `MCP-visible metadata preview` to confirm the agent-facing record is useful and contains no secret material.
-7. Use `Context guidance` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
-8. Use `Permitted Operations` to keep the credential read-only unless the workflow truly needs writes.
-9. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-10. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
+6. Review `What the AI will see` to confirm the agent-facing record is useful and contains no secret material.
+7. Use `Writing help` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
+8. Open `Advanced token settings` only if you need to change storage mode, internal ID, risk level, service name, tags, or write access.
+9. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+10. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
 11. Use the built-in `First prompt to try` examples after restarting the MCP client.
-12. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-13. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+12. Open `Remote or advanced connection options` only if you need HTTP MCP.
+13. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+14. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Context editing
 
-Inside `Credentials`, use `Inspect / edit context` to:
+Inside `Save token`, use `Inspect or edit AI-facing context` to:
 
 - inspect the current MCP-visible record for a saved credential
 - update display name, service, sensitivity, domains, tags, operations, and `selectionNotes`
-- apply lightweight lifecycle actions such as rename, retag, archive, and restore
+- apply lightweight lifecycle actions such as rename, retag, archive, and restore from `More actions`
 - keep secret storage and binding details out of the edit path entirely
 
 This flow is intentionally metadata-only. It does not display or mutate the stored secret.

@@ -4,3 +4,5 @@ node_modules/
 .DS_Store
 coverage/
 data/audit.ndjson
+data/local-secrets.enc.json
+data/local-secrets.key
