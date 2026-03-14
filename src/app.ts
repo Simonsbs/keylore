@@ -205,6 +205,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     config,
   );
   const coreMode = new CoreModeService(broker, policyRepository, localSecrets, config.defaultPrincipal);
+  await coreMode.reconcileLocalCredentialPolicies();
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,

@@ -3,13 +3,19 @@ import {
   CoreCredentialCreateInput,
   AuthContext,
   CredentialRecord,
+  CredentialSummary,
+  AccessScope,
   PolicyRule,
+  PrincipalRole,
 } from "../domain/types.js";
 import { PolicyRepository } from "../repositories/interfaces.js";
 import { BrokerService } from "./broker-service.js";
 import { LocalSecretStore } from "./local-secret-store.js";
 
 export class CoreModeService {
+  private readonly coreRoles: PrincipalRole[] = ["admin", "operator"];
+  private readonly reconcileScopes: AccessScope[] = ["catalog:read", "catalog:write"];
+
   public constructor(
     private readonly broker: BrokerService,
     private readonly policies: PolicyRepository,
@@ -23,18 +29,17 @@ export class CoreModeService {
     return `core-allow-${safeTenant}-${safeCredential}`;
   }
 
-  private buildCoreAllowRule(context: AuthContext, credential: CredentialRecord): PolicyRule {
-    const principals = Array.from(
-      new Set([context.principal, context.clientId, this.defaultPrincipal].filter(Boolean)),
-    );
-
+  private buildCoreAllowRule(credential: Pick<
+    CredentialSummary,
+    "id" | "tenantId" | "displayName" | "service" | "allowedDomains" | "permittedOperations"
+  >): PolicyRule {
     return {
       id: this.coreAllowRuleId(credential.tenantId, credential.id),
       tenantId: credential.tenantId,
       effect: "allow",
       description: `Core mode auto-allow rule for ${credential.displayName}.`,
-      principals,
-      principalRoles: ["admin", "operator"],
+      principals: ["*"],
+      principalRoles: this.coreRoles,
       credentialIds: [credential.id],
       services: [credential.service],
       operations: credential.permittedOperations,
@@ -43,11 +48,16 @@ export class CoreModeService {
     };
   }
 
-  private async syncCoreAllowRule(context: AuthContext, credential: CredentialRecord): Promise<void> {
+  private async syncCoreAllowRule(
+    credential: Pick<
+      CredentialSummary,
+      "id" | "tenantId" | "displayName" | "service" | "allowedDomains" | "permittedOperations"
+    >,
+  ): Promise<void> {
     const policies = await this.policies.read();
     const ruleId = this.coreAllowRuleId(credential.tenantId, credential.id);
     const nextRules = policies.rules.filter((rule) => rule.id !== ruleId);
-    nextRules.push(this.buildCoreAllowRule(context, credential));
+    nextRules.push(this.buildCoreAllowRule(credential));
     await this.policies.replaceAll({
       version: policies.version,
       rules: nextRules,
@@ -61,6 +71,20 @@ export class CoreModeService {
       version: policies.version,
       rules: policies.rules.filter((rule) => rule.id !== ruleId),
     });
+  }
+
+  public async reconcileLocalCredentialPolicies(): Promise<void> {
+    const credentials = await this.broker.listCredentials({
+      principal: this.defaultPrincipal,
+      clientId: this.defaultPrincipal,
+      tenantId: "default",
+      roles: this.coreRoles,
+      scopes: this.reconcileScopes,
+    });
+    const localCredentials = credentials.filter((credential) => credential.owner === "local");
+    for (const credential of localCredentials) {
+      await this.syncCoreAllowRule(credential);
+    }
   }
 
   public async createCredential(context: AuthContext, input: CoreCredentialCreateInput): Promise<CredentialRecord> {
@@ -113,7 +137,7 @@ export class CoreModeService {
       try {
         const created = await this.broker.createCredential(context, record);
         try {
-          await this.syncCoreAllowRule(context, created);
+          await this.syncCoreAllowRule(created);
         } catch (error) {
           await this.broker.deleteCredential(context, created.id);
           await this.localSecrets.delete(binding.ref);
@@ -128,7 +152,7 @@ export class CoreModeService {
 
     const created = await this.broker.createCredential(context, record);
     try {
-      await this.syncCoreAllowRule(context, created);
+      await this.syncCoreAllowRule(created);
     } catch (error) {
       await this.broker.deleteCredential(context, created.id);
       throw error;
@@ -142,7 +166,7 @@ export class CoreModeService {
     patch: Partial<Omit<CredentialRecord, "id" | "binding">>,
   ): Promise<CredentialRecord> {
     const updated = await this.broker.updateCredential(context, credentialId, patch);
-    await this.syncCoreAllowRule(context, updated);
+    await this.syncCoreAllowRule(updated);
     return updated;
   }
 

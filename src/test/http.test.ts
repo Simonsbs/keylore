@@ -12,6 +12,7 @@ import test from "node:test";
 
 import { authContextFromToken, localOperatorContext } from "../services/auth-context.js";
 import { startHttpServer } from "../http/server.js";
+import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
 import { makeTestApp } from "./helpers.js";
 
 async function startLocalTargetServer(
@@ -755,6 +756,92 @@ test("core credential onboarding stores a local secret and creates a usable cred
       credentialId: "github-local",
       operation: "http.get",
       targetUrl: `http://localhost:${target.port}/github`,
+    }),
+  });
+  assert.equal(accessResponse.status, 200);
+  const decision = (await accessResponse.json()) as {
+    decision: string;
+    httpResult?: {
+      bodyPreview: string;
+    };
+  };
+  assert.equal(decision.decision, "allowed");
+  assert.match(decision.httpResult?.bodyPreview ?? "", /true/);
+
+  await target.close();
+  await server.close();
+  await close();
+});
+
+test("core local policy reconciliation backfills existing local tokens", async () => {
+  const target = await startLocalTargetServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        authorized: req.headers.authorization === "Bearer ghp-reconcile-token",
+      }),
+    );
+  });
+
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8916,
+      publicBaseUrl: "http://127.0.0.1:8916",
+      oauthIssuerUrl: "http://127.0.0.1:8916/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8916/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read catalog:write broker:use",
+      resource: "http://127.0.0.1:8916/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+  const createResponse = await fetch("http://127.0.0.1:8916/v1/core/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "reconcile-demo",
+      displayName: "Reconcile Demo",
+      service: "github",
+      allowedDomains: ["localhost"],
+      selectionNotes: "Use for local policy reconciliation validation only.",
+      secretSource: {
+        adapter: "local",
+        secretValue: "ghp-reconcile-token",
+      },
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+
+  const policies = new PgPolicyRepository(app.database);
+  await policies.replaceAll({ version: 1, rules: [] });
+  await app.coreMode.reconcileLocalCredentialPolicies();
+
+  const accessResponse = await fetch("http://127.0.0.1:8916/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "reconcile-demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/reconcile`,
     }),
   });
   assert.equal(accessResponse.status, 200);
