@@ -2,6 +2,14 @@
 
 ## Local stack
 
+Export `.env` into the current shell before running local commands:
+
+```bash
+set -a
+source .env
+set +a
+```
+
 Start the local PostgreSQL dependency:
 
 ```bash

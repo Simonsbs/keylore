@@ -65,6 +65,18 @@ export interface KeyLoreConfig {
   rotationPlanningHorizonDays: number;
 }
 
+const emptyStringToUndefined = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => {
+    if (typeof value === "string" && value.trim() === "") {
+      return undefined;
+    }
+
+    return value;
+  }, schema);
+
+const optionalUrl = emptyStringToUndefined(z.string().url().optional());
+const optionalString = emptyStringToUndefined(z.string().optional());
+
 const envSchema = z.object({
   KEYLORE_DATA_DIR: z.string().optional(),
   KEYLORE_CATALOG_FILE: z.string().optional(),
@@ -101,9 +113,9 @@ const envSchema = z.object({
   KEYLORE_APPROVAL_REVIEW_QUORUM: z.coerce.number().int().min(1).max(5).default(1),
   KEYLORE_BREAKGLASS_MAX_DURATION_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
   KEYLORE_BREAKGLASS_REVIEW_QUORUM: z.coerce.number().int().min(1).max(5).default(1),
-  KEYLORE_VAULT_ADDR: z.string().url().optional(),
-  KEYLORE_VAULT_TOKEN: z.string().optional(),
-  KEYLORE_VAULT_NAMESPACE: z.string().optional(),
+  KEYLORE_VAULT_ADDR: optionalUrl,
+  KEYLORE_VAULT_TOKEN: optionalString,
+  KEYLORE_VAULT_NAMESPACE: optionalString,
   KEYLORE_OP_BIN: z.string().default("op"),
   KEYLORE_AWS_BIN: z.string().default("aws"),
   KEYLORE_GCLOUD_BIN: z.string().default("gcloud"),
@@ -125,16 +137,16 @@ const envSchema = z.object({
   KEYLORE_ADAPTER_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(250),
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().min(1).default(3),
   KEYLORE_ADAPTER_CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).default(60000),
-  KEYLORE_NOTIFICATION_WEBHOOK_URL: z.string().url().optional(),
-  KEYLORE_NOTIFICATION_SIGNING_SECRET: z.string().optional(),
+  KEYLORE_NOTIFICATION_WEBHOOK_URL: optionalUrl,
+  KEYLORE_NOTIFICATION_SIGNING_SECRET: optionalString,
   KEYLORE_NOTIFICATION_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
   KEYLORE_TRACE_CAPTURE_ENABLED: z
     .string()
     .transform((value) => value !== "false")
     .prefault("true"),
   KEYLORE_TRACE_RECENT_SPAN_LIMIT: z.coerce.number().int().min(10).max(5000).default(500),
-  KEYLORE_TRACE_EXPORT_URL: z.string().url().optional(),
-  KEYLORE_TRACE_EXPORT_AUTH_HEADER: z.string().optional(),
+  KEYLORE_TRACE_EXPORT_URL: optionalUrl,
+  KEYLORE_TRACE_EXPORT_AUTH_HEADER: optionalString,
   KEYLORE_TRACE_EXPORT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
   KEYLORE_TRACE_EXPORT_INTERVAL_MS: z.coerce.number().int().min(100).default(5000),
   KEYLORE_TRACE_EXPORT_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),

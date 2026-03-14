@@ -89,31 +89,39 @@ KEYLORE_SANDBOX_INJECTION_ENABLED=true
 KEYLORE_SANDBOX_COMMAND_ALLOWLIST=/usr/bin/env,node
 ```
 
-3. Start PostgreSQL:
+3. Export the local environment file into your shell:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+4. Start PostgreSQL:
 
 ```bash
 npm run db:up
 ```
 
-4. Start the HTTP server:
+5. Start the HTTP server:
 
 ```bash
 npm run dev:http
 ```
 
-5. Or run KeyLore as a local stdio MCP server:
+6. Or run KeyLore as a local stdio MCP server:
 
 ```bash
 npm run dev:stdio
 ```
 
-6. Use the local CLI:
+7. Use the local CLI:
 
 ```bash
 npm run dev:cli -- catalog list
 ```
 
-7. Mint an access token for the REST API:
+8. Mint an access token for the REST API:
 
 ```bash
 curl -X POST http://127.0.0.1:8787/oauth/token \
@@ -125,13 +133,13 @@ Remote tokens are tenant-scoped through their OAuth client. A tenant-bound calle
 
 Interactive flows can mint a user-bound code with `POST /oauth/authorize`, then exchange it at `POST /oauth/token` with `grant_type=authorization_code` and PKCE.
 
-8. Verify the health endpoint:
+9. Verify the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
 ```
 
-9. Inspect metrics and maintenance status:
+10. Inspect metrics and maintenance status:
 
 ```bash
 curl http://127.0.0.1:8787/metrics
@@ -141,19 +149,19 @@ npm run dev:cli -- system trace-exporter
 npm run dev:cli -- system rotations list
 ```
 
-10. Validate the Helm deployment path:
+11. Validate the Helm deployment path:
 
 ```bash
 npm run ops:helm-validate
 ```
 
-11. Run the release candidate gates:
+12. Run the release candidate gates:
 
 ```bash
 npm run ops:release-verify
 ```
 
-12. Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.
+13. Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.
 
 ## Example API usage
 
