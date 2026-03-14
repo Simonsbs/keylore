@@ -2,15 +2,18 @@
 
 ## Local stack
 
-Export `.env` into the current shell before running local commands:
+The fastest local path is now:
 
 ```bash
-set -a
-source .env
-set +a
+npm install
+npm run quickstart
 ```
 
-Start the local PostgreSQL dependency:
+Then open `http://127.0.0.1:8787/admin` and use the `Use local admin quickstart` button.
+
+If you want to override defaults, create `.env` from `.env.example`. KeyLore auto-loads `.env` on startup; you do not need to export it manually.
+
+Start only the local PostgreSQL dependency:
 
 ```bash
 npm run db:up
@@ -69,23 +72,11 @@ On process startup KeyLore now:
 
 With `.env` populated, a minimal smoke test is:
 
-1. `npm run db:up`
-2. `npm run build`
-3. `node dist/index.js --transport http`
-4. mint an API token through `POST /oauth/token`
-5. call `POST /v1/catalog/search` with `Authorization: Bearer ...`
-6. call `POST /v1/access/simulate` to verify dry-run evaluation
-7. call `GET /.well-known/oauth-protected-resource/mcp`
-8. request an approval-gated action, approve it, and retry with `approvalId`
-9. create a temporary auth client, mint a token for it, and revoke that token
-10. call `GET /v1/catalog/reports` to confirm rotation/expiry reporting
-11. call `POST /v1/runtime/sandbox` with an allowlisted command to verify injected execution and output scrubbing
-12. call `GET /metrics` and `GET /v1/system/maintenance`
-13. create, approve, and list a `POST /v1/break-glass` request
-14. export a logical backup with `POST /v1/system/backups/export` or `npm run dev:cli -- system backup create --file ./backup.json`
-15. run `helm template keylore ./charts/keylore -f ./charts/keylore/values.yaml`
-16. run `npm run ops:release-verify`
-17. open `http://127.0.0.1:8787/admin` for the interactive operator UI
+1. `npm run quickstart`
+2. open `http://127.0.0.1:8787/admin`
+3. use `Use local admin quickstart`
+4. verify tenants, auth clients, approvals, backups, audit, and system panels load
+5. run `npm run ops:release-verify`
 
 ## Migration policy
 

@@ -33,6 +33,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "dev:http": "tsx src/index.ts --transport http",
+    "quickstart": "bash ./scripts/quickstart.sh",
     "dev:stdio": "tsx src/index.ts --transport stdio",
     "dev:cli": "tsx src/cli.ts",
     "ops:container-smoke": "bash ./scripts/container-smoke.sh",

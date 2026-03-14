@@ -1,5 +1,15 @@
 # Configuration
 
+KeyLore auto-loads `.env` from the working directory when it exists. Shell export is optional for local use.
+
+For loopback development instances, KeyLore also enables a bounded local quickstart profile by default:
+
+- `KEYLORE_DATABASE_URL` falls back to `postgresql://keylore:keylore@127.0.0.1:5432/keylore`
+- `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET` falls back to `keylore-local-admin`
+- `KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET` falls back to `keylore-local-consumer`
+
+Those development defaults are only applied when the server is running on a loopback host and `KEYLORE_ENVIRONMENT` is not `production`.
+
 ## Environment variables
 
 - `KEYLORE_DATABASE_URL`: PostgreSQL connection string

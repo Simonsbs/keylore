@@ -78,7 +78,33 @@ Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md
 npm install
 ```
 
-2. Copy `.env.example` to `.env` and populate the demo secret refs, bootstrap client secrets, and any provider-specific adapter settings you intend to use:
+2. Start the zero-config local stack:
+
+```bash
+npm run quickstart
+```
+
+This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://127.0.0.1:8787`.
+
+3. Open the admin UI:
+
+`http://127.0.0.1:8787/admin`
+
+4. Click `Use local admin quickstart`.
+
+That uses the built-in loopback-only development bootstrap client and gets you into the operator UI without editing any config.
+
+## Optional local overrides
+
+If you want to override the local defaults, create `.env` from [.env.example](/home/simon/keylore/.env.example). KeyLore now auto-loads `.env` on startup, so you do not need to `source` it manually.
+
+If you override `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET`, the local admin quickstart button is no longer shown in the UI. At that point you are expected to sign in with your configured client credentials.
+
+Common overrides:
+
+```bash
+cp .env.example .env
+```
 
 ```bash
 KEYLORE_SECRET_GITHUB_READONLY=...
@@ -89,39 +115,33 @@ KEYLORE_SANDBOX_INJECTION_ENABLED=true
 KEYLORE_SANDBOX_COMMAND_ALLOWLIST=/usr/bin/env,node
 ```
 
-3. Export the local environment file into your shell:
+## Advanced local usage
 
-```bash
-set -a
-source .env
-set +a
-```
-
-4. Start PostgreSQL:
+Start PostgreSQL only:
 
 ```bash
 npm run db:up
 ```
 
-5. Start the HTTP server:
+Start the HTTP server directly:
 
 ```bash
 npm run dev:http
 ```
 
-6. Or run KeyLore as a local stdio MCP server:
+Or run KeyLore as a local stdio MCP server:
 
 ```bash
 npm run dev:stdio
 ```
 
-7. Use the local CLI:
+Use the local CLI:
 
 ```bash
 npm run dev:cli -- catalog list
 ```
 
-8. Mint an access token for the REST API:
+Mint an access token for the REST API:
 
 ```bash
 curl -X POST http://127.0.0.1:8787/oauth/token \
@@ -133,13 +153,13 @@ Remote tokens are tenant-scoped through their OAuth client. A tenant-bound calle
 
 Interactive flows can mint a user-bound code with `POST /oauth/authorize`, then exchange it at `POST /oauth/token` with `grant_type=authorization_code` and PKCE.
 
-9. Verify the health endpoint:
+Verify the health endpoint:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
 ```
 
-10. Inspect metrics and maintenance status:
+Inspect metrics and maintenance status:
 
 ```bash
 curl http://127.0.0.1:8787/metrics
@@ -149,19 +169,19 @@ npm run dev:cli -- system trace-exporter
 npm run dev:cli -- system rotations list
 ```
 
-11. Validate the Helm deployment path:
+Validate the Helm deployment path:
 
 ```bash
 npm run ops:helm-validate
 ```
 
-12. Run the release candidate gates:
+Run the release candidate gates:
 
 ```bash
 npm run ops:release-verify
 ```
 
-13. Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.
+Open the admin UI in a browser at `http://127.0.0.1:8787/admin`.
 
 ## Example API usage
 

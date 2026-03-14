@@ -629,6 +629,7 @@ const config = window.__KEYLORE_ADMIN_CONFIG__;
 const state = {
   baseUrl: config.baseUrl,
   resource: config.baseUrl.replace(/\/$/, '') + '/v1',
+  localAdminBootstrap: config.localAdminBootstrap || null,
   token: '',
   sessionClientId: '',
   sessionScopes: '',
@@ -765,6 +766,22 @@ function syncSessionFields() {
   byId('session-status').className = state.token ? 'state-active' : 'state-warning';
   byId('login-panel').hidden = !!state.token;
   byId('dashboard').hidden = !state.token;
+}
+
+function populateLoginDefaults(force) {
+  if (!state.localAdminBootstrap) {
+    return;
+  }
+
+  if (force || !byId('client-id').value.trim()) {
+    byId('client-id').value = state.localAdminBootstrap.clientId;
+  }
+  if (force || !byId('client-secret').value) {
+    byId('client-secret').value = state.localAdminBootstrap.clientSecret;
+  }
+  if (force || !byId('scope-input').value.trim()) {
+    byId('scope-input').value = state.localAdminBootstrap.scopes.join(' ');
+  }
 }
 
 async function requestTokenFromCredentials() {
@@ -1105,7 +1122,9 @@ function serializeAuthClientForm() {
 }
 
 async function handleLogin(event) {
-  event.preventDefault();
+  if (event) {
+    event.preventDefault();
+  }
   state.baseUrl = byId('base-url').value.trim().replace(/\/$/, '');
   state.resource = byId('resource').value.trim();
   const pastedToken = byId('pasted-token').value.trim();
@@ -1129,6 +1148,12 @@ async function handleLogin(event) {
     setBusy(false);
     setNotice('error', error instanceof Error ? error.message : String(error));
   }
+}
+
+async function handleLocalQuickstartLogin() {
+  populateLoginDefaults(true);
+  byId('pasted-token').value = '';
+  await handleLogin();
 }
 
 async function handleCreateTenant(event) {
@@ -1369,6 +1394,10 @@ async function initialize() {
   ].join(' ');
 
   byId('login-form').addEventListener('submit', handleLogin);
+  const localQuickstartButton = byId('local-login-submit');
+  if (localQuickstartButton) {
+    localQuickstartButton.addEventListener('click', handleLocalQuickstartLogin);
+  }
   byId('tenant-form').addEventListener('submit', handleCreateTenant);
   byId('auth-client-form').addEventListener('submit', handleCreateClient);
   byId('refresh-dashboard').addEventListener('click', refreshDashboard);
@@ -1402,6 +1431,10 @@ async function initialize() {
     await refreshDashboard();
   } else {
     renderAll();
+    populateLoginDefaults(false);
+    if (state.localAdminBootstrap) {
+      setNotice('info', 'Local quickstart is enabled. Use the shortcut to open an admin session immediately.');
+    }
   }
 }
 
@@ -1412,6 +1445,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
   const config = {
     version: app.config.version,
     baseUrl: app.config.publicBaseUrl,
+    localAdminBootstrap: app.config.localAdminBootstrap,
   };
 
   return `<!doctype html>
@@ -1468,6 +1502,14 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <p>Mint an operator token with existing OAuth clients or paste a bearer token directly.</p>
             </div>
           </div>
+          ${
+            app.config.localAdminBootstrap
+              ? `<div class="panel-footnote" style="margin-bottom: 16px;">Local quickstart is enabled on this loopback development instance. Use the shortcut below to open the built-in admin session without editing any configuration.</div>
+          <div class="form-actions" style="margin-bottom: 16px;">
+            <button class="button-secondary" id="local-login-submit" type="button" data-busy-label="Opening local session..." data-idle-label="Use local admin quickstart">Use local admin quickstart</button>
+          </div>`
+              : ""
+          }
           <form id="login-form" class="form-grid">
             <div class="field">
               <label for="base-url">Base URL</label>

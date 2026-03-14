@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 import * as z from "zod/v4";
@@ -63,7 +64,41 @@ export interface KeyLoreConfig {
   traceExportIntervalMs: number;
   traceExportTimeoutMs: number;
   rotationPlanningHorizonDays: number;
+  localQuickstartEnabled: boolean;
+  localAdminBootstrap:
+    | {
+        clientId: string;
+        clientSecret: string;
+        scopes: string[];
+      }
+    | undefined;
 }
+
+const LOCAL_DATABASE_URL = "postgresql://keylore:keylore@127.0.0.1:5432/keylore";
+const LOCAL_ADMIN_CLIENT_ID = "keylore-admin-local";
+const LOCAL_ADMIN_CLIENT_SECRET = "keylore-local-admin";
+const LOCAL_CONSUMER_CLIENT_SECRET = "keylore-local-consumer";
+const LOCAL_ADMIN_SCOPES = [
+  "catalog:read",
+  "catalog:write",
+  "admin:read",
+  "admin:write",
+  "auth:read",
+  "auth:write",
+  "broker:use",
+  "sandbox:run",
+  "audit:read",
+  "approval:read",
+  "approval:review",
+  "system:read",
+  "system:write",
+  "backup:read",
+  "backup:write",
+  "breakglass:request",
+  "breakglass:read",
+  "breakglass:review",
+  "mcp:use",
+] as const;
 
 const emptyStringToUndefined = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => {
@@ -76,6 +111,88 @@ const emptyStringToUndefined = <T extends z.ZodType>(schema: T) =>
 
 const optionalUrl = emptyStringToUndefined(z.string().url().optional());
 const optionalString = emptyStringToUndefined(z.string().optional());
+
+function parseDotEnv(contents: string): Record<string, string> {
+  const parsed: Record<string, string> = {};
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separator = trimmed.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separator).trim();
+    const rawValue = trimmed.slice(separator + 1).trim();
+    const value =
+      (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+      (rawValue.startsWith("'") && rawValue.endsWith("'"))
+        ? rawValue.slice(1, -1)
+        : rawValue;
+    parsed[key] = value;
+  }
+
+  return parsed;
+}
+
+function isMissing(value: string | undefined): boolean {
+  return value === undefined || value.trim() === "";
+}
+
+function isLoopbackHost(host: string | undefined): boolean {
+  return host === undefined || host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+function hydrateEnvironment(cwd: string): {
+  env: NodeJS.ProcessEnv;
+  localAdminBootstrapAvailable: boolean;
+} {
+  const envFilePath = path.resolve(cwd, ".env");
+  const fileEnv =
+    fs.existsSync(envFilePath) && fs.statSync(envFilePath).isFile()
+      ? parseDotEnv(fs.readFileSync(envFilePath, "utf8"))
+      : {};
+
+  const effectiveEnv: NodeJS.ProcessEnv = {
+    ...fileEnv,
+    ...process.env,
+  };
+
+  if (isMissing(effectiveEnv.KEYLORE_DATABASE_URL)) {
+    effectiveEnv.KEYLORE_DATABASE_URL = LOCAL_DATABASE_URL;
+  }
+
+  const environment = effectiveEnv.KEYLORE_ENVIRONMENT?.trim() || "development";
+  const httpHost = effectiveEnv.KEYLORE_HTTP_HOST?.trim() || "127.0.0.1";
+  const bootstrapFromFiles = effectiveEnv.KEYLORE_BOOTSTRAP_FROM_FILES !== "false";
+  const localQuickstartEnabled =
+    environment !== "production" && bootstrapFromFiles && isLoopbackHost(httpHost);
+  const adminSecretWasMissing = isMissing(effectiveEnv.KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET);
+  const consumerSecretWasMissing = isMissing(effectiveEnv.KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET);
+
+  if (localQuickstartEnabled) {
+    if (adminSecretWasMissing) {
+      effectiveEnv.KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET = LOCAL_ADMIN_CLIENT_SECRET;
+    }
+    if (consumerSecretWasMissing) {
+      effectiveEnv.KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET = LOCAL_CONSUMER_CLIENT_SECRET;
+    }
+  }
+
+  for (const [key, value] of Object.entries(effectiveEnv)) {
+    if (value !== undefined && isMissing(process.env[key])) {
+      process.env[key] = value;
+    }
+  }
+
+  return {
+    env: effectiveEnv,
+    localAdminBootstrapAvailable: localQuickstartEnabled && adminSecretWasMissing,
+  };
+}
 
 const envSchema = z.object({
   KEYLORE_DATA_DIR: z.string().optional(),
@@ -154,11 +271,16 @@ const envSchema = z.object({
 });
 
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
-  const env = envSchema.parse(process.env);
+  const hydrated = hydrateEnvironment(cwd);
+  const env = envSchema.parse(hydrated.env);
   const dataDir = path.resolve(cwd, env.KEYLORE_DATA_DIR ?? "data");
   const publicBaseUrl =
     env.KEYLORE_PUBLIC_BASE_URL ?? `http://${env.KEYLORE_HTTP_HOST}:${env.KEYLORE_HTTP_PORT}`;
   const oauthIssuerUrl = env.KEYLORE_OAUTH_ISSUER_URL ?? `${publicBaseUrl}/oauth`;
+  const localQuickstartEnabled =
+    env.KEYLORE_ENVIRONMENT !== "production" &&
+    env.KEYLORE_BOOTSTRAP_FROM_FILES &&
+    isLoopbackHost(env.KEYLORE_HTTP_HOST);
 
   return {
     appName: "keylore",
@@ -236,5 +358,13 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     traceExportIntervalMs: env.KEYLORE_TRACE_EXPORT_INTERVAL_MS,
     traceExportTimeoutMs: env.KEYLORE_TRACE_EXPORT_TIMEOUT_MS,
     rotationPlanningHorizonDays: env.KEYLORE_ROTATION_PLANNING_HORIZON_DAYS,
+    localQuickstartEnabled,
+    localAdminBootstrap: hydrated.localAdminBootstrapAvailable
+      ? {
+          clientId: LOCAL_ADMIN_CLIENT_ID,
+          clientSecret: LOCAL_ADMIN_CLIENT_SECRET,
+          scopes: [...LOCAL_ADMIN_SCOPES],
+        }
+      : undefined,
   };
 }

@@ -10,6 +10,12 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
       httpPort: 8907,
       publicBaseUrl: "http://127.0.0.1:8907",
       oauthIssuerUrl: "http://127.0.0.1:8907/oauth",
+      localQuickstartEnabled: true,
+      localAdminBootstrap: {
+        clientId: "keylore-admin-local",
+        clientSecret: "keylore-local-admin",
+        scopes: ["catalog:read", "admin:read"],
+      },
     },
   });
   const server = await startHttpServer(app);
@@ -22,6 +28,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     const html = await response.text();
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Open operator session/);
+    assert.match(html, /Use local admin quickstart/);
     assert.match(html, /Refresh everything/);
     assert.match(html, /1\.0\.0-rc4/);
   } finally {

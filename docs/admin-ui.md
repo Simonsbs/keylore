@@ -25,10 +25,11 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 
 ## Usage
 
-1. Start the HTTP server.
+1. For local use, run `npm run quickstart`.
 2. Open `<publicBaseUrl>/admin`.
-3. Use an existing operator OAuth client or paste an already minted bearer token.
-4. Work through the tenant, auth, review, backup, audit, and system panels.
+3. On the local loopback quickstart path, click `Use local admin quickstart`.
+4. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+5. Work through the tenant, auth, review, backup, audit, and system panels.
 
 ## Validation
 
@@ -47,5 +48,6 @@ npm run ops:release-verify
 ## Operator notes
 
 - The page itself is public, but every data read and action still goes through the existing authenticated REST endpoints.
+- The local quickstart shortcut is only exposed on loopback development instances that are still using the built-in local bootstrap secret. Production-style deployments and overridden local secrets still need real operator credentials.
 - If the active token lacks scopes or roles for a panel, that panel renders the underlying API error instead of bypassing authorization.
 - Tenant-scoped backup and auth-admin restrictions remain enforced server-side.
