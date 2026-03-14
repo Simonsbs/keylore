@@ -158,6 +158,8 @@ Status:
   - the core credential form now includes a live MCP-visible metadata preview
   - the preview shows the agent-facing record without binding refs or raw secret values
   - inline warnings now flag empty or weak selection notes and obvious secret-like content in notes
+  - the core credential form now includes stronger templates for GitHub read-only, GitHub write-capable, npm read-only, and internal service tokens
+  - templates now prefill the intended read or read/write operation profile instead of forcing every credential into `http.get`
 
 ## Core-5
 

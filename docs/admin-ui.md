@@ -37,11 +37,18 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 4. Use `Credentials` to create a token-backed credential with either:
    - `Local encrypted store`
    - `Environment reference`
-5. Review `MCP-visible metadata preview` to confirm the agent-facing record is useful and contains no secret material.
-6. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-7. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
-8. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-9. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+5. Start from a stronger template when possible:
+   - `GitHub read-only`
+   - `GitHub write-capable`
+   - `npm read-only`
+   - `Internal service token`
+   - `Generic bearer API`
+6. Review `MCP-visible metadata preview` to confirm the agent-facing record is useful and contains no secret material.
+7. Use `Permitted Operations` to keep the credential read-only unless the workflow truly needs writes.
+8. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+9. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
+10. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+11. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Validation
 

@@ -1053,6 +1053,10 @@ function credentialPreviewWarnings(payload) {
     warnings.push('Allowed domains are empty. The agent-visible metadata should make the intended target explicit.');
   }
 
+  if (!payload.permittedOperations || !payload.permittedOperations.length) {
+    warnings.push('Permitted operations are empty. The preview should make the intended read or write capability explicit.');
+  }
+
   if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(notes)) {
     warnings.push('Selection notes look like they may contain a secret. Keep raw tokens out of the agent-visible context.');
   }
@@ -1361,6 +1365,7 @@ function applyCredentialTemplate() {
     byId('credential-id').value = 'github-readonly-local';
     byId('credential-name').value = 'GitHub Read-Only Token';
     byId('credential-service').value = 'github';
+    byId('credential-operations').value = 'http.get';
     byId('credential-domains').value = 'api.github.com';
     byId('credential-notes').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
     byId('credential-tags').value = 'github,readonly';
@@ -1369,10 +1374,50 @@ function applyCredentialTemplate() {
     return;
   }
 
+  if (template === 'github-write') {
+    byId('credential-id').value = 'github-write-local';
+    byId('credential-name').value = 'GitHub Write Token';
+    byId('credential-service').value = 'github';
+    byId('credential-operations').value = 'http.get,http.post';
+    byId('credential-domains').value = 'api.github.com';
+    byId('credential-notes').value = 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, pull request updates, labels, or status changes. Prefer the read-only GitHub credential when writes are not required.';
+    byId('credential-tags').value = 'github,write';
+    byId('credential-sensitivity').value = 'critical';
+    renderCredentialPreview();
+    return;
+  }
+
+  if (template === 'npm-readonly') {
+    byId('credential-id').value = 'npm-readonly-local';
+    byId('credential-name').value = 'npm Read-Only Token';
+    byId('credential-service').value = 'npm';
+    byId('credential-operations').value = 'http.get';
+    byId('credential-domains').value = 'registry.npmjs.org';
+    byId('credential-notes').value = 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use this credential for publish or package mutation workflows.';
+    byId('credential-tags').value = 'npm,readonly';
+    byId('credential-sensitivity').value = 'high';
+    renderCredentialPreview();
+    return;
+  }
+
+  if (template === 'internal-service') {
+    byId('credential-id').value = 'internal-service-local';
+    byId('credential-name').value = 'Internal Service Token';
+    byId('credential-service').value = 'internal_api';
+    byId('credential-operations').value = 'http.get,http.post';
+    byId('credential-domains').value = 'internal.example.com';
+    byId('credential-notes').value = 'Use only for the listed internal service domain when the task explicitly targets that service. Keep this credential scoped to the documented internal API workflow and avoid unrelated external APIs.';
+    byId('credential-tags').value = 'internal,bearer';
+    byId('credential-sensitivity').value = 'critical';
+    renderCredentialPreview();
+    return;
+  }
+
   if (template === 'generic-bearer') {
     byId('credential-id').value = '';
     byId('credential-name').value = '';
     byId('credential-service').value = '';
+    byId('credential-operations').value = 'http.get';
     byId('credential-domains').value = '';
     byId('credential-notes').value = '';
     byId('credential-tags').value = '';
@@ -1389,16 +1434,17 @@ function syncCredentialSourceFields() {
 }
 
 function serializeCredentialForm() {
+  const operations = splitList(byId('credential-operations').value);
   const adapter = byId('credential-storage').value;
   return {
     credentialId: byId('credential-id').value.trim(),
     displayName: byId('credential-name').value.trim(),
     service: byId('credential-service').value.trim(),
     owner: 'local',
-    scopeTier: 'read_only',
+    scopeTier: operations.includes('http.post') ? 'read_write' : 'read_only',
     sensitivity: byId('credential-sensitivity').value,
     allowedDomains: splitList(byId('credential-domains').value),
-    permittedOperations: ['http.get'],
+    permittedOperations: operations.length ? operations : ['http.get'],
     selectionNotes: byId('credential-notes').value.trim(),
     tags: splitList(byId('credential-tags').value),
     authType: 'bearer',
@@ -2021,12 +2067,13 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             <div class="panel-grid">
               <div class="span-5 panel">
                 <form id="credential-form" class="form-grid">
-                  <div class="field"><label for="credential-template">Template</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="generic-bearer">Generic bearer API</option></select></div>
+                  <div class="field"><label for="credential-template">Template</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
                   <div class="field"><label for="credential-storage">Secret Storage</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
                   <div class="field"><label for="credential-id">Credential ID</label><input id="credential-id" type="text" required /></div>
                   <div class="field"><label for="credential-name">Display Name</label><input id="credential-name" type="text" required /></div>
                   <div class="field"><label for="credential-service">Service</label><input id="credential-service" type="text" required /></div>
                   <div class="field"><label for="credential-sensitivity">Sensitivity</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                  <div class="field"><label for="credential-operations">Permitted Operations</label><select id="credential-operations"><option value="http.get">Read only (http.get)</option><option value="http.get,http.post">Read and write (http.get, http.post)</option></select></div>
                   <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Token / Secret Value</label><textarea id="credential-secret" placeholder="Paste the raw token here. It will be stored outside the metadata catalogue."></textarea></div>
                   <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment Variable Name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
                   <div class="field-wide"><label for="credential-domains">Allowed Domains</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
