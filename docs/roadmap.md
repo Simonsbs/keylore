@@ -152,4 +152,4 @@ The active follow-on plan after `v1.0.0-rc4` is documented in [docs/core-mode-pl
     - hide the broader platform behind `advanced` mode by default
   - next:
     - LLM-friendly context authoring
-    - production handoff guidance between local core mode and advanced self-hosted mode
+    - context preview and stronger authoring templates

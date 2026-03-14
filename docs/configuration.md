@@ -10,6 +10,18 @@ For loopback development instances, KeyLore also enables a bounded local quickst
 
 Those development defaults are only applied when the server is running on a loopback host and `KEYLORE_ENVIRONMENT` is not `production`.
 
+In practice this creates two modes:
+
+- `core` mode
+  - local quickstart
+  - local encrypted secret storage
+  - shortest path to credential onboarding and MCP connection
+- `advanced` mode
+  - explicit production-style configuration
+  - external secret backends, OAuth clients, approvals, tenancy, and deployment controls
+
+Use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to move from one to the other.
+
 ## Environment variables
 
 - `KEYLORE_DATABASE_URL`: PostgreSQL connection string

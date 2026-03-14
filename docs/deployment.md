@@ -2,6 +2,8 @@
 
 `v1.0.0-rc4` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, serves the minimal admin UI from the same HTTP service, and now standardizes final release verification behind one sequential rehearsal command.
 
+This is the `advanced` deployment path. If you only need a local brokered secret workflow on one machine, stay in the `core` quickstart path first and use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) before promoting yourself into full self-hosted operations.
+
 ## Helm chart
 
 Chart location:

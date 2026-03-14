@@ -72,6 +72,8 @@ Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md
 
 The active post-`v1.0.0-rc4` refocus is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md): make the default user journey "add secret, add context, connect MCP, use it" and push broader operator features behind an advanced path.
 
+The handoff from local core mode to advanced self-hosted mode is documented in [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md).
+
 ## Quick start
 
 1. Install dependencies:
@@ -107,6 +109,8 @@ The result shows the broker decision and a redacted response preview so you can 
 7. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
+
+When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 
 ## Optional local overrides
 

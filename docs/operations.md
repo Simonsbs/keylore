@@ -11,6 +11,8 @@ npm run quickstart
 
 Then open `http://127.0.0.1:8787/admin` and use the `Use local admin quickstart` button.
 
+That path is intentionally `core` mode. When you outgrow it, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) before enabling broader self-hosted controls.
+
 If you want to override defaults, create `.env` from `.env.example`. KeyLore auto-loads `.env` on startup; you do not need to export it manually.
 
 Start only the local PostgreSQL dependency:
@@ -75,8 +77,10 @@ With `.env` populated, a minimal smoke test is:
 1. `npm run quickstart`
 2. open `http://127.0.0.1:8787/admin`
 3. use `Use local admin quickstart`
-4. verify tenants, auth clients, approvals, backups, audit, and system panels load
-5. run `npm run ops:release-verify`
+4. create a credential
+5. test it through the broker
+6. copy an MCP config snippet from `Connect MCP`
+7. run `npm run ops:release-verify` if you are validating the broader release path
 
 ## Migration policy
 

@@ -228,6 +228,13 @@ Acceptance criteria:
 
 - local-first users can start simple without being trapped in a dead-end mode
 
+Status:
+- complete:
+  - added explicit production handoff guidance for the boundary between local `core` mode and `advanced` self-hosted mode
+  - documented when to move from local secret storage to Vault or cloud secret stores
+  - documented when to enable OAuth, approvals, and tenant separation
+  - linked the handoff guidance from the main quickstart and operations docs
+
 ## Non-goals until the core path is excellent
 
 The following should not take priority over the core flow:
