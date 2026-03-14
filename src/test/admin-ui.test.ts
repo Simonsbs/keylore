@@ -29,6 +29,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Create credential/);
     assert.match(html, /Test credential/);
+    assert.match(html, /MCP-visible metadata preview/);
     assert.match(html, /Connect MCP/);
     assert.match(html, /Codex stdio/);
     assert.match(html, /Gemini stdio/);

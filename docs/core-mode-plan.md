@@ -153,6 +153,12 @@ Acceptance criteria:
 - a non-expert user can describe when the agent should use the credential
 - the MCP-visible record is easy to inspect and clearly contains no secret value
 
+Status:
+- partially complete:
+  - the core credential form now includes a live MCP-visible metadata preview
+  - the preview shows the agent-facing record without binding refs or raw secret values
+  - inline warnings now flag empty or weak selection notes and obvious secret-like content in notes
+
 ## Core-5
 
 Built-in broker test flow.

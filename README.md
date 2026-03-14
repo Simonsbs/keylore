@@ -102,11 +102,13 @@ That uses the built-in loopback-only development bootstrap client and gets you i
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
-6. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
+6. Review `MCP-visible metadata preview` in the credential form to confirm the agent-facing record is correct and secret-free.
+
+7. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
 
 The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
 
-7. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
+8. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 

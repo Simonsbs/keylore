@@ -1040,6 +1040,63 @@ function renderCredentials() {
     : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
 }
 
+function credentialPreviewWarnings(payload) {
+  const warnings = [];
+  const notes = String(payload.selectionNotes || '');
+  if (!notes.trim()) {
+    warnings.push('Selection notes are empty. The agent will have less context for choosing this credential.');
+  } else if (notes.trim().length < 24) {
+    warnings.push('Selection notes are very short. Add when-to-use guidance so the agent can choose this credential reliably.');
+  }
+
+  if (!payload.allowedDomains || !payload.allowedDomains.length) {
+    warnings.push('Allowed domains are empty. The agent-visible metadata should make the intended target explicit.');
+  }
+
+  if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(notes)) {
+    warnings.push('Selection notes look like they may contain a secret. Keep raw tokens out of the agent-visible context.');
+  }
+
+  return warnings;
+}
+
+function renderCredentialPreview() {
+  const previewNode = byId('credential-mcp-preview');
+  const warningNode = byId('credential-preview-warnings');
+  if (!previewNode || !warningNode) {
+    return;
+  }
+
+  const payload = serializeCredentialForm();
+  const preview = {
+    result: {
+      id: payload.credentialId || 'credential-id-preview',
+      tenantId: payload.tenantId || 'default',
+      displayName: payload.displayName || 'Credential Preview',
+      service: payload.service || 'service',
+      owner: payload.owner,
+      scopeTier: payload.scopeTier,
+      sensitivity: payload.sensitivity,
+      allowedDomains: payload.allowedDomains,
+      permittedOperations: payload.permittedOperations,
+      expiresAt: payload.expiresAt || null,
+      rotationPolicy: payload.rotationPolicy || 'Managed locally',
+      lastValidatedAt: null,
+      selectionNotes: payload.selectionNotes || '',
+      tags: payload.tags,
+      status: payload.status,
+    },
+  };
+
+  previewNode.innerHTML = '<pre>' + escapeHtml(prettyJson(preview)) + '</pre>';
+  const warnings = credentialPreviewWarnings(payload);
+  warningNode.innerHTML = warnings.length
+    ? warnings.map(function(message) {
+        return '<div class="panel-footnote">' + escapeHtml(message) + '</div>';
+      }).join('')
+    : '<div class="panel-footnote">This is the MCP-visible metadata shape. Secret storage details, binding refs, and raw token values do not appear here.</div>';
+}
+
 function renderConnect() {
   byId('codex-stdio-snippet').value = codexStdioSnippet();
   byId('codex-http-snippet').value = codexHttpSnippet();
@@ -1308,6 +1365,7 @@ function applyCredentialTemplate() {
     byId('credential-notes').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
     byId('credential-tags').value = 'github,readonly';
     byId('credential-sensitivity').value = 'high';
+    renderCredentialPreview();
     return;
   }
 
@@ -1319,6 +1377,7 @@ function applyCredentialTemplate() {
     byId('credential-notes').value = '';
     byId('credential-tags').value = '';
     byId('credential-sensitivity').value = 'moderate';
+    renderCredentialPreview();
   }
 }
 
@@ -1326,6 +1385,7 @@ function syncCredentialSourceFields() {
   const adapter = byId('credential-storage').value;
   byId('credential-secret-field').hidden = adapter !== 'local';
   byId('credential-env-ref-field').hidden = adapter !== 'env';
+  renderCredentialPreview();
 }
 
 function serializeCredentialForm() {
@@ -1427,6 +1487,7 @@ async function handleCreateCredential(event) {
   byId('credential-storage').value = 'local';
   applyCredentialTemplate();
   syncCredentialSourceFields();
+  renderCredentialPreview();
   syncCredentialTestDefaults(true);
 }
 
@@ -1758,6 +1819,8 @@ async function initialize() {
   byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
+  byId('credential-form').addEventListener('input', renderCredentialPreview);
+  byId('credential-form').addEventListener('change', renderCredentialPreview);
   byId('credential-test-id').addEventListener('change', function() {
     syncCredentialTestDefaults(true);
   });
@@ -1805,6 +1868,7 @@ async function initialize() {
     populateLoginDefaults(false);
     applyCredentialTemplate();
     syncCredentialSourceFields();
+    renderCredentialPreview();
     if (state.localAdminBootstrap) {
       setNotice('info', 'Local quickstart is enabled. Use the shortcut to open an admin session immediately.');
     }
@@ -1968,6 +2032,11 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="field-wide"><label for="credential-domains">Allowed Domains</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
                   <div class="field-wide"><label for="credential-notes">LLM Usage Notes</label><textarea id="credential-notes" placeholder="Explain when the coding agent should choose this credential."></textarea></div>
                   <div class="field-wide"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="field-wide">
+                    <label for="credential-mcp-preview">MCP-visible metadata preview</label>
+                    <div id="credential-preview-warnings" style="margin-bottom: 12px;"></div>
+                    <div id="credential-mcp-preview"></div>
+                  </div>
                   <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating credential..." data-idle-label="Create credential">Create credential</button></div>
                 </form>
               </div>
