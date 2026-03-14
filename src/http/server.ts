@@ -416,8 +416,16 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
 
           respondJson(res, 404, { error: "Not found" });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Internal server error";
+          const message =
+            error instanceof z.ZodError
+              ? error.issues.map((issue) => issue.message).join(" ")
+              : error instanceof Error
+                ? error.message
+                : "Internal server error";
           const statusCode =
+            error instanceof z.ZodError
+              ? 400
+              :
             message.includes("Request body exceeds")
               ? 413
               : message.includes("JSON")

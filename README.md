@@ -102,7 +102,7 @@ That uses the built-in loopback-only development bootstrap client and gets you i
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
-6. Review `MCP-visible metadata preview` in the credential form to confirm the agent-facing record is correct and secret-free, and keep `Permitted Operations` read-only unless the workflow truly needs writes.
+6. Review `Context guidance` and `MCP-visible metadata preview` in the credential form to confirm the agent-facing record is specific, useful, and secret-free, and keep `Permitted Operations` read-only unless the workflow truly needs writes.
 
 7. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
 

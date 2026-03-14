@@ -160,6 +160,7 @@ Status:
   - inline warnings now flag empty or weak selection notes and obvious secret-like content in notes
   - the core credential form now includes stronger templates for GitHub read-only, GitHub write-capable, npm read-only, and internal service tokens
   - templates now prefill the intended read or read/write operation profile instead of forcing every credential into `http.get`
+  - template-specific guidance and submit-time validation now push users away from vague or secret-like `selectionNotes`
 
 ## Core-5
 

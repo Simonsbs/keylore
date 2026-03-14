@@ -225,6 +225,11 @@ export const catalogSearchInputSchema = z.object({
 
 export const createCredentialInputSchema = credentialRecordSchema;
 
+const secretLikeSelectionNotesPattern =
+  /(gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/;
+const vagueSelectionNotesPattern =
+  /^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i;
+
 export const coreCredentialCreateInputSchema = z
   .object({
     credentialId: z.string().min(1),
@@ -266,6 +271,41 @@ export const coreCredentialCreateInputSchema = z
         code: z.ZodIssueCode.custom,
         path: ["headerPrefix"],
         message: "Bearer credentials should include a non-empty header prefix.",
+      });
+    }
+
+    const selectionNotes = value.selectionNotes.trim();
+    if (selectionNotes.length < 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectionNotes"],
+        message:
+          "Selection notes must explain when the agent should use this credential in more detail.",
+      });
+    }
+
+    if (vagueSelectionNotesPattern.test(selectionNotes)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectionNotes"],
+        message:
+          "Selection notes are too vague. Describe the target service, intended use, and what the agent should avoid.",
+      });
+    }
+
+    if (secretLikeSelectionNotesPattern.test(selectionNotes)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectionNotes"],
+        message: "Selection notes must not contain token-like secret material.",
+      });
+    }
+
+    if (value.permittedOperations.includes("http.post") && value.scopeTier === "read_only") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scopeTier"],
+        message: "Credentials that allow http.post cannot use the read_only scope tier.",
       });
     }
   });

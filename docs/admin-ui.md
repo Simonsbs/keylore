@@ -8,6 +8,7 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 
 - create credentials through the new core onboarding flow
 - preview the exact MCP-visible credential metadata before saving
+- get template-specific context guidance and inline validation before saving
 - test credentials through brokered access from the UI
 - generate Codex and Gemini CLI MCP connection snippets
 - mint and verify a remote HTTP MCP token from the UI
@@ -44,11 +45,12 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - `Internal service token`
    - `Generic bearer API`
 6. Review `MCP-visible metadata preview` to confirm the agent-facing record is useful and contains no secret material.
-7. Use `Permitted Operations` to keep the credential read-only unless the workflow truly needs writes.
-8. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-9. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
-10. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-11. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+7. Use `Context guidance` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
+8. Use `Permitted Operations` to keep the credential read-only unless the workflow truly needs writes.
+9. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+10. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
+11. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+12. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Validation
 

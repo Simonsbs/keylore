@@ -790,6 +790,59 @@ test("core MCP connection check validates a resource-bound MCP token", async () 
   await close();
 });
 
+test("core credential onboarding rejects vague or secret-like selection notes", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8913,
+      publicBaseUrl: "http://127.0.0.1:8913",
+      oauthIssuerUrl: "http://127.0.0.1:8913/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+  try {
+    const tokenResponse = await fetch("http://127.0.0.1:8913/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: "admin-client",
+        client_secret: "admin-secret",
+        scope: "catalog:read catalog:write broker:use",
+        resource: "http://127.0.0.1:8913/v1",
+      }),
+    });
+    assert.equal(tokenResponse.status, 200);
+    const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+    const createResponse = await fetch("http://127.0.0.1:8913/v1/core/credentials", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokenPayload.access_token}`,
+      },
+      body: JSON.stringify({
+        credentialId: "bad-context",
+        displayName: "Bad Context",
+        service: "github",
+        allowedDomains: ["api.github.com"],
+        selectionNotes: "ghp_super_secret_token",
+        secretSource: {
+          adapter: "local",
+          secretValue: "ghp-local-test-token",
+        },
+      }),
+    });
+    assert.equal(createResponse.status, 400);
+    const errorPayload = (await createResponse.json()) as { error?: string };
+    assert.match(errorPayload.error ?? "", /Selection notes/i);
+  } finally {
+    await server.close();
+    await close();
+  }
+});
+
 test("auth client lifecycle and token revocation APIs operate over HTTP", async () => {
   const { app, close } = await makeTestApp({
     configOverrides: {

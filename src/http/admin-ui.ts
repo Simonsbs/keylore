@@ -1040,13 +1040,17 @@ function renderCredentials() {
     : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
 }
 
-function credentialPreviewWarnings(payload) {
+function credentialContextAssessment(payload) {
+  const errors = [];
   const warnings = [];
   const notes = String(payload.selectionNotes || '');
+  const normalizedNotes = notes.trim().toLowerCase();
   if (!notes.trim()) {
-    warnings.push('Selection notes are empty. The agent will have less context for choosing this credential.');
-  } else if (notes.trim().length < 24) {
-    warnings.push('Selection notes are very short. Add when-to-use guidance so the agent can choose this credential reliably.');
+    errors.push('Selection notes are required. Explain when the agent should use this credential.');
+  } else if (notes.trim().length < 16) {
+    errors.push('Selection notes are too short. Add enough detail for the agent to distinguish this credential from others.');
+  } else if (notes.trim().length < 40) {
+    warnings.push('Selection notes are short. Add when-to-use guidance so the agent can choose this credential reliably.');
   }
 
   if (!payload.allowedDomains || !payload.allowedDomains.length) {
@@ -1057,11 +1061,60 @@ function credentialPreviewWarnings(payload) {
     warnings.push('Permitted operations are empty. The preview should make the intended read or write capability explicit.');
   }
 
-  if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(notes)) {
-    warnings.push('Selection notes look like they may contain a secret. Keep raw tokens out of the agent-visible context.');
+  if (/^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i.test(normalizedNotes)) {
+    errors.push('Selection notes are too vague. Say what the credential is for, when the agent should choose it, and what it should avoid.');
   }
 
-  return warnings;
+  if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(notes)) {
+    errors.push('Selection notes look like they may contain a secret. Keep raw tokens out of the agent-visible context.');
+  }
+
+  return { errors: errors, warnings: warnings };
+}
+
+function credentialGuidanceForTemplate() {
+  const template = byId('credential-template').value;
+  if (template === 'github-readonly') {
+    return {
+      good: 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.',
+      avoid: 'GitHub token'  
+    };
+  }
+  if (template === 'github-write') {
+    return {
+      good: 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, labels, or pull request updates. Prefer the read-only GitHub credential when writes are not needed.',
+      avoid: 'Main GitHub token'
+    };
+  }
+  if (template === 'npm-readonly') {
+    return {
+      good: 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use it for publish workflows.',
+      avoid: 'npm token'
+    };
+  }
+  if (template === 'internal-service') {
+    return {
+      good: 'Use only for the listed internal service domain when the task explicitly targets that API. Avoid unrelated external services.',
+      avoid: 'Internal token'
+    };
+  }
+  return {
+    good: 'Describe the target service, the intended domain, when the agent should choose this credential, and what kinds of actions it should avoid.',
+    avoid: 'Use when needed'
+  };
+}
+
+function renderCredentialGuidance() {
+  const node = byId('credential-guidance');
+  if (!node) {
+    return;
+  }
+  const guidance = credentialGuidanceForTemplate();
+  node.innerHTML = [
+    '<div class="panel-footnote"><strong>Good context:</strong> ' + escapeHtml(guidance.good) + '</div>',
+    '<div class="panel-footnote"><strong>Avoid:</strong> ' + escapeHtml(guidance.avoid) + '</div>',
+    '<div class="panel-footnote">Good notes should answer: what service is this for, when should the agent choose it, and what should it avoid doing?</div>'
+  ].join('');
 }
 
 function renderCredentialPreview() {
@@ -1093,12 +1146,19 @@ function renderCredentialPreview() {
   };
 
   previewNode.innerHTML = '<pre>' + escapeHtml(prettyJson(preview)) + '</pre>';
-  const warnings = credentialPreviewWarnings(payload);
-  warningNode.innerHTML = warnings.length
-    ? warnings.map(function(message) {
-        return '<div class="panel-footnote">' + escapeHtml(message) + '</div>';
-      }).join('')
-    : '<div class="panel-footnote">This is the MCP-visible metadata shape. Secret storage details, binding refs, and raw token values do not appear here.</div>';
+  const assessment = credentialContextAssessment(payload);
+  const messages = [];
+  assessment.errors.forEach(function(message) {
+    messages.push('<div class="error-state">' + escapeHtml(message) + '</div>');
+  });
+  assessment.warnings.forEach(function(message) {
+    messages.push('<div class="panel-footnote">' + escapeHtml(message) + '</div>');
+  });
+  if (!messages.length) {
+    messages.push('<div class="panel-footnote">This is the MCP-visible metadata shape. Secret storage details, binding refs, and raw token values do not appear here.</div>');
+  }
+  warningNode.innerHTML = messages.join('');
+  renderCredentialGuidance();
 }
 
 function renderConnect() {
@@ -1519,6 +1579,12 @@ async function handleLocalQuickstartLogin() {
 async function handleCreateCredential(event) {
   event.preventDefault();
   const payload = serializeCredentialForm();
+  const assessment = credentialContextAssessment(payload);
+  if (assessment.errors.length) {
+    renderCredentialPreview();
+    setNotice('error', assessment.errors[0]);
+    return;
+  }
   await withAction('Credential created.', async function() {
     return fetchJson('/v1/core/credentials', {
       method: 'POST',
@@ -2079,6 +2145,10 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="field-wide"><label for="credential-domains">Allowed Domains</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
                   <div class="field-wide"><label for="credential-notes">LLM Usage Notes</label><textarea id="credential-notes" placeholder="Explain when the coding agent should choose this credential."></textarea></div>
                   <div class="field-wide"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="field-wide">
+                    <label for="credential-guidance">Context guidance</label>
+                    <div id="credential-guidance"></div>
+                  </div>
                   <div class="field-wide">
                     <label for="credential-mcp-preview">MCP-visible metadata preview</label>
                     <div id="credential-preview-warnings" style="margin-bottom: 12px;"></div>
