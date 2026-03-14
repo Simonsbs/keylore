@@ -625,6 +625,105 @@ test("resource metadata is exposed and resource-bound tokens cannot cross protec
   await close();
 });
 
+test("core credential onboarding stores a local secret and creates a usable credential", async () => {
+  const target = await startLocalTargetServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        authorized: req.headers.authorization === "Bearer ghp-local-test-token",
+      }),
+    );
+  });
+
+  const { app, close } = await makeTestApp({
+    policies: {
+      version: 1,
+      rules: [
+        {
+          id: "allow-admin-github-read",
+          tenantId: "default",
+          effect: "allow",
+          description: "Allow admin role to use GitHub-style read credentials.",
+          principals: ["admin-client"],
+          principalRoles: ["admin", "operator"],
+          services: ["github"],
+          operations: ["http.get"],
+          domainPatterns: ["localhost"],
+          environments: ["test"],
+        },
+      ],
+    },
+    configOverrides: {
+      httpPort: 8911,
+      publicBaseUrl: "http://127.0.0.1:8911",
+      oauthIssuerUrl: "http://127.0.0.1:8911/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8911/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read catalog:write broker:use",
+      resource: "http://127.0.0.1:8911/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+  const createResponse = await fetch("http://127.0.0.1:8911/v1/core/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "github-local",
+      displayName: "GitHub Local",
+      service: "github",
+      allowedDomains: ["localhost"],
+      selectionNotes: "Use for local broker validation only.",
+      secretSource: {
+        adapter: "local",
+        secretValue: "ghp-local-test-token",
+      },
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+
+  const accessResponse = await fetch("http://127.0.0.1:8911/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "github-local",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/github`,
+    }),
+  });
+  assert.equal(accessResponse.status, 200);
+  const decision = (await accessResponse.json()) as {
+    decision: string;
+    httpResult?: {
+      bodyPreview: string;
+    };
+  };
+  assert.equal(decision.decision, "allowed");
+  assert.match(decision.httpResult?.bodyPreview ?? "", /true/);
+
+  await target.close();
+  await server.close();
+  await close();
+});
+
 test("auth client lifecycle and token revocation APIs operate over HTTP", async () => {
   const { app, close } = await makeTestApp({
     configOverrides: {

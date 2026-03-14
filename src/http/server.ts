@@ -21,6 +21,7 @@ import {
   approvalReviewInputSchema,
   AuthContext,
   catalogSearchInputSchema,
+  coreCredentialCreateInputSchema,
   createCredentialInputSchema,
   rotationCompleteInputSchema,
   rotationCreateInputSchema,
@@ -597,6 +598,27 @@ async function handleApiRequest(
       await readJsonBody(req, app.config.maxRequestBytes),
     );
     const credential = await app.broker.createCredential(context, body);
+    respondJson(res, 201, { credential });
+    return;
+  }
+
+  if (url.pathname === "/v1/core/credentials" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const body = coreCredentialCreateInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
+    const credential = await app.coreMode.createCredential(context, body);
     respondJson(res, 201, { credential });
     return;
   }

@@ -4,6 +4,7 @@ import { SecretAdapterRegistry } from "./adapters/adapter-registry.js";
 import { AwsSecretsManagerAdapter } from "./adapters/aws-secrets-manager-adapter.js";
 import { ExecFileCommandRunner } from "./adapters/command-runner.js";
 import { EnvSecretAdapter } from "./adapters/env-secret-adapter.js";
+import { LocalSecretAdapter } from "./adapters/local-secret-adapter.js";
 import { GcpSecretManagerAdapter } from "./adapters/gcp-secret-manager-adapter.js";
 import { OnePasswordSecretAdapter } from "./adapters/onepassword-secret-adapter.js";
 import { VaultSecretAdapter } from "./adapters/vault-secret-adapter.js";
@@ -25,7 +26,9 @@ import { AuthService } from "./services/auth-service.js";
 import { BackupService } from "./services/backup-service.js";
 import { BreakGlassService } from "./services/break-glass-service.js";
 import { BrokerService } from "./services/broker-service.js";
+import { CoreModeService } from "./services/core-mode-service.js";
 import { validateEgressTarget } from "./services/egress-policy.js";
+import { LocalSecretStore } from "./services/local-secret-store.js";
 import { MaintenanceService } from "./services/maintenance-service.js";
 import { NotificationService } from "./services/notification-service.js";
 import { PolicyEngine } from "./services/policy-engine.js";
@@ -58,6 +61,7 @@ export interface KeyLoreApp {
   rotations: RotationService;
   approvals: ApprovalService;
   breakGlass: BreakGlassService;
+  coreMode: CoreModeService;
   database: SqlDatabase;
   telemetry: TelemetryService;
   traces: TraceService;
@@ -114,9 +118,11 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     config.rateLimitMaxRequests,
     telemetry,
   );
+  const localSecrets = new LocalSecretStore(config.localSecretsFilePath, config.localSecretsKeyPath);
   const commandRunner = new ExecFileCommandRunner();
   const adapterRegistry = new SecretAdapterRegistry(
     [
+      new LocalSecretAdapter(localSecrets),
       new EnvSecretAdapter(),
       new VaultSecretAdapter(config.vaultAddr, config.vaultToken, config.vaultNamespace),
       new OnePasswordSecretAdapter(commandRunner, config.opBinary),
@@ -198,6 +204,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     validateEgressTarget,
     config,
   );
+  const coreMode = new CoreModeService(broker, localSecrets);
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,
@@ -223,6 +230,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     rotations: rotationService,
     approvals: approvalService,
     breakGlass: breakGlassService,
+    coreMode,
     database,
     telemetry,
     traces,

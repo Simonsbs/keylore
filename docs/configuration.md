@@ -18,6 +18,8 @@ Those development defaults are only applied when the server is running on a loop
 - `KEYLORE_CATALOG_FILE`: catalogue filename inside the data dir
 - `KEYLORE_POLICY_FILE`: policy filename inside the data dir
 - `KEYLORE_AUTH_CLIENTS_FILE`: OAuth client bootstrap filename inside the data dir
+- `KEYLORE_LOCAL_SECRETS_FILE`: encrypted local secret-store filename inside the data dir
+- `KEYLORE_LOCAL_SECRETS_KEY_FILE`: local secret-store key filename inside the data dir
 - `KEYLORE_BOOTSTRAP_FROM_FILES`: import seed data from `data/` if the database is empty
 - `KEYLORE_HTTP_HOST`: HTTP bind host
 - `KEYLORE_HTTP_PORT`: HTTP bind port
@@ -76,11 +78,14 @@ Those development defaults are only applied when the server is running on a loop
 
 Supported adapters are:
 
+- `local`
 - `env`
 - `vault`
 - `1password`
 - `aws_secrets_manager`
 - `gcp_secret_manager`
+
+The `local` adapter is the default core-mode storage path for quickstart installs. It stores the raw secret in the local encrypted file store and keeps only the reference in the credential catalogue.
 
 An `env` binding such as:
 

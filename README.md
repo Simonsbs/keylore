@@ -96,6 +96,10 @@ This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://
 
 That uses the built-in loopback-only development bootstrap client and gets you into the operator UI without editing any config.
 
+5. In `Credentials`, choose `GitHub read-only`, paste a token into `Local encrypted store`, and click `Create credential`.
+
+That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
+
 ## Optional local overrides
 
 If you want to override the local defaults, create `.env` from [.env.example](/home/simon/keylore/.env.example). KeyLore now auto-loads `.env` on startup, so you do not need to `source` it manually.

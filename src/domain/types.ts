@@ -4,6 +4,7 @@ export const scopeTierSchema = z.enum(["read_only", "read_write", "admin"]);
 export const sensitivitySchema = z.enum(["low", "moderate", "high", "critical"]);
 export const credentialStatusSchema = z.enum(["active", "disabled"]);
 export const bindingAdapterSchema = z.enum([
+  "local",
   "env",
   "vault",
   "1password",
@@ -223,6 +224,55 @@ export const catalogSearchInputSchema = z.object({
 });
 
 export const createCredentialInputSchema = credentialRecordSchema;
+
+export const coreCredentialCreateInputSchema = z
+  .object({
+    credentialId: z.string().min(1),
+    tenantId: tenantIdSchema.default("default"),
+    displayName: z.string().min(1),
+    service: z.string().min(1),
+    owner: z.string().default("local"),
+    scopeTier: scopeTierSchema.default("read_only"),
+    sensitivity: sensitivitySchema.default("high"),
+    allowedDomains: z.array(z.string().min(1)).min(1),
+    permittedOperations: z.array(operationSchema).min(1).default(["http.get"]),
+    selectionNotes: z.string().min(1),
+    rotationPolicy: z.string().default("Managed locally"),
+    tags: z.array(z.string().min(1)).default([]),
+    status: credentialStatusSchema.default("active"),
+    expiresAt: z.string().datetime().nullable().default(null),
+    authType: authTypeSchema.default("bearer"),
+    headerName: z.string().min(1).default("Authorization"),
+    headerPrefix: z.string().default("Bearer "),
+    injectionEnvName: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
+    secretSource: z.discriminatedUnion("adapter", [
+      z.object({
+        adapter: z.literal("local"),
+        secretValue: z.string().min(1),
+      }),
+      z.object({
+        adapter: z.literal("env"),
+        ref: z.string().min(1),
+      }),
+    ]),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.authType === "bearer" &&
+      value.headerName.toLowerCase() === "authorization" &&
+      !value.headerPrefix.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["headerPrefix"],
+        message: "Bearer credentials should include a non-empty header prefix.",
+      });
+    }
+  });
+
+export const coreCredentialCreateOutputSchema = z.object({
+  credential: credentialSummarySchema,
+});
 
 export const updateCredentialInputSchema = credentialRecordSchema
   .omit({ id: true, tenantId: true })
@@ -936,6 +986,7 @@ export type PolicyRule = z.infer<typeof policyRuleSchema>;
 export type PolicyFile = z.infer<typeof policyFileSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type CatalogSearchInput = z.infer<typeof catalogSearchInputSchema>;
+export type CoreCredentialCreateInput = z.infer<typeof coreCredentialCreateInputSchema>;
 export type AccessRequestInput = z.infer<typeof accessRequestInputSchema>;
 export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type PrincipalRole = z.infer<typeof principalRoleSchema>;

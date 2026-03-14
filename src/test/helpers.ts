@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import pino from "pino";
 
+import { LocalSecretAdapter } from "../adapters/local-secret-adapter.js";
 import { KeyLoreApp } from "../app.js";
 import { SecretAdapterRegistry } from "../adapters/adapter-registry.js";
 import { KeyLoreConfig } from "../config.js";
@@ -28,7 +29,9 @@ import { BackupService } from "../services/backup-service.js";
 import { BreakGlassService } from "../services/break-glass-service.js";
 import { hashSecret } from "../services/auth-secrets.js";
 import { BrokerService } from "../services/broker-service.js";
+import { CoreModeService } from "../services/core-mode-service.js";
 import { validateEgressTarget } from "../services/egress-policy.js";
+import { LocalSecretStore } from "../services/local-secret-store.js";
 import { MaintenanceService } from "../services/maintenance-service.js";
 import { NotificationService } from "../services/notification-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
@@ -127,6 +130,8 @@ export async function makeTestApp(options?: {
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
     bootstrapAuthClientsPath: path.join(tempDir, "auth-clients.json"),
     migrationsDir,
+    localSecretsFilePath: path.join(tempDir, "local-secrets.enc.json"),
+    localSecretsKeyPath: path.join(tempDir, "local-secrets.key"),
     databaseUrl: "postgres://memory/keylore",
     databasePoolMax: 4,
     httpHost: "127.0.0.1",
@@ -198,6 +203,12 @@ export async function makeTestApp(options?: {
   const breakGlassRepository = new PgBreakGlassRepository(database);
   const rotationRepository = new PgRotationRunRepository(database);
   const telemetry = new TelemetryService();
+  const localSecrets = new LocalSecretStore(config.localSecretsFilePath, config.localSecretsKeyPath);
+  const adapters = new SecretAdapterRegistry(
+    [new LocalSecretAdapter(localSecrets), new EnvSecretAdapter()],
+    config,
+    telemetry,
+  );
   const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
   const traceExports = new TraceExportService(
     config.traceExportUrl,
@@ -380,7 +391,7 @@ export async function makeTestApp(options?: {
   const rotations = new RotationService(
     rotationRepository,
     credentialRepository,
-    new SecretAdapterRegistry([new EnvSecretAdapter()], config, telemetry),
+    adapters,
     audit,
     notifications,
     traces,
@@ -404,7 +415,7 @@ export async function makeTestApp(options?: {
     credentialRepository,
     policyRepository,
     audit,
-    new SecretAdapterRegistry([new EnvSecretAdapter()], config, telemetry),
+    adapters,
     new PolicyEngine(),
     approvals,
     breakGlass,
@@ -413,6 +424,7 @@ export async function makeTestApp(options?: {
     validateEgressTarget,
     config,
   );
+  const coreMode = new CoreModeService(broker, localSecrets);
 
   const app: KeyLoreApp = {
     config,
@@ -423,6 +435,7 @@ export async function makeTestApp(options?: {
     rotations,
     approvals,
     breakGlass,
+    coreMode,
     database,
     telemetry,
     traces,

@@ -11,6 +11,8 @@ export interface KeyLoreConfig {
   bootstrapPolicyPath: string;
   bootstrapAuthClientsPath: string;
   migrationsDir: string;
+  localSecretsFilePath: string;
+  localSecretsKeyPath: string;
   databaseUrl: string;
   databasePoolMax: number;
   httpHost: string;
@@ -200,6 +202,8 @@ const envSchema = z.object({
   KEYLORE_POLICY_FILE: z.string().optional(),
   KEYLORE_AUTH_CLIENTS_FILE: z.string().optional(),
   KEYLORE_MIGRATIONS_DIR: z.string().optional(),
+  KEYLORE_LOCAL_SECRETS_FILE: z.string().optional(),
+  KEYLORE_LOCAL_SECRETS_KEY_FILE: z.string().optional(),
   KEYLORE_DATABASE_URL: z.string().min(1),
   KEYLORE_DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   KEYLORE_HTTP_HOST: z.string().default("127.0.0.1"),
@@ -293,6 +297,8 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
       env.KEYLORE_AUTH_CLIENTS_FILE ?? "auth-clients.json",
     ),
     migrationsDir: path.resolve(cwd, env.KEYLORE_MIGRATIONS_DIR ?? "migrations"),
+    localSecretsFilePath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_FILE ?? "local-secrets.enc.json"),
+    localSecretsKeyPath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_KEY_FILE ?? "local-secrets.key"),
     databaseUrl: env.KEYLORE_DATABASE_URL,
     databasePoolMax: env.KEYLORE_DATABASE_POOL_MAX,
     httpHost: env.KEYLORE_HTTP_HOST,

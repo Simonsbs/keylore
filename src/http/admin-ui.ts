@@ -863,6 +863,9 @@ function renderResultState(result, renderOk) {
 
 function renderOverview() {
   const ready = state.data.readyz && state.data.readyz.ok ? state.data.readyz.data : null;
+  const credentialCount = state.data.credentials && state.data.credentials.ok
+    ? state.data.credentials.data.credentials.length
+    : ready ? ready.credentials : 'n/a';
   const tenantCount = state.data.tenants && state.data.tenants.ok ? state.data.tenants.data.tenants.length : 0;
   const clientCount = state.data.authClients && state.data.authClients.ok ? state.data.authClients.data.clients.length : 0;
   const pendingApprovals = state.data.approvals && state.data.approvals.ok
@@ -873,7 +876,7 @@ function renderOverview() {
     : 0;
 
   byId('overview-metrics').innerHTML = [
-    '<article class="metric-card"><span>Credentials</span><strong>' + escapeHtml(String(ready ? ready.credentials : 'n/a')) + '</strong></article>',
+    '<article class="metric-card"><span>Credentials</span><strong>' + escapeHtml(String(credentialCount)) + '</strong></article>',
     '<article class="metric-card"><span>Tenants</span><strong>' + escapeHtml(String(tenantCount)) + '</strong></article>',
     '<article class="metric-card"><span>OAuth Clients</span><strong>' + escapeHtml(String(clientCount)) + '</strong></article>',
     '<article class="metric-card"><span>Pending Reviews</span><strong>' + escapeHtml(String(pendingApprovals + activeBreakGlass)) + '</strong></article>'
@@ -885,6 +888,29 @@ function renderOverview() {
   byId('overview-last-response').innerHTML = state.lastResponse
     ? '<pre>' + escapeHtml(prettyJson(state.lastResponse)) + '</pre>'
     : '<div class="empty-state">Fresh token issues and admin actions are echoed here for quick operator inspection.</div>';
+}
+
+function renderCredentials() {
+  byId('credential-list').innerHTML = renderResultState(state.data.credentials, function(payload) {
+    if (!payload.credentials.length) {
+      return '<div class="empty-state">No credentials are visible yet. Create one below.</div>';
+    }
+
+    return payload.credentials.map(function(credential) {
+      return [
+        '<article class="list-card">',
+        '<div class="toolbar"><div><h3>' + escapeHtml(credential.displayName) + '</h3><p class="mono">' + escapeHtml(credential.id) + '</p></div><span class="' + (credential.status === 'active' ? 'state-active' : 'state-disabled') + '">' + escapeHtml(credential.status) + '</span></div>',
+        '<div class="list-meta">',
+        '<span class="pill"><strong>Service</strong> ' + escapeHtml(credential.service) + '</span>',
+        '<span class="pill"><strong>Scope</strong> ' + escapeHtml(credential.scopeTier) + '</span>',
+        '<span class="pill"><strong>Sensitivity</strong> ' + escapeHtml(credential.sensitivity) + '</span>',
+        '</div>',
+        '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
+        '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
+        '</article>'
+      ].join('');
+    }).join('');
+  });
 }
 
 function renderTenants() {
@@ -1047,6 +1073,7 @@ function renderBackups() {
 
 function renderAll() {
   syncSessionFields();
+  renderCredentials();
   renderOverview();
   renderTenants();
   renderAuthClients();
@@ -1065,6 +1092,7 @@ async function refreshDashboard() {
   setBusy(true);
   clearNotice();
   state.data.readyz = await safeFetch('/readyz');
+  state.data.credentials = await safeFetch('/v1/catalog/credentials');
   state.data.tenants = await safeFetch('/v1/tenants');
   state.data.authClients = await safeFetch('/v1/auth/clients');
   state.data.approvals = await safeFetch('/v1/approvals');
@@ -1121,6 +1149,64 @@ function serializeAuthClientForm() {
   };
 }
 
+function applyCredentialTemplate() {
+  const template = byId('credential-template').value;
+  if (template === 'github-readonly') {
+    byId('credential-id').value = 'github-readonly-local';
+    byId('credential-name').value = 'GitHub Read-Only Token';
+    byId('credential-service').value = 'github';
+    byId('credential-domains').value = 'api.github.com';
+    byId('credential-notes').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
+    byId('credential-tags').value = 'github,readonly';
+    byId('credential-sensitivity').value = 'high';
+    return;
+  }
+
+  if (template === 'generic-bearer') {
+    byId('credential-id').value = '';
+    byId('credential-name').value = '';
+    byId('credential-service').value = '';
+    byId('credential-domains').value = '';
+    byId('credential-notes').value = '';
+    byId('credential-tags').value = '';
+    byId('credential-sensitivity').value = 'moderate';
+  }
+}
+
+function syncCredentialSourceFields() {
+  const adapter = byId('credential-storage').value;
+  byId('credential-secret-field').hidden = adapter !== 'local';
+  byId('credential-env-ref-field').hidden = adapter !== 'env';
+}
+
+function serializeCredentialForm() {
+  const adapter = byId('credential-storage').value;
+  return {
+    credentialId: byId('credential-id').value.trim(),
+    displayName: byId('credential-name').value.trim(),
+    service: byId('credential-service').value.trim(),
+    owner: 'local',
+    scopeTier: 'read_only',
+    sensitivity: byId('credential-sensitivity').value,
+    allowedDomains: splitList(byId('credential-domains').value),
+    permittedOperations: ['http.get'],
+    selectionNotes: byId('credential-notes').value.trim(),
+    tags: splitList(byId('credential-tags').value),
+    authType: 'bearer',
+    headerName: 'Authorization',
+    headerPrefix: 'Bearer ',
+    secretSource: adapter === 'local'
+      ? {
+          adapter: 'local',
+          secretValue: byId('credential-secret').value
+        }
+      : {
+          adapter: 'env',
+          ref: byId('credential-env-ref').value.trim()
+        }
+  };
+}
+
 async function handleLogin(event) {
   if (event) {
     event.preventDefault();
@@ -1154,6 +1240,25 @@ async function handleLocalQuickstartLogin() {
   populateLoginDefaults(true);
   byId('pasted-token').value = '';
   await handleLogin();
+}
+
+async function handleCreateCredential(event) {
+  event.preventDefault();
+  const payload = serializeCredentialForm();
+  await withAction('Credential created.', async function() {
+    return fetchJson('/v1/core/credentials', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+  });
+  byId('credential-form').reset();
+  byId('credential-template').value = 'github-readonly';
+  byId('credential-storage').value = 'local';
+  applyCredentialTemplate();
+  syncCredentialSourceFields();
 }
 
 async function handleCreateTenant(event) {
@@ -1375,6 +1480,7 @@ async function initialize() {
   byId('resource').value = state.resource;
   byId('scope-input').value = [
     'catalog:read',
+    'catalog:write',
     'admin:read',
     'admin:write',
     'auth:read',
@@ -1398,6 +1504,9 @@ async function initialize() {
   if (localQuickstartButton) {
     localQuickstartButton.addEventListener('click', handleLocalQuickstartLogin);
   }
+  byId('credential-form').addEventListener('submit', handleCreateCredential);
+  byId('credential-template').addEventListener('change', applyCredentialTemplate);
+  byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
   byId('tenant-form').addEventListener('submit', handleCreateTenant);
   byId('auth-client-form').addEventListener('submit', handleCreateClient);
   byId('refresh-dashboard').addEventListener('click', refreshDashboard);
@@ -1432,6 +1541,8 @@ async function initialize() {
   } else {
     renderAll();
     populateLoginDefaults(false);
+    applyCredentialTemplate();
+    syncCredentialSourceFields();
     if (state.localAdminBootstrap) {
       setNotice('info', 'Local quickstart is enabled. Use the shortcut to open an admin session immediately.');
     }
@@ -1463,7 +1574,8 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         <h1 class="brand">KeyLore<br />Admin</h1>
         <p class="brand-subtitle">A thin operator interface over the frozen REST contract. It stays inside the existing deployment path and never surfaces secret values.</p>
         <nav class="nav-group">
-          <button class="nav-button is-active" data-section="overview-section" type="button">Overview</button>
+          <button class="nav-button is-active" data-section="credentials-section" type="button">Credentials</button>
+          <button class="nav-button" data-section="overview-section" type="button">Overview</button>
           <button class="nav-button" data-section="tenants-section" type="button">Tenants</button>
           <button class="nav-button" data-section="clients-section" type="button">OAuth Clients</button>
           <button class="nav-button" data-section="approvals-section" type="button">Approvals</button>
@@ -1477,9 +1589,9 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
       <main class="content">
         <section class="hero">
           <div>
-            <span class="eyebrow">Minimal Admin UI Beta Scope</span>
-            <h1>Operate the broker without leaving the release contract.</h1>
-            <p class="hero-copy">This UI is intentionally narrow: session bootstrap, tenant and client administration, review queues, backups, audit, and system status. It wraps existing endpoints rather than inventing new backend behavior.</p>
+            <span class="eyebrow">Core Mode</span>
+            <h1>Add a secret, add context, and broker it safely.</h1>
+            <p class="hero-copy">The primary workflow is now credential onboarding. Store a token through KeyLore, write LLM-facing usage notes, and keep the raw secret out of model-visible context.</p>
           </div>
           <div class="hero-meta">
             <div class="meta-card">
@@ -1542,6 +1654,34 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         </section>
 
         <div id="dashboard" class="dashboard" hidden>
+          <section id="credentials-section" class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Credentials</h2>
+                <p>Create the secret binding and the LLM-facing context in one flow. Local storage keeps the raw token out of the catalogue.</p>
+              </div>
+            </div>
+            <div class="panel-grid">
+              <div class="span-5 panel">
+                <form id="credential-form" class="form-grid">
+                  <div class="field"><label for="credential-template">Template</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="generic-bearer">Generic bearer API</option></select></div>
+                  <div class="field"><label for="credential-storage">Secret Storage</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
+                  <div class="field"><label for="credential-id">Credential ID</label><input id="credential-id" type="text" required /></div>
+                  <div class="field"><label for="credential-name">Display Name</label><input id="credential-name" type="text" required /></div>
+                  <div class="field"><label for="credential-service">Service</label><input id="credential-service" type="text" required /></div>
+                  <div class="field"><label for="credential-sensitivity">Sensitivity</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                  <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Token / Secret Value</label><textarea id="credential-secret" placeholder="Paste the raw token here. It will be stored outside the metadata catalogue."></textarea></div>
+                  <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment Variable Name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
+                  <div class="field-wide"><label for="credential-domains">Allowed Domains</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
+                  <div class="field-wide"><label for="credential-notes">LLM Usage Notes</label><textarea id="credential-notes" placeholder="Explain when the coding agent should choose this credential."></textarea></div>
+                  <div class="field-wide"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating credential..." data-idle-label="Create credential">Create credential</button></div>
+                </form>
+              </div>
+              <div class="span-7 panel"><div id="credential-list"></div></div>
+            </div>
+          </section>
+
           <section id="overview-section" class="panel">
             <div class="section-heading">
               <div>

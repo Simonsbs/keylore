@@ -6,6 +6,7 @@ KeyLore now ships a minimal operator UI at `/admin`.
 
 The UI is intentionally narrow and stays on top of the frozen REST contract:
 
+- create credentials through the new core onboarding flow
 - open an operator session with `client_credentials` or a pasted bearer token
 - inspect readiness and recent operator responses
 - create and toggle tenants
@@ -28,8 +29,11 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 1. For local use, run `npm run quickstart`.
 2. Open `<publicBaseUrl>/admin`.
 3. On the local loopback quickstart path, click `Use local admin quickstart`.
-4. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
-5. Work through the tenant, auth, review, backup, audit, and system panels.
+4. Use `Credentials` to create a token-backed credential with either:
+   - `Local encrypted store`
+   - `Environment reference`
+5. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+6. Work through the tenant, auth, review, backup, audit, and system panels.
 
 ## Validation
 

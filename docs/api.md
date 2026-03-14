@@ -86,6 +86,18 @@ Creates a credential metadata record. Secret material is still external and refe
 Required scope: `catalog:write`
 Required role: `admin` or `operator`
 
+### `POST /v1/core/credentials`
+
+Creates a credential through the core onboarding path. This endpoint is intended for the local-first UI flow where the user stores the secret separately from the LLM-facing catalogue record.
+
+Supported secret sources:
+
+- `local`: stores the secret in the local encrypted file store and creates a `local` binding reference automatically
+- `env`: creates an `env` binding against an existing environment variable name
+
+Required scope: `catalog:write`
+Required role: `admin` or `operator`
+
 ### `GET /v1/catalog/credentials/:id`
 
 Returns one safe credential summary.
