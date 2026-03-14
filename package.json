@@ -4,12 +4,26 @@
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",
   "main": "dist/index.js",
+  "files": [
+    "bin",
+    "dist",
+    "data/auth-clients.json",
+    "data/catalog.json",
+    "data/policies.json",
+    "migrations",
+    ".env.example",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
   "bin": {
-    "keylore": "dist/cli.js"
+    "keylore": "dist/cli.js",
+    "keylore-http": "bin/keylore-http.js",
+    "keylore-stdio": "bin/keylore-stdio.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Simonsbs/keylore.git"
+    "url": "git+https://github.com/Simonsbs/keylore.git"
   },
   "keywords": [
     "mcp",
@@ -25,7 +39,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
     "test:contracts": "node --test --import tsx src/test/contract.test.ts",
     "test:conformance": "node --test --import tsx src/test/conformance.test.ts",

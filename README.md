@@ -88,6 +88,15 @@ npm install
 npm run quickstart
 ```
 
+For a clean Linux VM install from npm instead of cloning the repo:
+
+```bash
+npm install -g keylore
+keylore-http
+```
+
+That starts KeyLore from the packaged migrations and seed data, while writable state defaults to `~/.keylore`.
+
 To simulate a brand-new user install on the same machine without reusing your normal checkout or shell environment:
 
 ```bash

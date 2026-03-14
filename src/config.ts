@@ -1,5 +1,7 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import * as z from "zod/v4";
 
@@ -84,6 +86,7 @@ export interface KeyLoreConfig {
 }
 
 const LOCAL_DATABASE_URL = "postgresql://keylore:keylore@127.0.0.1:5432/keylore";
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOCAL_ADMIN_CLIENT_ID = "keylore-admin-local";
 const LOCAL_ADMIN_CLIENT_SECRET = "keylore-local-admin";
 const LOCAL_CONSUMER_CLIENT_SECRET = "keylore-local-consumer";
@@ -203,6 +206,22 @@ function hydrateEnvironment(cwd: string): {
   };
 }
 
+function resolveRuntimeRoot(cwd: string): string {
+  if (fs.existsSync(path.join(cwd, "migrations")) && fs.existsSync(path.join(cwd, "data"))) {
+    return cwd;
+  }
+
+  return PACKAGE_ROOT;
+}
+
+function resolveDefaultDataDir(cwd: string): string {
+  if (fs.existsSync(path.join(cwd, "data"))) {
+    return path.resolve(cwd, "data");
+  }
+
+  return path.join(os.homedir(), ".keylore");
+}
+
 const envSchema = z.object({
   KEYLORE_DATA_DIR: z.string().optional(),
   KEYLORE_CATALOG_FILE: z.string().optional(),
@@ -286,7 +305,8 @@ const envSchema = z.object({
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
   const hydrated = hydrateEnvironment(cwd);
   const env = envSchema.parse(hydrated.env);
-  const dataDir = path.resolve(cwd, env.KEYLORE_DATA_DIR ?? "data");
+  const runtimeRoot = resolveRuntimeRoot(cwd);
+  const dataDir = path.resolve(env.KEYLORE_DATA_DIR ?? resolveDefaultDataDir(cwd));
   const publicBaseUrl =
     env.KEYLORE_PUBLIC_BASE_URL ?? `http://${env.KEYLORE_HTTP_HOST}:${env.KEYLORE_HTTP_PORT}`;
   const oauthIssuerUrl = env.KEYLORE_OAUTH_ISSUER_URL ?? `${publicBaseUrl}/oauth`;
@@ -299,13 +319,14 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     appName: "keylore",
     version: "1.0.0-rc4",
     dataDir,
-    bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
-    bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
+    bootstrapCatalogPath: path.resolve(runtimeRoot, "data", env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
+    bootstrapPolicyPath: path.resolve(runtimeRoot, "data", env.KEYLORE_POLICY_FILE ?? "policies.json"),
     bootstrapAuthClientsPath: path.resolve(
-      dataDir,
+      runtimeRoot,
+      "data",
       env.KEYLORE_AUTH_CLIENTS_FILE ?? "auth-clients.json",
     ),
-    migrationsDir: path.resolve(cwd, env.KEYLORE_MIGRATIONS_DIR ?? "migrations"),
+    migrationsDir: path.resolve(runtimeRoot, env.KEYLORE_MIGRATIONS_DIR ?? "migrations"),
     localSecretsFilePath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_FILE ?? "local-secrets.enc.json"),
     localSecretsKeyPath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_KEY_FILE ?? "local-secrets.key"),
     databaseUrl: env.KEYLORE_DATABASE_URL,

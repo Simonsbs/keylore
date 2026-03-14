@@ -176,3 +176,30 @@ test("loadConfig does not expose a UI quickstart secret when a custom bootstrap 
     process.env = originalEnv;
   }
 });
+
+test("loadConfig falls back to packaged assets and user-home data outside the repo root", async () => {
+  const originalEnv = process.env;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "keylore-config-package-"));
+
+  process.env = {
+    KEYLORE_HTTP_HOST: "127.0.0.1",
+    KEYLORE_ENVIRONMENT: "development",
+  };
+
+  try {
+    const config = loadConfig(tempDir);
+
+    assert.equal(config.dataDir, path.join(os.homedir(), ".keylore"));
+    assert.match(config.bootstrapCatalogPath, /\/data\/catalog\.json$/);
+    assert.match(config.bootstrapPolicyPath, /\/data\/policies\.json$/);
+    assert.match(config.bootstrapAuthClientsPath, /\/data\/auth-clients\.json$/);
+    assert.match(config.migrationsDir, /\/migrations$/);
+    assert.equal(
+      config.localSecretsFilePath,
+      path.join(os.homedir(), ".keylore", "local-secrets.enc.json"),
+    );
+  } finally {
+    process.env = originalEnv;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
