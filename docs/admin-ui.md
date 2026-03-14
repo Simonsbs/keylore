@@ -8,6 +8,8 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 
 - create credentials through the new core onboarding flow
 - test credentials through brokered access from the UI
+- generate Codex and Gemini CLI MCP connection snippets
+- mint and verify a remote HTTP MCP token from the UI
 - open an operator session with `client_credentials` or a pasted bearer token
 - inspect readiness and recent operator responses
 - create and toggle tenants
@@ -34,8 +36,9 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - `Local encrypted store`
    - `Environment reference`
 5. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-6. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
-7. Work through the tenant, auth, review, backup, audit, and system panels.
+6. Use `Connect MCP` to copy the generated `stdio` or HTTP snippets for Codex and Gemini CLI.
+7. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+8. Work through the tenant, auth, review, backup, audit, and system panels.
 
 ## Validation
 

@@ -191,6 +191,11 @@ Acceptance criteria:
 - a user can connect Codex from the UI without reading the API docs
 - the MCP path uses KeyLore tools and not the raw secret
 
+Status:
+- complete:
+  - `Connect MCP` now generates ready-to-paste Codex and Gemini CLI snippets for local `stdio`
+  - the panel also mints and verifies a resource-bound HTTP MCP token for `/mcp`
+
 ## Core-7
 
 Hide advanced scope by default.

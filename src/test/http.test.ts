@@ -724,6 +724,72 @@ test("core credential onboarding stores a local secret and creates a usable cred
   await close();
 });
 
+test("core MCP connection check validates a resource-bound MCP token", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8912,
+      publicBaseUrl: "http://127.0.0.1:8912",
+      oauthIssuerUrl: "http://127.0.0.1:8912/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const apiTokenResponse = await fetch("http://127.0.0.1:8912/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8912/v1",
+    }),
+  });
+  assert.equal(apiTokenResponse.status, 200);
+  const apiToken = (await apiTokenResponse.json()) as { access_token: string };
+
+  const mcpTokenResponse = await fetch("http://127.0.0.1:8912/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read broker:use mcp:use",
+      resource: "http://127.0.0.1:8912/mcp",
+    }),
+  });
+  assert.equal(mcpTokenResponse.status, 200);
+  const mcpToken = (await mcpTokenResponse.json()) as { access_token: string };
+
+  const checkResponse = await fetch("http://127.0.0.1:8912/v1/core/mcp/check", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiToken.access_token}`,
+    },
+    body: JSON.stringify({
+      token: mcpToken.access_token,
+    }),
+  });
+  assert.equal(checkResponse.status, 200);
+  const checkPayload = (await checkResponse.json()) as {
+    ok: boolean;
+    resource: string;
+    scopes: string[];
+  };
+  assert.equal(checkPayload.ok, true);
+  assert.equal(checkPayload.resource, "http://127.0.0.1:8912/mcp");
+  assert.ok(checkPayload.scopes.includes("mcp:use"));
+
+  await server.close();
+  await close();
+});
+
 test("auth client lifecycle and token revocation APIs operate over HTTP", async () => {
   const { app, close } = await makeTestApp({
     configOverrides: {

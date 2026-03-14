@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { KeyLoreApp } from "../app.js";
 
 const adminStyles = String.raw`
@@ -639,7 +642,9 @@ const state = {
   lastBackup: null,
   lastClientSecret: null,
   lastResponse: null,
-  lastCredentialTest: null
+  lastCredentialTest: null,
+  lastMcpConnection: null,
+  mcpToken: ''
 };
 
 const storageKey = 'keylore-admin-session';
@@ -698,6 +703,57 @@ function defaultTestUrlForCredential(credential) {
     return 'https://' + credential.allowedDomains[0];
   }
   return '';
+}
+
+function mcpHttpTokenValue() {
+  return state.mcpToken || 'REPLACE_ME_MCP_TOKEN';
+}
+
+function codexStdioSnippet() {
+  return [
+    '[mcp_servers.keylore_stdio]',
+    'command = "node"',
+    'args = ["' + config.stdioEntryPath.replace(/\\/g, '\\\\') + '", "--transport", "stdio"]'
+  ].join('\n');
+}
+
+function codexHttpSnippet() {
+  return [
+    '[mcp_servers.keylore_http]',
+    'url = "' + config.baseUrl.replace(/\/$/, '') + '/mcp"',
+    'bearer_token_env_var = "KEYLORE_MCP_ACCESS_TOKEN"'
+  ].join('\n');
+}
+
+function geminiStdioSnippet() {
+  return prettyJson({
+    mcpServers: {
+      keylore_stdio: {
+        command: 'node',
+        args: [config.stdioEntryPath, '--transport', 'stdio']
+      }
+    }
+  });
+}
+
+function geminiHttpSnippet() {
+  return prettyJson({
+    mcpServers: {
+      keylore_http: {
+        httpUrl: config.baseUrl.replace(/\/$/, '') + '/mcp',
+        headers: {
+          Authorization: 'Bearer ' + mcpHttpTokenValue()
+        }
+      }
+    }
+  });
+}
+
+function genericHttpSnippet() {
+  return [
+    'MCP endpoint: ' + config.baseUrl.replace(/\/$/, '') + '/mcp',
+    'Authorization: Bearer ' + mcpHttpTokenValue()
+  ].join('\n');
 }
 
 function setNotice(kind, message) {
@@ -765,6 +821,8 @@ function clearSession() {
   state.lastClientSecret = null;
   state.lastResponse = null;
   state.lastCredentialTest = null;
+  state.lastMcpConnection = null;
+  state.mcpToken = '';
   localStorage.removeItem(storageKey);
   syncSessionFields();
   renderAll();
@@ -942,6 +1000,25 @@ function renderCredentials() {
     : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
 }
 
+function renderConnect() {
+  byId('codex-stdio-snippet').value = codexStdioSnippet();
+  byId('codex-http-snippet').value = codexHttpSnippet();
+  byId('gemini-stdio-snippet').value = geminiStdioSnippet();
+  byId('gemini-http-snippet').value = geminiHttpSnippet();
+  byId('generic-http-snippet').value = genericHttpSnippet();
+  byId('mcp-token-export').value = "export KEYLORE_MCP_ACCESS_TOKEN='" + mcpHttpTokenValue() + "'";
+  byId('connect-client-id').value = state.localAdminBootstrap ? state.localAdminBootstrap.clientId : (state.sessionClientId || '');
+  if (state.localAdminBootstrap && !byId('connect-client-secret').value) {
+    byId('connect-client-secret').value = state.localAdminBootstrap.clientSecret;
+  }
+  byId('connect-stdio-status').innerHTML = config.stdioAvailable
+    ? '<div class="state-active">stdio entry is available at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span></div>'
+    : '<div class="error-state">The stdio entry point was not found at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span>.</div>';
+  byId('connect-result').innerHTML = state.lastMcpConnection
+    ? '<pre>' + escapeHtml(prettyJson(state.lastMcpConnection)) + '</pre>'
+    : '<div class="empty-state">Run the MCP connection check to mint and validate a remote MCP token.</div>';
+}
+
 function renderTenants() {
   byId('tenant-list').innerHTML = renderResultState(state.data.tenants, function(payload) {
     if (!payload.tenants.length) {
@@ -1103,6 +1180,7 @@ function renderBackups() {
 function renderAll() {
   syncSessionFields();
   renderCredentials();
+  renderConnect();
   renderOverview();
   renderTenants();
   renderAuthClients();
@@ -1330,6 +1408,65 @@ async function handleCredentialTest(event) {
   });
   state.lastCredentialTest = result;
   renderCredentials();
+}
+
+async function handleMcpConnectionCheck(event) {
+  event.preventDefault();
+  const clientId = byId('connect-client-id').value.trim();
+  const clientSecret = byId('connect-client-secret').value;
+  if (!clientId || !clientSecret) {
+    setNotice('error', 'Client ID and client secret are required to mint a remote MCP token.');
+    return;
+  }
+
+  setBusy(true);
+  clearNotice();
+
+  try {
+    const tokenResponse = await fetch(state.baseUrl.replace(/\/$/, '') + '/oauth/token', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: 'catalog:read broker:use mcp:use',
+        resource: state.baseUrl.replace(/\/$/, '') + '/mcp'
+      })
+    });
+    const tokenPayload = await tokenResponse.json().catch(function() {
+      return { error: 'Unable to parse token response.' };
+    });
+    if (!tokenResponse.ok) {
+      throw new Error(tokenPayload.error || 'Failed to mint MCP token.');
+    }
+
+    state.mcpToken = tokenPayload.access_token;
+
+    const checkResult = await fetchJson('/v1/core/mcp/check', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ token: state.mcpToken })
+    });
+
+    state.lastMcpConnection = {
+      transport: 'http',
+      tokenIssued: true,
+      tokenScopes: tokenPayload.scope || 'catalog:read broker:use mcp:use',
+      tokenType: tokenPayload.token_type || 'Bearer',
+      verification: checkResult
+    };
+    setNotice('info', 'HTTP MCP token minted and verified.');
+    renderConnect();
+    setBusy(false);
+  } catch (error) {
+    setBusy(false);
+    setNotice('error', error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function handleCreateTenant(event) {
@@ -1577,6 +1714,7 @@ async function initialize() {
   }
   byId('credential-form').addEventListener('submit', handleCreateCredential);
   byId('credential-test-form').addEventListener('submit', handleCredentialTest);
+  byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
   byId('credential-test-id').addEventListener('change', function() {
@@ -1628,10 +1766,13 @@ window.addEventListener('DOMContentLoaded', initialize);
 `;
 
 export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
+  const stdioEntryPath = path.resolve(process.cwd(), "dist/index.js");
   const config = {
     version: app.config.version,
     baseUrl: app.config.publicBaseUrl,
     localAdminBootstrap: app.config.localAdminBootstrap,
+    stdioEntryPath,
+    stdioAvailable: fs.existsSync(stdioEntryPath),
   };
 
   return `<!doctype html>
@@ -1650,6 +1791,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         <p class="brand-subtitle">A thin operator interface over the frozen REST contract. It stays inside the existing deployment path and never surfaces secret values.</p>
         <nav class="nav-group">
           <button class="nav-button is-active" data-section="credentials-section" type="button">Credentials</button>
+          <button class="nav-button" data-section="connect-section" type="button">Connect MCP</button>
           <button class="nav-button" data-section="overview-section" type="button">Overview</button>
           <button class="nav-button" data-section="tenants-section" type="button">Tenants</button>
           <button class="nav-button" data-section="clients-section" type="button">OAuth Clients</button>
@@ -1769,6 +1911,60 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   </form>
                   <div id="credential-test-result" style="margin-top: 18px;"></div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="connect-section" class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Connect MCP</h2>
+                <p>Use <code>stdio</code> for the easiest local setup. Use HTTP MCP only when you want a remote bearer-token flow.</p>
+              </div>
+            </div>
+            <div class="panel-grid">
+              <div class="span-6 code-stack">
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex stdio</h2></div></div>
+                  <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini stdio</h2></div></div>
+                  <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">stdio check</h2></div></div>
+                  <div id="connect-stdio-status"></div>
+                </div>
+              </div>
+              <div class="span-6 code-stack">
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex HTTP</h2></div></div>
+                  <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini HTTP</h2></div></div>
+                  <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
+                </div>
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Generic HTTP</h2></div></div>
+                  <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
+                </div>
+              </div>
+              <div class="span-12 panel">
+                <div class="section-heading">
+                  <div>
+                    <h2 style="font-size:1.4rem;">HTTP MCP token and check</h2>
+                    <p>Mint a resource-bound token for <code>/mcp</code>, verify it against the MCP resource, and copy the export command if you want the HTTP transport.</p>
+                  </div>
+                </div>
+                <form id="connect-form" class="form-grid">
+                  <div class="field"><label for="connect-client-id">Client ID</label><input id="connect-client-id" type="text" placeholder="keylore-admin-local" /></div>
+                  <div class="field"><label for="connect-client-secret">Client Secret</label><input id="connect-client-secret" type="password" placeholder="operator secret" /></div>
+                  <div class="field-wide"><label for="mcp-token-export">Export command</label><textarea id="mcp-token-export" style="width:100%; min-height: 90px;"></textarea></div>
+                  <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Checking MCP..." data-idle-label="Mint token and verify HTTP MCP">Mint token and verify HTTP MCP</button></div>
+                </form>
+                <div id="connect-result" style="margin-top: 18px;"></div>
               </div>
             </div>
           </section>

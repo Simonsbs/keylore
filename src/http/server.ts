@@ -564,6 +564,38 @@ async function handleApiRequest(
   res: ServerResponse,
   url: URL,
 ): Promise<void> {
+  if (url.pathname === "/v1/core/mcp/check" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const body = z
+      .object({
+        token: z.string().min(1),
+      })
+      .parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const mcpContext = await app.auth.authenticateBearerToken(
+      body.token,
+      `${app.config.publicBaseUrl}/mcp`,
+    );
+    respondJson(res, 200, {
+      ok: true,
+      clientId: mcpContext.clientId,
+      principal: mcpContext.principal,
+      scopes: mcpContext.scopes,
+      resource: `${app.config.publicBaseUrl}/mcp`,
+    });
+    return;
+  }
+
   if (url.pathname === "/v1/catalog/credentials" && req.method === "GET") {
     const context = await authenticateRequest(
       app,

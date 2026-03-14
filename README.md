@@ -104,6 +104,8 @@ That stores the raw token outside the searchable catalogue and keeps only the LL
 
 The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
 
+7. In `Connect MCP`, copy the generated Codex or Gemini CLI `stdio` snippet for the easiest local setup. If you want remote HTTP MCP instead, mint and verify an `/mcp` token directly from the panel first.
+
 ## Optional local overrides
 
 If you want to override the local defaults, create `.env` from [.env.example](/home/simon/keylore/.env.example). KeyLore now auto-loads `.env` on startup, so you do not need to `source` it manually.
