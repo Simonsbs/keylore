@@ -701,23 +701,6 @@ test("core credential onboarding stores a local secret and creates a usable cred
   });
 
   const { app, close } = await makeTestApp({
-    policies: {
-      version: 1,
-      rules: [
-        {
-          id: "allow-admin-github-read",
-          tenantId: "default",
-          effect: "allow",
-          description: "Allow admin role to use GitHub-style read credentials.",
-          principals: ["admin-client"],
-          principalRoles: ["admin", "operator"],
-          services: ["github"],
-          operations: ["http.get"],
-          domainPatterns: ["localhost"],
-          environments: ["test"],
-        },
-      ],
-    },
     configOverrides: {
       httpPort: 8911,
       publicBaseUrl: "http://127.0.0.1:8911",
@@ -785,6 +768,75 @@ test("core credential onboarding stores a local secret and creates a usable cred
   assert.match(decision.httpResult?.bodyPreview ?? "", /true/);
 
   await target.close();
+  await server.close();
+  await close();
+});
+
+test("core credential delete removes the credential and local secret", async () => {
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8915,
+      publicBaseUrl: "http://127.0.0.1:8915",
+      oauthIssuerUrl: "http://127.0.0.1:8915/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8915/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read catalog:write broker:use",
+      resource: "http://127.0.0.1:8915/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+  const createResponse = await fetch("http://127.0.0.1:8915/v1/core/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "delete-demo",
+      displayName: "Delete Demo",
+      service: "github",
+      allowedDomains: ["api.github.com"],
+      selectionNotes: "Use for delete validation only.",
+      secretSource: {
+        adapter: "local",
+        secretValue: "ghp-delete-demo",
+      },
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+
+  const deleteResponse = await fetch("http://127.0.0.1:8915/v1/core/credentials/delete-demo", {
+    method: "DELETE",
+    headers: {
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+  });
+  assert.equal(deleteResponse.status, 200);
+  const deletePayload = (await deleteResponse.json()) as { deleted: boolean };
+  assert.equal(deletePayload.deleted, true);
+
+  const credentialResponse = await fetch("http://127.0.0.1:8915/v1/catalog/credentials", {
+    headers: {
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+  });
+  assert.equal(credentialResponse.status, 200);
+  const credentialPayload = (await credentialResponse.json()) as { credentials: Array<{ id: string }> };
+  assert.equal(credentialPayload.credentials.some((credential) => credential.id === "delete-demo"), false);
+
   await server.close();
   await close();
 });

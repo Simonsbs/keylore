@@ -425,7 +425,7 @@ export async function makeTestApp(options?: {
     validateEgressTarget,
     config,
   );
-  const coreMode = new CoreModeService(broker, localSecrets);
+  const coreMode = new CoreModeService(broker, policyRepository, localSecrets, config.defaultPrincipal);
 
   const app: KeyLoreApp = {
     config,

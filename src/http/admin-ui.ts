@@ -1165,7 +1165,7 @@ function renderCredentials() {
         '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
         '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit AI notes</button></div>',
-        '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button></div></details>',
+        '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button>' + (credential.owner === 'local' ? '<button class="button-danger" type="button" data-credential-context-action="delete" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Delete</button>' : '') + '</div></details>',
         '</article>'
       ].join('');
     }
@@ -2091,6 +2091,31 @@ async function handleCredentialContextAction(event) {
       });
       state.currentCredentialContext = result.credential;
       state.selectedCredentialId = credentialId;
+      renderCredentialContextManager();
+      return;
+    }
+
+    if (action === 'delete') {
+      const confirmed = window.confirm('Delete "' + (button.dataset.credentialContextName || credentialId) + '" permanently? This removes the token metadata and its local secret material.');
+      if (!confirmed) {
+        return;
+      }
+      await withAction('Token deleted.', async function() {
+        return fetchJson('/v1/core/credentials/' + encodeURIComponent(credentialId), {
+          method: 'DELETE'
+        });
+      });
+      if (state.selectedCredentialId === credentialId) {
+        state.selectedCredentialId = '';
+        state.currentCredentialContext = null;
+      }
+      if (state.lastCreatedCredentialId === credentialId) {
+        state.lastCreatedCredentialId = '';
+      }
+      if (state.lastCredentialTestContext?.credentialId === credentialId) {
+        state.lastCredentialTest = null;
+        state.lastCredentialTestContext = null;
+      }
       renderCredentialContextManager();
       return;
     }

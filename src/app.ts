@@ -204,7 +204,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     validateEgressTarget,
     config,
   );
-  const coreMode = new CoreModeService(broker, localSecrets);
+  const coreMode = new CoreModeService(broker, policyRepository, localSecrets, config.defaultPrincipal);
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,

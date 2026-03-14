@@ -751,8 +751,26 @@ async function handleApiRequest(
     const patch = coreCredentialContextUpdateInputSchema.parse(
       await readJsonBody(req, app.config.maxRequestBytes),
     );
-    const credential = await app.broker.updateCredential(context, credentialId, patch);
+    const credential = await app.coreMode.updateCredentialContext(context, credentialId, patch);
     respondJson(res, 200, { credential });
+    return;
+  }
+
+  if (coreCredentialContextId && !url.pathname.endsWith("/context") && req.method === "DELETE") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const deleted = await app.coreMode.deleteCredential(context, coreCredentialContextId);
+    respondJson(res, deleted ? 200 : 404, { deleted });
     return;
   }
 

@@ -52,6 +52,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Rename/);
     assert.match(html, /Retag/);
     assert.match(html, /Archive/);
+    assert.match(html, /Delete/);
     assert.match(html, /Show advanced controls/);
     assert.match(html, /Advanced mode is optional/);
     assert.match(html, /Local encrypted store/);
