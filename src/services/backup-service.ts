@@ -13,14 +13,15 @@ import {
   breakGlassRequestSchema,
   credentialRecordSchema,
   policyFileSchema,
+  rotationRunSchema,
 } from "../domain/types.js";
 import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { StoredAuthClient } from "../repositories/interfaces.js";
 import { SqlDatabase } from "../storage/database.js";
 
 const storedAuthClientSchema = authClientRecordSchema.extend({
-  secretHash: z.string().min(1),
-  secretSalt: z.string().min(1),
+  secretHash: z.string().min(1).optional(),
+  secretSalt: z.string().min(1).optional(),
 });
 
 const backupEnvelopeSchema = z.object({
@@ -34,6 +35,7 @@ const backupEnvelopeSchema = z.object({
   accessTokens: z.array(accessTokenRecordSchema.extend({ tokenHash: z.string().min(1) })),
   approvals: z.array(approvalRequestSchema),
   breakGlassRequests: z.array(breakGlassRequestSchema),
+  rotationRuns: z.array(rotationRunSchema).default([]),
   auditEvents: z.array(auditEventSchema),
 });
 
@@ -71,11 +73,13 @@ interface BackupPolicyRow {
 interface BackupAuthClientRow {
   client_id: string;
   display_name: string;
-  secret_hash: string;
-  secret_salt: string;
+  secret_hash: string | null;
+  secret_salt: string | null;
   roles: string[];
   allowed_scopes: string[];
   status: "active" | "disabled";
+  token_endpoint_auth_method: string;
+  jwks: unknown;
 }
 
 interface BackupAccessTokenRow {
@@ -127,6 +131,23 @@ interface BackupAuditRow {
   metadata: Record<string, unknown>;
 }
 
+interface BackupRotationRunRow {
+  id: string;
+  credential_id: string;
+  status: "pending" | "in_progress" | "completed" | "failed" | "cancelled";
+  source: "manual" | "catalog_expiry" | "secret_expiry" | "secret_rotation_window";
+  reason: string;
+  due_at: string | Date | null;
+  planned_at: string | Date;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+  planned_by: string;
+  updated_by: string;
+  note: string | null;
+  target_ref: string | null;
+  result_note: string | null;
+}
+
 interface BackupBreakGlassRow {
   id: string;
   created_at: string | Date;
@@ -161,6 +182,16 @@ function toIso(value: string | Date | null): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function normalizeJwks(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value as Array<Record<string, unknown>>;
+  }
+  if (value && typeof value === "object" && "kty" in value) {
+    return [value as Record<string, unknown>];
+  }
+  return [];
+}
+
 export type KeyLoreBackup = z.infer<typeof backupEnvelopeSchema>;
 
 export class BackupService {
@@ -181,6 +212,7 @@ export class BackupService {
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
       breakGlassRequests: backup.breakGlassRequests.length,
+      rotationRuns: backup.rotationRuns.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -190,13 +222,14 @@ export class BackupService {
   }
 
   public async exportBackup(actor?: AuthContext): Promise<KeyLoreBackup> {
-    const [credentials, policies, authClients, accessTokens, approvals, breakGlassRequests, auditEvents] = await Promise.all([
+    const [credentials, policies, authClients, accessTokens, approvals, breakGlassRequests, rotationRuns, auditEvents] = await Promise.all([
       this.database.query<BackupCredentialRow>("SELECT * FROM credentials ORDER BY id"),
       this.database.query<BackupPolicyRow>("SELECT * FROM policy_rules ORDER BY id"),
       this.database.query<BackupAuthClientRow>("SELECT * FROM oauth_clients ORDER BY client_id"),
       this.database.query<BackupAccessTokenRow>("SELECT * FROM access_tokens ORDER BY created_at"),
       this.database.query<BackupApprovalRow>("SELECT * FROM approval_requests ORDER BY created_at"),
       this.database.query<BackupBreakGlassRow>("SELECT * FROM break_glass_requests ORDER BY created_at"),
+      this.database.query<BackupRotationRunRow>("SELECT * FROM rotation_runs ORDER BY planned_at"),
       this.database.query<BackupAuditRow>("SELECT * FROM audit_events ORDER BY occurred_at"),
     ]);
 
@@ -243,8 +276,10 @@ export class BackupService {
         roles: row.roles,
         allowedScopes: row.allowed_scopes,
         status: row.status,
-        secretHash: row.secret_hash,
-        secretSalt: row.secret_salt,
+        tokenEndpointAuthMethod: row.token_endpoint_auth_method,
+        jwks: normalizeJwks(row.jwks),
+        secretHash: row.secret_hash ?? undefined,
+        secretSalt: row.secret_salt ?? undefined,
       })),
       accessTokens: accessTokens.rows.map((row) => ({
         tokenId: row.token_id,
@@ -308,6 +343,22 @@ export class BackupService {
         revokedAt: toIso(row.revoked_at) ?? undefined,
         revokeNote: row.revoke_note ?? undefined,
       })),
+      rotationRuns: rotationRuns.rows.map((row) => ({
+        id: row.id,
+        credentialId: row.credential_id,
+        status: row.status,
+        source: row.source,
+        reason: row.reason,
+        dueAt: toIso(row.due_at) ?? undefined,
+        plannedAt: toIso(row.planned_at),
+        startedAt: toIso(row.started_at) ?? undefined,
+        completedAt: toIso(row.completed_at) ?? undefined,
+        plannedBy: row.planned_by,
+        updatedBy: row.updated_by,
+        note: row.note ?? undefined,
+        targetRef: row.target_ref ?? undefined,
+        resultNote: row.result_note ?? undefined,
+      })),
       auditEvents: auditEvents.rows.map((row) => ({
         eventId: row.event_id,
         occurredAt: toIso(row.occurred_at),
@@ -349,6 +400,7 @@ export class BackupService {
       await client.query("DELETE FROM access_tokens");
       await client.query("DELETE FROM approval_requests");
       await client.query("DELETE FROM break_glass_requests");
+      await client.query("DELETE FROM rotation_runs");
       await client.query("DELETE FROM audit_events");
       await client.query("DELETE FROM oauth_clients");
       await client.query("DELETE FROM policy_rules");
@@ -413,16 +465,19 @@ export class BackupService {
       for (const clientRecord of backup.authClients as StoredAuthClient[]) {
         await client.query(
           `INSERT INTO oauth_clients (
-             client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
+             token_endpoint_auth_method, jwks
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             clientRecord.clientId,
             clientRecord.displayName,
-            clientRecord.secretHash,
-            clientRecord.secretSalt,
+            clientRecord.secretHash ?? null,
+            clientRecord.secretSalt ?? null,
             clientRecord.roles,
             clientRecord.allowedScopes,
             clientRecord.status,
+            clientRecord.tokenEndpointAuthMethod,
+            clientRecord.jwks,
           ],
         );
       }
@@ -531,6 +586,34 @@ export class BackupService {
             request.revokedBy ?? null,
             request.revokedAt ?? null,
             request.revokeNote ?? null,
+          ],
+        );
+      }
+
+      for (const rotation of backup.rotationRuns) {
+        await client.query(
+          `INSERT INTO rotation_runs (
+             id, credential_id, status, source, reason, due_at, planned_at, started_at,
+             completed_at, planned_by, updated_by, note, target_ref, result_note
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8,
+             $9, $10, $11, $12, $13, $14
+           )`,
+          [
+            rotation.id,
+            rotation.credentialId,
+            rotation.status,
+            rotation.source,
+            rotation.reason,
+            rotation.dueAt ?? null,
+            rotation.plannedAt,
+            rotation.startedAt ?? null,
+            rotation.completedAt ?? null,
+            rotation.plannedBy,
+            rotation.updatedBy,
+            rotation.note ?? null,
+            rotation.targetRef ?? null,
+            rotation.resultNote ?? null,
           ],
         );
       }

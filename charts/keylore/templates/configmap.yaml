@@ -33,5 +33,10 @@ data:
   KEYLORE_NOTIFICATION_TIMEOUT_MS: {{ .Values.app.notificationTimeoutMs | quote }}
   KEYLORE_TRACE_CAPTURE_ENABLED: {{ ternary "true" "false" .Values.app.traceCaptureEnabled | quote }}
   KEYLORE_TRACE_RECENT_SPAN_LIMIT: {{ .Values.app.traceRecentSpanLimit | quote }}
+  KEYLORE_TRACE_EXPORT_URL: {{ .Values.app.traceExportUrl | quote }}
+  KEYLORE_TRACE_EXPORT_BATCH_SIZE: {{ .Values.app.traceExportBatchSize | quote }}
+  KEYLORE_TRACE_EXPORT_INTERVAL_MS: {{ .Values.app.traceExportIntervalMs | quote }}
+  KEYLORE_TRACE_EXPORT_TIMEOUT_MS: {{ .Values.app.traceExportTimeoutMs | quote }}
+  KEYLORE_ROTATION_PLANNING_HORIZON_DAYS: {{ .Values.app.rotationPlanningHorizonDays | quote }}
   KEYLORE_PUBLIC_BASE_URL: {{ default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl | quote }}
   KEYLORE_OAUTH_ISSUER_URL: {{ default (printf "%s/oauth" (default (printf "http://%s" (index .Values.ingress.hosts 0).host) .Values.app.publicBaseUrl)) .Values.app.oauthIssuerUrl | quote }}

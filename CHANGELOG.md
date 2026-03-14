@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-03-14
+
+### Added
+
+- `private_key_jwt` OAuth client authentication with persisted assertion replay protection.
+- External trace export with queue status, manual flush controls, and HTTP operator coverage.
+- Persisted rotation orchestration across REST, CLI, and MCP with plan, start, complete, and fail transitions.
+- HA-oriented Helm profile with pod disruption budget and topology spread controls.
+- Additional integration coverage for JWT auth, trace export, rotation workflows, and backup state.
+
 ## [0.8.0] - 2026-03-14
 
 ### Added

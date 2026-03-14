@@ -11,6 +11,9 @@ import {
   breakGlassReviewInputSchema,
   catalogSearchInputSchema,
   createCredentialInputSchema,
+  rotationCompleteInputSchema,
+  rotationCreateInputSchema,
+  rotationTransitionInputSchema,
   runtimeExecutionInputSchema,
   updateCredentialInputSchema,
 } from "../domain/types.js";
@@ -50,6 +53,14 @@ Usage:
   keylore system maintenance
   keylore system maintenance run
   keylore system traces [--limit 20] [--trace-id uuid]
+  keylore system trace-exporter
+  keylore system trace-exporter flush
+  keylore system rotations list [--status pending|in_progress|completed|failed|cancelled] [--credential-id id]
+  keylore system rotations plan [--horizon-days 14]
+  keylore system rotations create --file /path/to/rotation.json
+  keylore system rotations start <rotation-id> [--note text]
+  keylore system rotations complete <rotation-id> [--note text] [--target-ref ref] [--expires-at iso8601] [--last-validated-at iso8601]
+  keylore system rotations fail <rotation-id> [--note text]
   keylore system backup create --file /path/to/backup.json
   keylore system backup inspect --file /path/to/backup.json
   keylore system backup restore --file /path/to/backup.json --yes
@@ -290,6 +301,74 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
     return output({ traces: app.traces.recent(limit, traceId) });
   }
 
+  if (resource === "system" && action === "trace-exporter" && !subject) {
+    return output({ exporter: app.traceExports.status() });
+  }
+
+  if (resource === "system" && action === "trace-exporter" && subject === "flush") {
+    return output({ exporter: await app.traceExports.flushNow() });
+  }
+
+  if (resource === "system" && action === "rotations" && subject === "list") {
+    const rotations = await app.rotations.list({
+      status: readStringFlag(parsed.flags, "status") as
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "failed"
+        | "cancelled"
+        | undefined,
+      credentialId: readStringFlag(parsed.flags, "credential-id"),
+    });
+    return output({ rotations });
+  }
+
+  if (resource === "system" && action === "rotations" && subject === "plan") {
+    const rotations = await app.rotations.planDue(context, {
+      horizonDays: readNumberFlag(parsed.flags, "horizon-days") ?? app.config.rotationPlanningHorizonDays,
+    });
+    return output({ rotations });
+  }
+
+  if (resource === "system" && action === "rotations" && subject === "create") {
+    const filePath = readStringFlag(parsed.flags, "file");
+    if (!filePath) {
+      throw new Error("system rotations create requires --file.");
+    }
+    const payload = rotationCreateInputSchema.parse(await readJsonFile(filePath));
+    return output({ rotation: await app.rotations.createManual(context, payload) });
+  }
+
+  if (resource === "system" && action === "rotations" && (subject === "start" || subject === "fail")) {
+    const rotationId = parsed.positionals[3];
+    if (!rotationId) {
+      throw new Error(`system rotations ${subject} requires a rotation id.`);
+    }
+    const payload = rotationTransitionInputSchema.parse({
+      note: readStringFlag(parsed.flags, "note"),
+    });
+    const rotation =
+      subject === "start"
+        ? await app.rotations.start(rotationId, context, payload.note)
+        : await app.rotations.fail(rotationId, context, payload.note);
+    return output({ rotation: rotation ?? null });
+  }
+
+  if (resource === "system" && action === "rotations" && subject === "complete") {
+    const rotationId = parsed.positionals[3];
+    if (!rotationId) {
+      throw new Error("system rotations complete requires a rotation id.");
+    }
+    const payload = rotationCompleteInputSchema.parse({
+      note: readStringFlag(parsed.flags, "note"),
+      targetRef: readStringFlag(parsed.flags, "target-ref"),
+      expiresAt: readStringFlag(parsed.flags, "expires-at"),
+      lastValidatedAt: readStringFlag(parsed.flags, "last-validated-at"),
+    });
+    const rotation = await app.rotations.complete(rotationId, context, payload);
+    return output({ rotation: rotation ?? null });
+  }
+
   if (resource === "system" && action === "backup" && subject === "create") {
     const filePath = readStringFlag(parsed.flags, "file");
     if (!filePath) {
@@ -305,6 +384,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
       breakGlassRequests: backup.breakGlassRequests.length,
+      rotationRuns: backup.rotationRuns.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -327,6 +407,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
       breakGlassRequests: backup.breakGlassRequests.length,
+      rotationRuns: backup.rotationRuns.length,
       auditEvents: backup.auditEvents.length,
     });
   }
@@ -351,6 +432,7 @@ export async function runCli(app: KeyLoreApp, argv: string[]): Promise<string> {
       accessTokens: backup.accessTokens.length,
       approvals: backup.approvals.length,
       breakGlassRequests: backup.breakGlassRequests.length,
+      rotationRuns: backup.rotationRuns.length,
       auditEvents: backup.auditEvents.length,
     });
   }

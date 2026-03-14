@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -64,6 +65,7 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
       approvalsExpired: number;
       breakGlassExpired: number;
       accessTokensExpired: number;
+      oauthClientAssertionsExpired: number;
       rateLimitBucketsDeleted: number;
     };
   };
@@ -71,6 +73,7 @@ test("metrics endpoint exposes request telemetry and maintenance status endpoint
     approvalsExpired: 0,
     breakGlassExpired: 0,
     accessTokensExpired: 0,
+    oauthClientAssertionsExpired: 0,
     rateLimitBucketsDeleted: 0,
   });
 
@@ -187,4 +190,97 @@ test("logical backups can be created and restored", async () => {
 
   await fs.rm(path.dirname(backupFile), { recursive: true, force: true });
   await close();
+});
+
+test("trace exporter status and flush deliver spans to the configured endpoint", async () => {
+  const deliveries: Array<{ authorization?: string; payload: unknown }> = [];
+  const collector = http.createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    deliveries.push({
+      authorization: req.headers.authorization,
+      payload: JSON.parse(Buffer.concat(chunks).toString("utf8")),
+    });
+    res.writeHead(202, { "content-type": "application/json" });
+    res.end(JSON.stringify({ accepted: true }));
+  });
+  await new Promise<void>((resolve) => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Failed to determine collector port.");
+  }
+
+  const { app, auth, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8897,
+      publicBaseUrl: "http://127.0.0.1:8897",
+      oauthIssuerUrl: "http://127.0.0.1:8897/oauth",
+      traceExportUrl: `http://127.0.0.1:${address.port}/collect`,
+      traceExportAuthHeader: "Bearer trace-export-token",
+      traceExportBatchSize: 100,
+      traceExportIntervalMs: 60000,
+    },
+  });
+  const server = await startHttpServer(app);
+  const adminToken = await auth.issueToken({
+    clientId: "admin-client",
+    clientSecret: "admin-secret",
+    grantType: "client_credentials",
+    scope: ["catalog:read", "system:read", "system:write"],
+  });
+
+  const searchResponse = await fetch("http://127.0.0.1:8897/v1/catalog/search", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${adminToken.access_token}`,
+      "x-trace-id": "trace-export-test",
+    },
+    body: JSON.stringify({ query: "demo", limit: 5 }),
+  });
+  assert.equal(searchResponse.status, 200);
+
+  const statusBeforeFlush = await fetch("http://127.0.0.1:8897/v1/system/trace-exporter", {
+    headers: {
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+  });
+  assert.equal(statusBeforeFlush.status, 200);
+  const beforePayload = (await statusBeforeFlush.json()) as {
+    exporter: { enabled: boolean; pendingSpans: number };
+  };
+  assert.equal(beforePayload.exporter.enabled, true);
+  assert.ok(beforePayload.exporter.pendingSpans > 0);
+
+  const flushResponse = await fetch("http://127.0.0.1:8897/v1/system/trace-exporter/flush", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+  });
+  assert.equal(flushResponse.status, 200);
+  const flushPayload = (await flushResponse.json()) as {
+    exporter: { pendingSpans: number; lastFlushAt?: string };
+  };
+  assert.equal(flushPayload.exporter.pendingSpans, 0);
+  assert.ok(flushPayload.exporter.lastFlushAt);
+
+  assert.equal(deliveries.length, 1);
+  assert.equal(deliveries[0]?.authorization, "Bearer trace-export-token");
+  const exportedPayload = deliveries[0]?.payload as {
+    spans: Array<{ traceId: string; name: string }>;
+  };
+  assert.ok(exportedPayload.spans.length > 0);
+  assert.equal(
+    exportedPayload.spans.some((span) => span.traceId === "trace-export-test" && span.name === "http.request"),
+    true,
+  );
+
+  await server.close();
+  await close();
+  await new Promise<void>((resolve, reject) => {
+    collector.close((error) => (error ? reject(error) : resolve()));
+  });
 });

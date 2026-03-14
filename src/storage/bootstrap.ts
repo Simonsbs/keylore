@@ -39,21 +39,23 @@ export async function bootstrapFromFiles(
       const authClients = authClientSeedFileSchema.parse(JSON.parse(authClientText));
       const missingSecrets: string[] = [];
       for (const client of authClients.clients) {
-        const secret = process.env[client.secretRef];
-        if (!secret) {
+        const secret = client.secretRef ? process.env[client.secretRef] : undefined;
+        if (client.tokenEndpointAuthMethod !== "private_key_jwt" && !secret) {
           missingSecrets.push(`${client.clientId}:${client.secretRef}`);
           continue;
         }
 
-        const hashed = hashSecret(secret);
+        const hashed = secret ? hashSecret(secret) : undefined;
         await authClientRepository.upsert({
           clientId: client.clientId,
           displayName: client.displayName,
-          secretHash: hashed.hash,
-          secretSalt: hashed.salt,
+          secretHash: hashed?.hash,
+          secretSalt: hashed?.salt,
           roles: client.roles,
           allowedScopes: client.allowedScopes,
           status: client.status,
+          tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+          jwks: client.jwks ?? [],
         });
       }
 

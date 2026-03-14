@@ -14,7 +14,9 @@ import { PgAuditLogService } from "./repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "./repositories/pg-auth-client-repository.js";
 import { PgBreakGlassRepository } from "./repositories/pg-break-glass-repository.js";
 import { PgCredentialRepository } from "./repositories/pg-credential-repository.js";
+import { PgOAuthClientAssertionRepository } from "./repositories/pg-oauth-client-assertion-repository.js";
 import { PgPolicyRepository } from "./repositories/pg-policy-repository.js";
+import { PgRotationRunRepository } from "./repositories/pg-rotation-run-repository.js";
 import { ApprovalService } from "./services/approval-service.js";
 import { AuthService } from "./services/auth-service.js";
 import { BackupService } from "./services/backup-service.js";
@@ -25,7 +27,9 @@ import { MaintenanceService } from "./services/maintenance-service.js";
 import { NotificationService } from "./services/notification-service.js";
 import { PolicyEngine } from "./services/policy-engine.js";
 import { PgRateLimitService } from "./services/rate-limit-service.js";
+import { RotationService } from "./services/rotation-service.js";
 import { TelemetryService } from "./services/telemetry.js";
+import { TraceExportService } from "./services/trace-export-service.js";
 import { TraceService } from "./services/trace-service.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
 import { createPostgresDatabase, SqlDatabase } from "./storage/database.js";
@@ -46,11 +50,13 @@ export interface KeyLoreApp {
   logger: pino.Logger;
   broker: BrokerService;
   auth: AuthService;
+  rotations: RotationService;
   approvals: ApprovalService;
   breakGlass: BreakGlassService;
   database: SqlDatabase;
   telemetry: TelemetryService;
   traces: TraceService;
+  traceExports: TraceExportService;
   rateLimits: PgRateLimitService;
   maintenance: MaintenanceService;
   backup: BackupService;
@@ -64,6 +70,15 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const database = createPostgresDatabase(config);
   const telemetry = new TelemetryService();
   const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
+  const traceExports = new TraceExportService(
+    config.traceExportUrl,
+    config.traceExportAuthHeader,
+    config.traceExportBatchSize,
+    config.traceExportIntervalMs,
+    config.traceExportTimeoutMs,
+    telemetry,
+  );
+  traces.attachExporter(traceExports);
 
   await database.healthcheck();
   await runMigrations(database, config.migrationsDir);
@@ -71,10 +86,12 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const credentialRepository = new PgCredentialRepository(database);
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
+  const assertionRepository = new PgOAuthClientAssertionRepository(database);
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
   const approvals = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
+  const rotationRuns = new PgRotationRunRepository(database);
   const notificationService = new NotificationService(
     config.notificationWebhookUrl,
     config.notificationSigningSecret,
@@ -108,6 +125,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const authService = new AuthService(
     authClientRepository,
     accessTokens,
+    assertionRepository,
     audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
@@ -129,6 +147,15 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     config.breakGlassReviewQuorum,
     notificationService,
     traces,
+  );
+  const rotationService = new RotationService(
+    rotationRuns,
+    credentialRepository,
+    adapterRegistry,
+    audit,
+    notificationService,
+    traces,
+    config.rotationPlanningHorizonDays,
   );
 
   if (config.bootstrapFromFiles) {
@@ -161,8 +188,10 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     breakGlassRepository,
     accessTokens,
     rateLimits,
+    assertionRepository,
     telemetry,
   );
+  traceExports.start();
   maintenance.start();
   const backup = new BackupService(database, config.version, audit);
 
@@ -171,11 +200,13 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
     logger,
     broker,
     auth: authService,
+    rotations: rotationService,
     approvals: approvalService,
     breakGlass: breakGlassService,
     database,
     telemetry,
     traces,
+    traceExports,
     rateLimits,
     maintenance,
     backup,
@@ -193,6 +224,7 @@ export async function createKeyLoreApp(): Promise<KeyLoreApp> {
       },
     },
     close: async () => {
+      await traceExports.stop();
       await maintenance.stop();
       await database.close();
     },

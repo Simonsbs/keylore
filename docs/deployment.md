@@ -1,6 +1,6 @@
 # Deployment
 
-`v0.8` keeps the Helm-based deployment path for self-hosted Kubernetes environments and adds upgrade-path validation plus operator guidance for rollback planning.
+`v0.9` keeps the Helm-based deployment path for self-hosted Kubernetes environments and adds an HA-oriented profile for replicated API pods, pod disruption budgets, and spread controls.
 
 ## Helm chart
 
@@ -13,6 +13,7 @@ Environment profiles:
 - [charts/keylore/values-dev.yaml](/home/simon/keylore/charts/keylore/values-dev.yaml)
 - [charts/keylore/values-staging.yaml](/home/simon/keylore/charts/keylore/values-staging.yaml)
 - [charts/keylore/values-prod.yaml](/home/simon/keylore/charts/keylore/values-prod.yaml)
+- [charts/keylore/values-ha.yaml](/home/simon/keylore/charts/keylore/values-ha.yaml)
 
 ## Example install
 
@@ -32,6 +33,16 @@ Production-style install with external PostgreSQL:
 helm upgrade --install keylore ./charts/keylore \
   -f ./charts/keylore/values.yaml \
   -f ./charts/keylore/values-prod.yaml \
+  --set app.databaseUrl=postgresql://USER:PASSWORD@postgres.example.com:5432/keylore \
+  --set bootstrapSecrets.existingSecret=keylore-bootstrap
+```
+
+HA-style install with spread controls and an external PostgreSQL service:
+
+```bash
+helm upgrade --install keylore ./charts/keylore \
+  -f ./charts/keylore/values.yaml \
+  -f ./charts/keylore/values-ha.yaml \
   --set app.databaseUrl=postgresql://USER:PASSWORD@postgres.example.com:5432/keylore \
   --set bootstrapSecrets.existingSecret=keylore-bootstrap
 ```
@@ -74,3 +85,4 @@ For production rollouts:
 - validate `values.yaml` plus your environment override with `ops:helm-validate`
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
+- for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings

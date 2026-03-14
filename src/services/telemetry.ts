@@ -160,6 +160,15 @@ export class TelemetryService {
     this.incrementCounter("keylore_notification_deliveries_total", { event_type: eventType, outcome });
   }
 
+  public recordTraceExport(outcome: "success" | "error" | "disabled", batchSize: number): void {
+    this.incrementCounter("keylore_trace_exports_total", { outcome });
+    this.observeSummary("keylore_trace_export_batch_size", { outcome }, batchSize);
+  }
+
+  public recordRotationRun(action: string, outcome: "success" | "error"): void {
+    this.incrementCounter("keylore_rotation_runs_total", { action, outcome });
+  }
+
   public renderPrometheus(): string {
     const lines: string[] = [
       "# HELP keylore_process_start_time_seconds Process start time in Unix seconds.",

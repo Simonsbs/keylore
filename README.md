@@ -42,17 +42,21 @@ This repository is incubating privately today, but it is structured to be publis
 - sandbox env allowlisting for injected runtime execution
 - signed notification webhooks for approval and break-glass lifecycle events
 - request trace capture with `x-trace-id` propagation and recent-trace inspection
+- optional external trace export with operator status and manual flush controls
+- `private_key_jwt` OAuth client authentication with assertion replay protection
+- persisted credential rotation workflows with plan, start, complete, and fail transitions
 - Helm chart with dev, staging, and production values profiles
+- HA-oriented Helm profile with pod disruption budget and spread controls
 - tagged release workflow with SBOM generation, vulnerability scanning, keyless image signing, and Helm upgrade validation
 - shipped Grafana dashboard and Prometheus alert rule examples
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane v0.8 delivery. This repo does not yet implement:
+The full `KeyLore.md` specification is broader than a sane v0.9 delivery. This repo does not yet implement:
 
 - multi-tenant isolation
 - broader OAuth authorization flows beyond client credentials
-- admin UI and rotation orchestration
+- admin UI
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
 
@@ -119,6 +123,8 @@ curl http://127.0.0.1:8787/healthz
 curl http://127.0.0.1:8787/metrics
 npm run dev:cli -- system maintenance
 npm run dev:cli -- system traces --limit 10
+npm run dev:cli -- system trace-exporter
+npm run dev:cli -- system rotations list
 ```
 
 10. Validate the Helm deployment path:
@@ -197,6 +203,26 @@ curl "http://127.0.0.1:8787/v1/system/traces?traceId=deploy-trace-123&limit=10" 
   -H "authorization: Bearer ${TOKEN}"
 ```
 
+Inspect the external trace-export pipeline:
+
+```bash
+TOKEN=...
+curl http://127.0.0.1:8787/v1/system/trace-exporter \
+  -H "authorization: Bearer ${TOKEN}"
+curl -X POST http://127.0.0.1:8787/v1/system/trace-exporter/flush \
+  -H "authorization: Bearer ${TOKEN}"
+```
+
+Plan rotation runs:
+
+```bash
+TOKEN=...
+curl -X POST http://127.0.0.1:8787/v1/system/rotations/plan \
+  -H "authorization: Bearer ${TOKEN}" \
+  -H 'content-type: application/json' \
+  -d '{"horizonDays":14}'
+```
+
 ## Example Codex configuration
 
 See [examples/codex/config.toml](/home/simon/keylore/examples/codex/config.toml) for both `stdio` and remote HTTP MCP registration examples. For remote MCP, mint a token with `resource=http://127.0.0.1:8787/mcp` and export it into the configured client env var.
@@ -219,6 +245,20 @@ Read recent audit events:
 
 ```bash
 npm run dev:cli -- audit recent --limit 10
+```
+
+Inspect trace-export status:
+
+```bash
+npm run dev:cli -- system trace-exporter
+npm run dev:cli -- system trace-exporter flush
+```
+
+Work rotation runs:
+
+```bash
+npm run dev:cli -- system rotations list
+npm run dev:cli -- system rotations plan --horizon-days 14
 ```
 
 Simulate a request locally:

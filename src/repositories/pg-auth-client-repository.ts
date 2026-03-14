@@ -1,7 +1,9 @@
 import {
   AuthClientRecord,
+  AuthClientAuthMethod,
   authClientRecordSchema,
   PrincipalRole,
+  publicJwkSchema,
 } from "../domain/types.js";
 import { SqlDatabase } from "../storage/database.js";
 import { AuthClientRepository, StoredAuthClient } from "./interfaces.js";
@@ -9,11 +11,23 @@ import { AuthClientRepository, StoredAuthClient } from "./interfaces.js";
 interface AuthClientRow {
   client_id: string;
   display_name: string;
-  secret_hash: string;
-  secret_salt: string;
+  secret_hash: string | null;
+  secret_salt: string | null;
   roles: PrincipalRole[];
   allowed_scopes: string[];
   status: "active" | "disabled";
+  token_endpoint_auth_method: AuthClientAuthMethod;
+  jwks: unknown;
+}
+
+function normalizeJwks(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value as Array<Record<string, unknown>>;
+  }
+  if (value && typeof value === "object" && "kty" in value) {
+    return [value as Record<string, unknown>];
+  }
+  return [];
 }
 
 function mapRow(row: AuthClientRow): StoredAuthClient {
@@ -23,12 +37,14 @@ function mapRow(row: AuthClientRow): StoredAuthClient {
     roles: row.roles,
     allowedScopes: row.allowed_scopes,
     status: row.status,
+    tokenEndpointAuthMethod: row.token_endpoint_auth_method,
+    jwks: normalizeJwks(row.jwks).map((entry) => publicJwkSchema.parse(entry)),
   });
 
   return {
     ...base,
-    secretHash: row.secret_hash,
-    secretSalt: row.secret_salt,
+    secretHash: row.secret_hash ?? undefined,
+    secretSalt: row.secret_salt ?? undefined,
   };
 }
 
@@ -39,6 +55,8 @@ function stripSecrets(client: StoredAuthClient): AuthClientRecord {
     roles: client.roles,
     allowedScopes: client.allowedScopes,
     status: client.status,
+    tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+    jwks: client.jwks,
   });
 }
 
@@ -74,17 +92,20 @@ export class PgAuthClientRepository implements AuthClientRepository {
   public async upsert(client: {
     clientId: string;
     displayName: string;
-    secretHash: string;
-    secretSalt: string;
+    secretHash?: string;
+    secretSalt?: string;
     roles: PrincipalRole[];
     allowedScopes: string[];
     status: "active" | "disabled";
+    tokenEndpointAuthMethod: AuthClientAuthMethod;
+    jwks: Array<Record<string, unknown>>;
   }): Promise<void> {
     await this.database.query(
       `INSERT INTO oauth_clients (
-        client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status
+        client_id, display_name, secret_hash, secret_salt, roles, allowed_scopes, status,
+        token_endpoint_auth_method, jwks
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7
+        $1, $2, $3, $4, $5, $6, $7, $8, $9
       )
       ON CONFLICT (client_id) DO UPDATE SET
         display_name = EXCLUDED.display_name,
@@ -93,15 +114,19 @@ export class PgAuthClientRepository implements AuthClientRepository {
         roles = EXCLUDED.roles,
         allowed_scopes = EXCLUDED.allowed_scopes,
         status = EXCLUDED.status,
+        token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
+        jwks = EXCLUDED.jwks,
         updated_at = NOW()`,
       [
         client.clientId,
         client.displayName,
-        client.secretHash,
-        client.secretSalt,
+        client.secretHash ?? null,
+        client.secretSalt ?? null,
         client.roles,
         client.allowedScopes,
         client.status,
+        client.tokenEndpointAuthMethod,
+        client.jwks,
       ],
     );
   }

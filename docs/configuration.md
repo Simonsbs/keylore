@@ -53,6 +53,12 @@
 - `KEYLORE_NOTIFICATION_TIMEOUT_MS`: notification delivery timeout
 - `KEYLORE_TRACE_CAPTURE_ENABLED`: enable in-memory recent trace capture
 - `KEYLORE_TRACE_RECENT_SPAN_LIMIT`: recent trace span retention limit
+- `KEYLORE_TRACE_EXPORT_URL`: optional HTTP endpoint for batched trace export
+- `KEYLORE_TRACE_EXPORT_AUTH_HEADER`: optional `Authorization` header value for the trace export endpoint
+- `KEYLORE_TRACE_EXPORT_BATCH_SIZE`: max spans per export batch
+- `KEYLORE_TRACE_EXPORT_INTERVAL_MS`: background trace export interval
+- `KEYLORE_TRACE_EXPORT_TIMEOUT_MS`: timeout for each trace export call
+- `KEYLORE_ROTATION_PLANNING_HORIZON_DAYS`: default planning horizon for automatic rotation planning
 
 ## Secret bindings
 
@@ -107,6 +113,14 @@ Remote callers use the `client_credentials` grant. Tokens may be resource-bound:
 
 If a token is resource-bound, KeyLore rejects it on the wrong protected resource.
 
+Supported client authentication methods are:
+
+- `client_secret_basic`
+- `client_secret_post`
+- `private_key_jwt`
+
+`private_key_jwt` clients must be configured with at least one public JWK and do not use shared secrets.
+
 ## Approvals and break-glass quorum
 
 Approval and break-glass requests are persisted with:
@@ -122,7 +136,9 @@ Any denial finalizes the request as denied. Approvals require distinct reviewers
 
 When `KEYLORE_NOTIFICATION_WEBHOOK_URL` is configured, KeyLore emits signed JSON webhook envelopes for approval and break-glass lifecycle events. If `KEYLORE_NOTIFICATION_SIGNING_SECRET` is set, KeyLore includes an `x-keylore-signature` HMAC-SHA256 header over the raw JSON body.
 
-When trace capture is enabled, KeyLore records recent spans in memory and propagates `x-trace-id` from inbound HTTP requests into approval, break-glass, and notification spans.
+When trace capture is enabled, KeyLore records recent spans in memory and propagates `x-trace-id` from inbound HTTP requests into approval, break-glass, notification, and rotation spans.
+
+If `KEYLORE_TRACE_EXPORT_URL` is configured, KeyLore also batches spans to that endpoint and exposes operator status through `GET /v1/system/trace-exporter`.
 
 ## Roles and scopes
 
@@ -171,6 +187,15 @@ KeyLore reports both:
 
 This is available through `GET /v1/catalog/reports`, `GET /v1/catalog/credentials/:id/report`, `GET /v1/system/adapters`, and the matching CLI/MCP admin surfaces.
 
+Rotation workflows are exposed through:
+
+- `GET /v1/system/rotations`
+- `POST /v1/system/rotations`
+- `POST /v1/system/rotations/plan`
+- `POST /v1/system/rotations/:id/start`
+- `POST /v1/system/rotations/:id/complete`
+- `POST /v1/system/rotations/:id/fail`
+
 ## Operations and maintenance
 
 Operational visibility is exposed through:
@@ -179,12 +204,14 @@ Operational visibility is exposed through:
 - `GET /readyz`
 - `GET /v1/system/maintenance`
 - `GET /v1/system/traces`
+- `GET /v1/system/trace-exporter`
 
 Deployment profiles are shipped through Helm values files:
 
 - `charts/keylore/values-dev.yaml`
 - `charts/keylore/values-staging.yaml`
 - `charts/keylore/values-prod.yaml`
+- `charts/keylore/values-ha.yaml`
 
 The maintenance loop expires stale approvals and break-glass grants, revokes expired tokens, and removes old rate-limit buckets.
 
@@ -196,7 +223,7 @@ The database is the system of record. `data/catalog.json`, `data/policies.json`,
 
 If bootstrap is enabled and the database is empty, KeyLore imports catalogue records, policies, and auth clients from `data/`.
 
-Auth client bootstrap is strict: missing `secretRef` environment variables fail startup instead of silently creating an unusable remote-auth setup.
+Auth client bootstrap is strict for shared-secret clients: missing `secretRef` environment variables fail startup instead of silently creating an unusable remote-auth setup. `private_key_jwt` clients bootstrap from their public JWK set and do not require `secretRef`.
 
 ## Local operator context
 

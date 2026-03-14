@@ -29,6 +29,10 @@ Body fields:
 - `client_secret`
 - `scope`
 - `resource`
+- `client_assertion_type`
+- `client_assertion`
+
+`client_secret_basic`, `client_secret_post`, and `private_key_jwt` are supported. `private_key_jwt` assertions are replay-protected; a reused assertion is rejected with `409`.
 
 ### `GET /healthz`
 
@@ -226,9 +230,21 @@ Returns recent in-memory trace spans. Optional query params:
 Required scope: `system:read`
 Required role: `admin`, `maintenance_operator`, or `auditor`
 
+### `GET /v1/system/trace-exporter`
+
+Returns the external trace-export pipeline status, pending queue depth, last flush time, and last error.
+Required scope: `system:read`
+Required role: `admin`, `maintenance_operator`, or `auditor`
+
 ### `POST /v1/system/maintenance/run`
 
 Runs maintenance immediately.
+Required scope: `system:write`
+Required role: `admin` or `maintenance_operator`
+
+### `POST /v1/system/trace-exporter/flush`
+
+Flushes the queued trace-export batch immediately and returns the updated exporter status.
 Required scope: `system:write`
 Required role: `admin` or `maintenance_operator`
 
@@ -249,6 +265,46 @@ Required role: `admin` or `backup_operator`
 Restores a supplied logical backup payload when `confirm=true`.
 Required scope: `backup:write`
 Required role: `admin` or `backup_operator`
+
+### `GET /v1/system/rotations`
+
+Lists rotation workflow runs. Optional filters:
+
+- `status`
+- `credentialId`
+
+Required scope: `system:read`
+Required role: `admin`, `operator`, `maintenance_operator`, or `auditor`
+
+### `POST /v1/system/rotations`
+
+Creates a manual rotation run for one credential.
+Required scope: `system:write`
+Required role: `admin`, `operator`, or `maintenance_operator`
+
+### `POST /v1/system/rotations/plan`
+
+Creates pending rotation runs for credentials due within the supplied planning horizon.
+Required scope: `system:write`
+Required role: `admin`, `operator`, or `maintenance_operator`
+
+### `POST /v1/system/rotations/:id/start`
+
+Marks a pending rotation run as `in_progress`.
+Required scope: `system:write`
+Required role: `admin`, `operator`, or `maintenance_operator`
+
+### `POST /v1/system/rotations/:id/complete`
+
+Marks a rotation run completed and may update the credential binding reference, expiry, and validation timestamp.
+Required scope: `system:write`
+Required role: `admin`, `operator`, or `maintenance_operator`
+
+### `POST /v1/system/rotations/:id/fail`
+
+Marks a rotation run failed without mutating the credential binding.
+Required scope: `system:write`
+Required role: `admin`, `operator`, or `maintenance_operator`
 
 ### `GET /v1/break-glass`
 

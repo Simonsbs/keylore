@@ -31,6 +31,7 @@ This file maps the current repository state to the local `KeyLore.md` production
 - quorum-based approval and break-glass reviews with persisted review history
 - signed notification webhooks for approval and break-glass lifecycle events
 - recent trace capture with operator inspection over REST, CLI, and MCP
+- external trace export with queue inspection and manual flush
 - delegated auth, maintenance, and backup administration roles
 - egress policy enforcement for blocked private and link-local targets
 - sandbox env allowlisting and reserved-name protection
@@ -38,18 +39,20 @@ This file maps the current repository state to the local `KeyLore.md` production
 - startup migrations, config validation, and bootstrap import
 - ingress and egress hardening controls
 - Helm dry-run upgrade validation in CI and release automation
+- `private_key_jwt` OAuth client authentication with persisted replay protection
+- rotation orchestration with persisted runs and operator lifecycle controls
+- HA-oriented Helm values with pod disruption budget and spread constraints
 
 ## Partially implemented
 
 - Catalogue CRUD: REST and CLI implemented, no UI yet
 - Remote MCP auth: client credentials and protected-resource metadata exist, but no broader OAuth authorization flows
 - Deployment readiness: Helm and release automation are present, but no operator-managed multi-cluster story exists yet
-- Observability: metrics, recent traces, dashboards, and alert rules are present, but no external traces backend is shipped yet
+- Observability: metrics, recent traces, trace export, dashboards, and alert rules are present, but no vendor-specific tracing stack is bundled yet
 
 ## Deferred
 
 - multi-tenant isolation
-- rotation orchestration
 - admin UI and CLI richness
 - managed gateway profiles beyond static examples
 

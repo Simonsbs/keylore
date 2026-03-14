@@ -16,7 +16,13 @@ import {
   catalogSearchOutputSchema,
   maintenanceStatusOutputSchema,
   operationSchema,
+  rotationRunListOutputSchema,
+  rotationPlanInputSchema,
+  rotationCreateInputSchema,
+  rotationCompleteInputSchema,
   runtimeExecutionResultSchema,
+  rotationRunSchema,
+  traceExportStatusOutputSchema,
   traceListOutputSchema,
   sensitivitySchema,
   scopeTierSchema,
@@ -288,6 +294,135 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
         content: [{ type: "text", text: makeText(app.traces.recent(limit, traceId)) }],
         structuredContent: {
           traces: app.traces.recent(limit, traceId),
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_trace_exporter_status",
+    {
+      description: "Read external trace-export pipeline status and pending queue depth.",
+      inputSchema: {},
+      outputSchema: traceExportStatusOutputSchema,
+    },
+    async (_input, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:read"]);
+      app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
+
+      return {
+        content: [{ type: "text", text: makeText(app.traceExports.status()) }],
+        structuredContent: {
+          exporter: app.traceExports.status(),
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_rotation_list",
+    {
+      description: "List credential rotation workflow runs and their current status.",
+      inputSchema: {
+        status: z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]).optional(),
+        credentialId: z.string().optional(),
+      },
+      outputSchema: rotationRunListOutputSchema,
+    },
+    async ({ status, credentialId }, extra) => {
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:read"]);
+      app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator", "auditor"]);
+      const rotations = await app.rotations.list({ status, credentialId });
+
+      return {
+        content: [{ type: "text", text: makeText(rotations) }],
+        structuredContent: {
+          rotations,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_rotation_plan",
+    {
+      description: "Create pending rotation runs for credentials approaching expiry or backend rotation windows.",
+      inputSchema: {
+        horizonDays: z.number().int().min(1).max(365).default(14),
+        credentialIds: z.array(z.string()).optional(),
+      },
+      outputSchema: rotationRunListOutputSchema,
+    },
+    async (input, extra) => {
+      const parsed = rotationPlanInputSchema.parse(input);
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:write"]);
+      app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+      const rotations = await app.rotations.planDue(context, parsed);
+
+      return {
+        content: [{ type: "text", text: makeText(rotations) }],
+        structuredContent: {
+          rotations,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_rotation_create",
+    {
+      description: "Create a manual rotation workflow run for a specific credential.",
+      inputSchema: {
+        credentialId: z.string().min(1),
+        reason: z.string().min(8).max(2000),
+        dueAt: z.string().datetime().optional(),
+        note: z.string().max(2000).optional(),
+      },
+      outputSchema: z.object({ rotation: rotationRunSchema }),
+    },
+    async (input, extra) => {
+      const parsed = rotationCreateInputSchema.parse(input);
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:write"]);
+      app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+      const rotation = await app.rotations.createManual(context, parsed);
+
+      return {
+        content: [{ type: "text", text: makeText(rotation) }],
+        structuredContent: {
+          rotation,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "system_rotation_complete",
+    {
+      description: "Mark a rotation workflow run completed and optionally update the credential binding reference.",
+      inputSchema: {
+        rotationId: z.string().uuid(),
+        note: z.string().max(2000).optional(),
+        targetRef: z.string().optional(),
+        expiresAt: z.string().datetime().nullable().optional(),
+        lastValidatedAt: z.string().datetime().optional(),
+      },
+      outputSchema: z.object({ rotation: rotationRunSchema.nullable() }),
+    },
+    async ({ rotationId, ...input }, extra) => {
+      const parsed = rotationCompleteInputSchema.parse(input);
+      const context = contextFromExtra(app, extra);
+      app.auth.requireScopes(context, ["system:write"]);
+      app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+      const rotation = await app.rotations.complete(rotationId, context, parsed);
+
+      return {
+        content: [{ type: "text", text: makeText(rotation ?? { error: "Rotation not found." }) }],
+        structuredContent: {
+          rotation: rotation ?? null,
         },
       };
     },

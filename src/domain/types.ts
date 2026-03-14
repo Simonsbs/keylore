@@ -46,11 +46,43 @@ export const accessScopeSchema = z.enum([
   "mcp:use",
 ]);
 export const authClientStatusSchema = z.enum(["active", "disabled"]);
+export const authClientAuthMethodSchema = z.enum([
+  "client_secret_basic",
+  "client_secret_post",
+  "private_key_jwt",
+]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "denied", "expired"]);
 export const accessModeSchema = z.enum(["live", "dry_run", "simulation"]);
 export const accessTokenStatusSchema = z.enum(["active", "revoked"]);
 export const breakGlassStatusSchema = z.enum(["pending", "active", "denied", "expired", "revoked"]);
 export const reviewDecisionSchema = z.enum(["approved", "denied"]);
+export const rotationRunStatusSchema = z.enum([
+  "pending",
+  "in_progress",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export const rotationRunSourceSchema = z.enum([
+  "manual",
+  "catalog_expiry",
+  "secret_expiry",
+  "secret_rotation_window",
+]);
+
+export const publicJwkSchema = z
+  .object({
+    kty: z.string().min(1),
+    kid: z.string().min(1).optional(),
+    alg: z.string().min(1).optional(),
+    use: z.string().min(1).optional(),
+    n: z.string().min(1).optional(),
+    e: z.string().min(1).optional(),
+    crv: z.string().min(1).optional(),
+    x: z.string().min(1).optional(),
+    y: z.string().min(1).optional(),
+  })
+  .passthrough();
 
 export const credentialBindingSchema = z.object({
   adapter: bindingAdapterSchema,
@@ -125,6 +157,8 @@ export const auditEventSchema = z.object({
     "runtime.exec",
     "adapter.health",
     "notification.delivery",
+    "trace.export",
+    "rotation.run",
     "system.backup",
   ]),
   action: z.string().min(1),
@@ -217,14 +251,44 @@ export const runtimeExecutionResultSchema = z.object({
   outputTruncated: z.boolean(),
 });
 
-export const authClientSeedSchema = z.object({
-  clientId: z.string().min(1),
-  displayName: z.string().min(1),
-  secretRef: z.string().min(1),
-  roles: z.array(principalRoleSchema).min(1),
-  allowedScopes: z.array(accessScopeSchema).min(1),
-  status: authClientStatusSchema.default("active"),
-});
+export const authClientSeedSchema = z
+  .object({
+    clientId: z.string().min(1),
+    displayName: z.string().min(1),
+    secretRef: z.string().min(1).optional(),
+    tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+    jwks: z.array(publicJwkSchema).min(1).optional(),
+    roles: z.array(principalRoleSchema).min(1),
+    allowedScopes: z.array(accessScopeSchema).min(1),
+    status: authClientStatusSchema.default("active"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.tokenEndpointAuthMethod === "private_key_jwt") {
+      if (!value.jwks?.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["jwks"],
+          message: "private_key_jwt clients require at least one public JWK.",
+        });
+      }
+      if (value.secretRef) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["secretRef"],
+          message: "private_key_jwt clients must not define secretRef.",
+        });
+      }
+      return;
+    }
+
+    if (!value.secretRef) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["secretRef"],
+        message: "client_secret auth clients require secretRef.",
+      });
+    }
+  });
 
 export const authClientSeedFileSchema = z.object({
   version: z.number().int().positive(),
@@ -237,16 +301,42 @@ export const authClientRecordSchema = z.object({
   roles: z.array(principalRoleSchema).min(1),
   allowedScopes: z.array(accessScopeSchema).min(1),
   status: authClientStatusSchema,
+  tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+  jwks: z.array(publicJwkSchema).default([]),
 });
 
-export const authClientCreateInputSchema = z.object({
-  clientId: z.string().min(1),
-  displayName: z.string().min(1),
-  roles: z.array(principalRoleSchema).min(1),
-  allowedScopes: z.array(accessScopeSchema).min(1),
-  clientSecret: z.string().min(16).optional(),
-  status: authClientStatusSchema.default("active"),
-});
+export const authClientCreateInputSchema = z
+  .object({
+    clientId: z.string().min(1),
+    displayName: z.string().min(1),
+    roles: z.array(principalRoleSchema).min(1),
+    allowedScopes: z.array(accessScopeSchema).min(1),
+    clientSecret: z.string().min(16).optional(),
+    status: authClientStatusSchema.default("active"),
+    tokenEndpointAuthMethod: authClientAuthMethodSchema.default("client_secret_basic"),
+    jwks: z.array(publicJwkSchema).min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.tokenEndpointAuthMethod !== "private_key_jwt") {
+      return;
+    }
+
+    if (!value.jwks?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jwks"],
+        message: "private_key_jwt clients require at least one public JWK.",
+      });
+    }
+
+    if (value.clientSecret) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clientSecret"],
+        message: "private_key_jwt clients do not use shared secrets.",
+      });
+    }
+  });
 
 export const authClientUpdateInputSchema = z
   .object({
@@ -254,6 +344,8 @@ export const authClientUpdateInputSchema = z
     roles: z.array(principalRoleSchema).min(1).optional(),
     allowedScopes: z.array(accessScopeSchema).min(1).optional(),
     status: authClientStatusSchema.optional(),
+    tokenEndpointAuthMethod: authClientAuthMethodSchema.optional(),
+    jwks: z.array(publicJwkSchema).min(1).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided.",
@@ -265,15 +357,19 @@ export const authClientRotateSecretInputSchema = z.object({
 
 export const authClientSecretOutputSchema = z.object({
   client: authClientRecordSchema,
-  clientSecret: z.string().min(16),
+  clientSecret: z.string().min(16).optional(),
 });
 
 export const tokenIssueInputSchema = z.object({
   clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  clientSecret: z.string().min(1).optional(),
   grantType: z.literal("client_credentials"),
   scope: z.array(accessScopeSchema).optional(),
   resource: z.string().url().optional(),
+  clientAssertionType: z
+    .literal("urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+    .optional(),
+  clientAssertion: z.string().min(1).optional(),
 });
 
 export const tokenIssueOutputSchema = z.object({
@@ -456,6 +552,7 @@ export const maintenanceTaskResultSchema = z.object({
   breakGlassExpired: z.number().int().min(0),
   accessTokensExpired: z.number().int().min(0),
   rateLimitBucketsDeleted: z.number().int().min(0),
+  oauthClientAssertionsExpired: z.number().int().min(0),
 });
 
 export const maintenanceStatusSchema = z.object({
@@ -491,6 +588,65 @@ export const traceListOutputSchema = z.object({
   traces: z.array(traceSpanSchema),
 });
 
+export const traceExportStatusSchema = z.object({
+  enabled: z.boolean(),
+  endpoint: z.string().url().optional(),
+  pendingSpans: z.number().int().min(0),
+  lastFlushAt: z.string().datetime().optional(),
+  lastError: z.string().optional(),
+  consecutiveFailures: z.number().int().min(0),
+  lastBatchSize: z.number().int().min(0).optional(),
+  running: z.boolean(),
+});
+
+export const traceExportStatusOutputSchema = z.object({
+  exporter: traceExportStatusSchema,
+});
+
+export const rotationRunSchema = z.object({
+  id: z.string().uuid(),
+  credentialId: z.string().min(1),
+  status: rotationRunStatusSchema,
+  source: rotationRunSourceSchema,
+  reason: z.string().min(1),
+  dueAt: z.string().datetime().optional(),
+  plannedAt: z.string().datetime(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  plannedBy: z.string().min(1),
+  updatedBy: z.string().min(1),
+  note: z.string().max(2000).optional(),
+  targetRef: z.string().min(1).optional(),
+  resultNote: z.string().max(2000).optional(),
+});
+
+export const rotationRunListOutputSchema = z.object({
+  rotations: z.array(rotationRunSchema),
+});
+
+export const rotationPlanInputSchema = z.object({
+  horizonDays: z.number().int().min(1).max(365).default(14),
+  credentialIds: z.array(z.string().min(1)).max(100).optional(),
+});
+
+export const rotationCreateInputSchema = z.object({
+  credentialId: z.string().min(1),
+  reason: z.string().min(8).max(2000),
+  dueAt: z.string().datetime().optional(),
+  note: z.string().max(2000).optional(),
+});
+
+export const rotationTransitionInputSchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+
+export const rotationCompleteInputSchema = z.object({
+  note: z.string().max(2000).optional(),
+  targetRef: z.string().min(1).optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+  lastValidatedAt: z.string().datetime().optional(),
+});
+
 export const backupSummarySchema = z.object({
   format: z.literal("keylore-logical-backup"),
   version: z.number().int().positive(),
@@ -501,6 +657,7 @@ export const backupSummarySchema = z.object({
   accessTokens: z.number().int().min(0),
   approvals: z.number().int().min(0),
   breakGlassRequests: z.number().int().min(0),
+  rotationRuns: z.number().int().min(0),
   auditEvents: z.number().int().min(0),
 });
 
@@ -519,6 +676,7 @@ export type AccessRequestInput = z.infer<typeof accessRequestInputSchema>;
 export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type PrincipalRole = z.infer<typeof principalRoleSchema>;
 export type AccessScope = z.infer<typeof accessScopeSchema>;
+export type AuthClientAuthMethod = z.infer<typeof authClientAuthMethodSchema>;
 export type AuthClientSeed = z.infer<typeof authClientSeedSchema>;
 export type AuthClientSeedFile = z.infer<typeof authClientSeedFileSchema>;
 export type AuthClientRecord = z.infer<typeof authClientRecordSchema>;
@@ -541,3 +699,5 @@ export type MaintenanceTaskResult = z.infer<typeof maintenanceTaskResultSchema>;
 export type MaintenanceStatus = z.infer<typeof maintenanceStatusSchema>;
 export type BackupSummary = z.infer<typeof backupSummarySchema>;
 export type TraceSpan = z.infer<typeof traceSpanSchema>;
+export type TraceExportStatus = z.infer<typeof traceExportStatusSchema>;
+export type RotationRun = z.infer<typeof rotationRunSchema>;

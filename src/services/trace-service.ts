@@ -13,6 +13,12 @@ export class TraceService {
 
   private readonly spans: TraceSpan[] = [];
 
+  private exporter:
+    | {
+        enqueue(span: TraceSpan): void;
+      }
+    | undefined;
+
   public constructor(
     private readonly enabled: boolean,
     private readonly recentSpanLimit: number,
@@ -92,11 +98,16 @@ export class TraceService {
     return filtered.slice(Math.max(0, filtered.length - limit)).reverse();
   }
 
+  public attachExporter(exporter: { enqueue(span: TraceSpan): void }): void {
+    this.exporter = exporter;
+  }
+
   private record(span: TraceSpan): void {
     const parsed = traceSpanSchema.parse(span);
     this.spans.push(parsed);
     if (this.spans.length > this.recentSpanLimit) {
       this.spans.splice(0, this.spans.length - this.recentSpanLimit);
     }
+    this.exporter?.enqueue(parsed);
   }
 }

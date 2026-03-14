@@ -1,5 +1,10 @@
 import { MaintenanceStatus, MaintenanceTaskResult } from "../domain/types.js";
-import { AccessTokenRepository, ApprovalRepository, BreakGlassRepository } from "../repositories/interfaces.js";
+import {
+  AccessTokenRepository,
+  ApprovalRepository,
+  BreakGlassRepository,
+  OAuthClientAssertionRepository,
+} from "../repositories/interfaces.js";
 import { PgRateLimitService } from "./rate-limit-service.js";
 import { TelemetryService } from "./telemetry.js";
 
@@ -17,6 +22,7 @@ export class MaintenanceService {
     private readonly breakGlass: BreakGlassRepository,
     private readonly tokens: AccessTokenRepository,
     private readonly rateLimits: PgRateLimitService,
+    private readonly assertions: OAuthClientAssertionRepository,
     private readonly telemetry: TelemetryService,
   ) {
     this.statusSnapshot = {
@@ -65,6 +71,7 @@ export class MaintenanceService {
         breakGlassExpired: await this.breakGlass.expireStale(),
         accessTokensExpired: await this.tokens.expireStale(),
         rateLimitBucketsDeleted: await this.rateLimits.cleanup(),
+        oauthClientAssertionsExpired: await this.assertions.cleanup(),
       };
       const durationMs = Date.now() - startedAt;
 

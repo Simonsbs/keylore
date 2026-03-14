@@ -55,6 +55,12 @@ export interface KeyLoreConfig {
   notificationTimeoutMs: number;
   traceCaptureEnabled: boolean;
   traceRecentSpanLimit: number;
+  traceExportUrl: string | undefined;
+  traceExportAuthHeader: string | undefined;
+  traceExportBatchSize: number;
+  traceExportIntervalMs: number;
+  traceExportTimeoutMs: number;
+  rotationPlanningHorizonDays: number;
 }
 
 const envSchema = z.object({
@@ -123,6 +129,12 @@ const envSchema = z.object({
     .transform((value) => value !== "false")
     .prefault("true"),
   KEYLORE_TRACE_RECENT_SPAN_LIMIT: z.coerce.number().int().min(10).max(5000).default(500),
+  KEYLORE_TRACE_EXPORT_URL: z.string().url().optional(),
+  KEYLORE_TRACE_EXPORT_AUTH_HEADER: z.string().optional(),
+  KEYLORE_TRACE_EXPORT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
+  KEYLORE_TRACE_EXPORT_INTERVAL_MS: z.coerce.number().int().min(100).default(5000),
+  KEYLORE_TRACE_EXPORT_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
+  KEYLORE_ROTATION_PLANNING_HORIZON_DAYS: z.coerce.number().int().min(1).max(365).default(14),
 });
 
 export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
@@ -134,7 +146,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
 
   return {
     appName: "keylore",
-    version: "0.8.0",
+    version: "0.9.0",
     dataDir,
     bootstrapCatalogPath: path.resolve(dataDir, env.KEYLORE_CATALOG_FILE ?? "catalog.json"),
     bootstrapPolicyPath: path.resolve(dataDir, env.KEYLORE_POLICY_FILE ?? "policies.json"),
@@ -200,5 +212,11 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     notificationTimeoutMs: env.KEYLORE_NOTIFICATION_TIMEOUT_MS,
     traceCaptureEnabled: env.KEYLORE_TRACE_CAPTURE_ENABLED,
     traceRecentSpanLimit: env.KEYLORE_TRACE_RECENT_SPAN_LIMIT,
+    traceExportUrl: env.KEYLORE_TRACE_EXPORT_URL || undefined,
+    traceExportAuthHeader: env.KEYLORE_TRACE_EXPORT_AUTH_HEADER || undefined,
+    traceExportBatchSize: env.KEYLORE_TRACE_EXPORT_BATCH_SIZE,
+    traceExportIntervalMs: env.KEYLORE_TRACE_EXPORT_INTERVAL_MS,
+    traceExportTimeoutMs: env.KEYLORE_TRACE_EXPORT_TIMEOUT_MS,
+    rotationPlanningHorizonDays: env.KEYLORE_ROTATION_PLANNING_HORIZON_DAYS,
   };
 }

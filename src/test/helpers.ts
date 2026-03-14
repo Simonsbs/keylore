@@ -16,7 +16,9 @@ import { PgAuditLogService } from "../repositories/pg-audit-log.js";
 import { PgAuthClientRepository } from "../repositories/pg-auth-client-repository.js";
 import { PgBreakGlassRepository } from "../repositories/pg-break-glass-repository.js";
 import { PgCredentialRepository } from "../repositories/pg-credential-repository.js";
+import { PgOAuthClientAssertionRepository } from "../repositories/pg-oauth-client-assertion-repository.js";
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
+import { PgRotationRunRepository } from "../repositories/pg-rotation-run-repository.js";
 import { ApprovalService } from "../services/approval-service.js";
 import { AuthService } from "../services/auth-service.js";
 import { BackupService } from "../services/backup-service.js";
@@ -28,7 +30,9 @@ import { MaintenanceService } from "../services/maintenance-service.js";
 import { NotificationService } from "../services/notification-service.js";
 import { PolicyEngine } from "../services/policy-engine.js";
 import { PgRateLimitService } from "../services/rate-limit-service.js";
+import { RotationService } from "../services/rotation-service.js";
 import { TelemetryService } from "../services/telemetry.js";
+import { TraceExportService } from "../services/trace-export-service.js";
 import { TraceService } from "../services/trace-service.js";
 import { SandboxRunner } from "../runtime/sandbox-runner.js";
 import { createInMemoryDatabase } from "../storage/in-memory-database.js";
@@ -42,7 +46,10 @@ const migrationsDir = path.join(repoRoot, "migrations");
 export async function makeTestApp(options?: {
   catalog?: CatalogFile;
   policies?: PolicyFile;
-  authClients?: Array<AuthClientRecord & { clientSecret: string }>;
+  authClients?: Array<
+    Omit<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks"> &
+      Partial<Pick<AuthClientRecord, "tokenEndpointAuthMethod" | "jwks">> & { clientSecret?: string }
+  >;
   configOverrides?: Partial<KeyLoreConfig>;
   database?: SqlDatabase;
   skipMigrations?: boolean;
@@ -101,7 +108,7 @@ export async function makeTestApp(options?: {
 
   const config: KeyLoreConfig = {
     appName: "keylore",
-    version: "0.8.0",
+    version: "0.9.0",
     dataDir: tempDir,
     bootstrapCatalogPath: path.join(tempDir, "catalog.json"),
     bootstrapPolicyPath: path.join(tempDir, "policies.json"),
@@ -152,18 +159,35 @@ export async function makeTestApp(options?: {
     notificationTimeoutMs: 1000,
     traceCaptureEnabled: true,
     traceRecentSpanLimit: 200,
+    traceExportUrl: undefined,
+    traceExportAuthHeader: undefined,
+    traceExportBatchSize: 20,
+    traceExportIntervalMs: 1000,
+    traceExportTimeoutMs: 1000,
+    rotationPlanningHorizonDays: 14,
     ...options?.configOverrides,
   };
 
   const credentialRepository = new PgCredentialRepository(database);
   const policyRepository = new PgPolicyRepository(database);
   const authClientRepository = new PgAuthClientRepository(database);
+  const assertionRepository = new PgOAuthClientAssertionRepository(database);
   const audit = new PgAuditLogService(database);
   const accessTokens = new PgAccessTokenRepository(database);
   const approvalRepository = new PgApprovalRepository(database);
   const breakGlassRepository = new PgBreakGlassRepository(database);
+  const rotationRepository = new PgRotationRunRepository(database);
   const telemetry = new TelemetryService();
   const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
+  const traceExports = new TraceExportService(
+    config.traceExportUrl,
+    config.traceExportAuthHeader,
+    config.traceExportBatchSize,
+    config.traceExportIntervalMs,
+    config.traceExportTimeoutMs,
+    telemetry,
+  );
+  traces.attachExporter(traceExports);
   const notifications = new NotificationService(
     config.notificationWebhookUrl,
     config.notificationSigningSecret,
@@ -228,6 +252,8 @@ export async function makeTestApp(options?: {
         ],
         status: "active" as const,
         clientSecret: "admin-secret",
+        tokenEndpointAuthMethod: "client_secret_basic" as const,
+        jwks: [],
       },
       {
         clientId: "consumer-client",
@@ -236,25 +262,34 @@ export async function makeTestApp(options?: {
         allowedScopes: ["catalog:read", "broker:use", "mcp:use"],
         status: "active" as const,
         clientSecret: "consumer-secret",
+        tokenEndpointAuthMethod: "client_secret_basic" as const,
+        jwks: [],
       },
     ];
 
-  for (const client of authClients) {
-    const hashed = hashSecret(client.clientSecret);
+  for (const client of authClients.map((client) => ({
+    tokenEndpointAuthMethod: "client_secret_basic" as const,
+    jwks: [],
+    ...client,
+  }))) {
+    const hashed = client.clientSecret ? hashSecret(client.clientSecret) : undefined;
     await authClientRepository.upsert({
       clientId: client.clientId,
       displayName: client.displayName,
-      secretHash: hashed.hash,
-      secretSalt: hashed.salt,
+      secretHash: hashed?.hash,
+      secretSalt: hashed?.salt,
       roles: client.roles,
       allowedScopes: client.allowedScopes,
       status: client.status,
+      tokenEndpointAuthMethod: client.tokenEndpointAuthMethod,
+      jwks: client.jwks,
     });
   }
 
   const auth = new AuthService(
     authClientRepository,
     accessTokens,
+    assertionRepository,
     audit,
     config.oauthIssuerUrl,
     config.publicBaseUrl,
@@ -277,6 +312,15 @@ export async function makeTestApp(options?: {
     notifications,
     traces,
   );
+  const rotations = new RotationService(
+    rotationRepository,
+    credentialRepository,
+    new SecretAdapterRegistry([new EnvSecretAdapter()], config, telemetry),
+    audit,
+    notifications,
+    traces,
+    config.rotationPlanningHorizonDays,
+  );
   const maintenance = new MaintenanceService(
     config.maintenanceEnabled,
     config.maintenanceIntervalMs,
@@ -284,8 +328,10 @@ export async function makeTestApp(options?: {
     breakGlassRepository,
     accessTokens,
     rateLimits,
+    assertionRepository,
     telemetry,
   );
+  traceExports.start();
 
   const broker = new BrokerService(
     credentialRepository,
@@ -305,11 +351,13 @@ export async function makeTestApp(options?: {
     logger: pino({ enabled: false }),
     broker,
     auth,
+    rotations,
     approvals,
     breakGlass,
     database,
     telemetry,
     traces,
+    traceExports,
     rateLimits,
     maintenance,
     backup: new BackupService(database, config.version, audit),
@@ -325,6 +373,7 @@ export async function makeTestApp(options?: {
       },
     },
     close: async () => {
+      await traceExports.stop();
       await maintenance.stop();
       await database.close();
     },

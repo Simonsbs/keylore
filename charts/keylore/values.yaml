@@ -60,6 +60,11 @@ autoscaling:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+topologySpreadConstraints: []
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
 
 persistence:
   enabled: true
@@ -116,6 +121,11 @@ app:
   notificationTimeoutMs: 5000
   traceCaptureEnabled: true
   traceRecentSpanLimit: 500
+  traceExportUrl: ""
+  traceExportBatchSize: 20
+  traceExportIntervalMs: 1000
+  traceExportTimeoutMs: 5000
+  rotationPlanningHorizonDays: 14
 
 bootstrapSecrets:
   existingSecret: ""

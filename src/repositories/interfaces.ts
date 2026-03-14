@@ -2,11 +2,13 @@ import {
   AccessTokenRecord,
   ApprovalRequest,
   AuthClientRecord,
+  AuthClientAuthMethod,
   BreakGlassRequest,
   CatalogSearchInput,
   CredentialRecord,
   PolicyFile,
   PrincipalRole,
+  RotationRun,
 } from "../domain/types.js";
 
 export interface CredentialRepository {
@@ -28,8 +30,8 @@ export interface PolicyRepository {
 }
 
 export interface StoredAuthClient extends AuthClientRecord {
-  secretHash: string;
-  secretSalt: string;
+  secretHash?: string;
+  secretSalt?: string;
 }
 
 export interface AuthClientRepository {
@@ -40,12 +42,19 @@ export interface AuthClientRepository {
   upsert(client: {
     clientId: string;
     displayName: string;
-    secretHash: string;
-    secretSalt: string;
+    secretHash?: string;
+    secretSalt?: string;
     roles: PrincipalRole[];
     allowedScopes: string[];
     status: "active" | "disabled";
+    tokenEndpointAuthMethod: AuthClientAuthMethod;
+    jwks: Array<Record<string, unknown>>;
   }): Promise<void>;
+}
+
+export interface OAuthClientAssertionRepository {
+  register(clientId: string, jti: string, expiresAt: string): Promise<boolean>;
+  cleanup(): Promise<number>;
 }
 
 export interface AccessTokenRepository {
@@ -111,4 +120,25 @@ export interface BreakGlassRepository {
       revokeNote?: string;
     },
   ): Promise<BreakGlassRequest | undefined>;
+}
+
+export interface RotationRunRepository {
+  create(input: RotationRun): Promise<RotationRun>;
+  getById(id: string): Promise<RotationRun | undefined>;
+  list(filter?: {
+    status?: RotationRun["status"];
+    credentialId?: string;
+  }): Promise<RotationRun[]>;
+  findOpenByCredentialId(credentialId: string): Promise<RotationRun | undefined>;
+  transition(
+    id: string,
+    update: {
+      fromStatuses: RotationRun["status"][];
+      status: RotationRun["status"];
+      updatedBy: string;
+      note?: string;
+      targetRef?: string;
+      resultNote?: string;
+    },
+  ): Promise<RotationRun | undefined>;
 }

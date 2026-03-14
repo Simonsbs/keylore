@@ -7,8 +7,13 @@ prod_database_url="postgresql://keylore:keylore@postgres.example.com:5432/keylor
 helm lint "$chart_dir"
 helm template keylore "$chart_dir" -f "$chart_dir/values.yaml" > /dev/null
 
-for profile in dev staging prod; do
+for profile in dev staging prod ha; do
   if [ "$profile" = "prod" ]; then
+    helm template keylore "$chart_dir" \
+      -f "$chart_dir/values.yaml" \
+      -f "$chart_dir/values-${profile}.yaml" \
+      --set "app.databaseUrl=${prod_database_url}" > /dev/null
+  elif [ "$profile" = "ha" ]; then
     helm template keylore "$chart_dir" \
       -f "$chart_dir/values.yaml" \
       -f "$chart_dir/values-${profile}.yaml" \
@@ -20,8 +25,14 @@ for profile in dev staging prod; do
   fi
 done
 
-for profile in staging prod; do
+for profile in staging prod ha; do
   if [ "$profile" = "prod" ]; then
+    helm template keylore "$chart_dir" \
+      --is-upgrade \
+      -f "$chart_dir/values.yaml" \
+      -f "$chart_dir/values-${profile}.yaml" \
+      --set "app.databaseUrl=${prod_database_url}" > /dev/null
+  elif [ "$profile" = "ha" ]; then
     helm template keylore "$chart_dir" \
       --is-upgrade \
       -f "$chart_dir/values.yaml" \

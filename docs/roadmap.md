@@ -60,6 +60,15 @@
 - add Helm lint, render, and dry-run upgrade validation to CI and release flows
 - add operator guidance for Helm upgrade validation and rollback planning
 
+## v0.9
+
+- completed:
+- add `private_key_jwt` OAuth client authentication with persisted assertion replay protection
+- add external trace export with queue status, manual flush, and operator inspection
+- add persisted rotation orchestration with plan, start, complete, and fail transitions
+- add HA-oriented Helm profile with pod disruption budget and topology spread controls
+- expand backup coverage and tests for auth-client and rotation state
+
 ## v1.0
 
 - add multi-tenant RBAC and audit partitioning

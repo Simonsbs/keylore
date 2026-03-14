@@ -107,6 +107,8 @@ npm run dev:cli -- auth clients list
 npm run dev:cli -- auth clients create --file ./client.json
 ```
 
+Shared-secret clients use `tokenEndpointAuthMethod: "client_secret_basic"` or `"client_secret_post"`. `private_key_jwt` clients omit `clientSecret` and provide `jwks`.
+
 ### `auth clients update`
 
 ```bash
@@ -167,6 +169,49 @@ npm run dev:cli -- system maintenance run
 ```bash
 npm run dev:cli -- system traces --limit 20
 npm run dev:cli -- system traces --trace-id deploy-trace-123
+```
+
+### `system trace-exporter`
+
+```bash
+npm run dev:cli -- system trace-exporter
+npm run dev:cli -- system trace-exporter flush
+```
+
+### `system rotations list`
+
+```bash
+npm run dev:cli -- system rotations list --status pending
+```
+
+### `system rotations plan`
+
+```bash
+npm run dev:cli -- system rotations plan --horizon-days 14
+```
+
+### `system rotations create`
+
+```bash
+npm run dev:cli -- system rotations create --file ./rotation-create.json
+```
+
+### `system rotations start`
+
+```bash
+npm run dev:cli -- system rotations start <rotation-id> --note "began rotation"
+```
+
+### `system rotations complete`
+
+```bash
+npm run dev:cli -- system rotations complete <rotation-id> --file ./rotation-complete.json
+```
+
+### `system rotations fail`
+
+```bash
+npm run dev:cli -- system rotations fail <rotation-id> --note "backend issue"
 ```
 
 ### `system backup create`

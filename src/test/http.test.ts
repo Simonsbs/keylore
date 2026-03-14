@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import {
+  createHmac,
+  generateKeyPairSync,
+  KeyObject,
+  randomUUID,
+  sign as signWithKey,
+} from "node:crypto";
 import http from "node:http";
 import test from "node:test";
 
@@ -25,6 +31,32 @@ async function startLocalTargetServer(
       });
     },
   };
+}
+
+function encodeBase64Url(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function makeClientAssertion(
+  privateKey: KeyObject,
+  clientId: string,
+  audience: string,
+  jti = randomUUID(),
+): string {
+  const header = encodeBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "test-key" }));
+  const payload = encodeBase64Url(
+    JSON.stringify({
+      iss: clientId,
+      sub: clientId,
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 300,
+      iat: Math.floor(Date.now() / 1000),
+      jti,
+    }),
+  );
+  const body = `${header}.${payload}`;
+  const signature = signWithKey("RSA-SHA256", Buffer.from(body), privateKey).toString("base64url");
+  return `${body}.${signature}`;
 }
 
 test("http server returns 413 for oversized request bodies", async () => {
@@ -797,6 +829,201 @@ test("auth client lifecycle and token revocation APIs operate over HTTP", async 
   await close();
 });
 
+test("oauth token endpoint supports private_key_jwt clients and blocks assertion replay", async () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const exportedJwk = publicKey.export({ format: "jwk" }) as {
+    kty: string;
+    n: string;
+    e: string;
+  };
+  const publicJwk = {
+    ...exportedJwk,
+    kid: "test-key",
+    alg: "RS256",
+    use: "sig",
+  };
+
+  const { app, close } = await makeTestApp({
+    authClients: [
+      {
+        clientId: "jwt-client",
+        displayName: "JWT Client",
+        roles: ["consumer"],
+        allowedScopes: ["catalog:read"],
+        status: "active",
+        tokenEndpointAuthMethod: "private_key_jwt",
+        jwks: [publicJwk],
+      },
+    ],
+    configOverrides: {
+      httpPort: 8883,
+      publicBaseUrl: "http://127.0.0.1:8883",
+      oauthIssuerUrl: "http://127.0.0.1:8883/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const assertion = makeClientAssertion(privateKey, "jwt-client", "http://127.0.0.1:8883/oauth");
+  const tokenResponse = await fetch("http://127.0.0.1:8883/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "jwt-client",
+      client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion: assertion,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8883/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const token = (await tokenResponse.json()) as { access_token: string };
+  assert.ok(token.access_token.length > 10);
+
+  const replayResponse = await fetch("http://127.0.0.1:8883/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "jwt-client",
+      client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion: assertion,
+      scope: "catalog:read",
+      resource: "http://127.0.0.1:8883/v1",
+    }),
+  });
+  assert.equal(replayResponse.status, 409);
+
+  const searchResponse = await fetch("http://127.0.0.1:8883/v1/catalog/credentials", {
+    headers: {
+      authorization: `Bearer ${token.access_token}`,
+    },
+  });
+  assert.equal(searchResponse.status, 200);
+
+  await server.close();
+  await close();
+});
+
+test("rotation workflow plans due credentials and completes with updated binding state", async () => {
+  const { app, close } = await makeTestApp({
+    catalog: {
+      version: 1,
+      credentials: [
+        {
+          id: "rotation-demo",
+          displayName: "Rotation Demo",
+          service: "github",
+          owner: "platform",
+          scopeTier: "read_only",
+          sensitivity: "high",
+          allowedDomains: ["localhost"],
+          permittedOperations: ["http.get"],
+          expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          rotationPolicy: "30 days",
+          lastValidatedAt: null,
+          selectionNotes: "Rotation demo credential",
+          binding: {
+            adapter: "env",
+            ref: "KEYLORE_TEST_SECRET",
+            authType: "bearer",
+            headerName: "Authorization",
+            headerPrefix: "Bearer ",
+          },
+          tags: ["rotation"],
+          status: "active",
+        },
+      ],
+    },
+    configOverrides: {
+      httpPort: 8894,
+      publicBaseUrl: "http://127.0.0.1:8894",
+      oauthIssuerUrl: "http://127.0.0.1:8894/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const adminTokenResponse = await fetch("http://127.0.0.1:8894/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "system:read system:write",
+      resource: "http://127.0.0.1:8894/v1",
+    }),
+  });
+  assert.equal(adminTokenResponse.status, 200);
+  const adminToken = (await adminTokenResponse.json()) as { access_token: string };
+
+  const planResponse = await fetch("http://127.0.0.1:8894/v1/system/rotations/plan", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${adminToken.access_token}`,
+    },
+    body: JSON.stringify({ horizonDays: 14, credentialIds: ["rotation-demo"] }),
+  });
+  assert.equal(planResponse.status, 200);
+  const planPayload = (await planResponse.json()) as {
+    rotations: Array<{ id: string; status: string; credentialId: string }>;
+  };
+  assert.equal(planPayload.rotations.length, 1);
+  assert.equal(planPayload.rotations[0]?.status, "pending");
+
+  const startResponse = await fetch(
+    `http://127.0.0.1:8894/v1/system/rotations/${planPayload.rotations[0]?.id}/start`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+      body: JSON.stringify({ note: "begin rotation" }),
+    },
+  );
+  assert.equal(startResponse.status, 200);
+
+  const completeResponse = await fetch(
+    `http://127.0.0.1:8894/v1/system/rotations/${planPayload.rotations[0]?.id}/complete`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken.access_token}`,
+      },
+      body: JSON.stringify({
+        note: "rotation completed",
+        targetRef: "KEYLORE_TEST_SECRET_ROTATED",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    },
+  );
+  assert.equal(completeResponse.status, 200);
+  const completePayload = (await completeResponse.json()) as {
+    rotation: { status: string; targetRef?: string };
+  };
+  assert.equal(completePayload.rotation.status, "completed");
+  assert.equal(completePayload.rotation.targetRef, "KEYLORE_TEST_SECRET_ROTATED");
+
+  const credentialRow = await app.database.query<{ binding: { ref: string }; last_validated_at: string | null }>(
+    "SELECT binding, last_validated_at FROM credentials WHERE id = $1",
+    ["rotation-demo"],
+  );
+  assert.equal(credentialRow.rows[0]?.binding.ref, "KEYLORE_TEST_SECRET_ROTATED");
+  assert.ok(credentialRow.rows[0]?.last_validated_at);
+
+  await server.close();
+  await close();
+});
+
 test("catalog reports and adapter health expose rotation metadata without secrets", async () => {
   process.env.KEYLORE_TEST_SECRET = "report-secret";
   const { app, close } = await makeTestApp({
@@ -830,14 +1057,14 @@ test("catalog reports and adapter health expose rotation metadata without secret
       ],
     },
     configOverrides: {
-      httpPort: 8883,
-      publicBaseUrl: "http://127.0.0.1:8883",
-      oauthIssuerUrl: "http://127.0.0.1:8883/oauth",
+      httpPort: 8896,
+      publicBaseUrl: "http://127.0.0.1:8896",
+      oauthIssuerUrl: "http://127.0.0.1:8896/oauth",
     },
   });
   const server = await startHttpServer(app);
 
-  const adminTokenResponse = await fetch("http://127.0.0.1:8883/oauth/token", {
+  const adminTokenResponse = await fetch("http://127.0.0.1:8896/oauth/token", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -847,13 +1074,13 @@ test("catalog reports and adapter health expose rotation metadata without secret
       client_id: "admin-client",
       client_secret: "admin-secret",
       scope: "catalog:read system:read",
-      resource: "http://127.0.0.1:8883/v1",
+      resource: "http://127.0.0.1:8896/v1",
     }),
   });
   assert.equal(adminTokenResponse.status, 200);
   const adminToken = (await adminTokenResponse.json()) as { access_token: string };
 
-  const reportResponse = await fetch("http://127.0.0.1:8883/v1/catalog/credentials/demo/report", {
+  const reportResponse = await fetch("http://127.0.0.1:8896/v1/catalog/credentials/demo/report", {
     headers: {
       authorization: `Bearer ${adminToken.access_token}`,
     },
@@ -870,7 +1097,7 @@ test("catalog reports and adapter health expose rotation metadata without secret
   assert.equal(reportBody.reports[0]?.inspection.adapter, "env");
   assert.equal(reportBody.reports[0]?.inspection.resolved, true);
 
-  const adaptersResponse = await fetch("http://127.0.0.1:8883/v1/system/adapters", {
+  const adaptersResponse = await fetch("http://127.0.0.1:8896/v1/system/adapters", {
     headers: {
       authorization: `Bearer ${adminToken.access_token}`,
     },

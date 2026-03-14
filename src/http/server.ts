@@ -21,7 +21,13 @@ import {
   AuthContext,
   catalogSearchInputSchema,
   createCredentialInputSchema,
+  rotationCompleteInputSchema,
+  rotationCreateInputSchema,
+  rotationPlanInputSchema,
+  rotationRunListOutputSchema,
+  rotationTransitionInputSchema,
   runtimeExecutionInputSchema,
+  traceExportStatusOutputSchema,
   traceListOutputSchema,
   tokenIssueInputSchema,
   updateCredentialInputSchema,
@@ -157,6 +163,27 @@ function normalizeRoute(pathname: string): string {
   }
   if (pathname.startsWith("/v1/system/backups/")) {
     return "/v1/system/backups/:action";
+  }
+  if (pathname === "/v1/system/trace-exporter") {
+    return "/v1/system/trace-exporter";
+  }
+  if (pathname === "/v1/system/trace-exporter/flush") {
+    return "/v1/system/trace-exporter/flush";
+  }
+  if (pathname.startsWith("/v1/system/rotations/") && pathname.endsWith("/start")) {
+    return "/v1/system/rotations/:id/start";
+  }
+  if (pathname.startsWith("/v1/system/rotations/") && pathname.endsWith("/complete")) {
+    return "/v1/system/rotations/:id/complete";
+  }
+  if (pathname.startsWith("/v1/system/rotations/") && pathname.endsWith("/fail")) {
+    return "/v1/system/rotations/:id/fail";
+  }
+  if (pathname === "/v1/system/rotations/plan") {
+    return "/v1/system/rotations/plan";
+  }
+  if (pathname.startsWith("/v1/system/rotations/")) {
+    return "/v1/system/rotations/:id";
   }
   if (pathname.startsWith("/mcp")) {
     return "/mcp";
@@ -365,13 +392,22 @@ export async function startHttpServer(app: KeyLoreApp): Promise<HttpServerHandle
                 : message === "Invalid client credentials." || message === "Invalid access token."
                   ? 401
                   : message === "Access token expired."
+                  ? 401
+                  : message === "Access token resource does not match this protected resource."
                     ? 401
-                    : message === "Access token resource does not match this protected resource."
-                      ? 401
-                      : message === "No valid scopes were granted."
-                        ? 400
-                        : message.startsWith("Client already exists")
-                          ? 409
+                : message.startsWith("Client assertion replay detected") ||
+                    message.startsWith("An open rotation already exists")
+                  ? 409
+                  : message.startsWith("Invalid client assertion") ||
+                      message.startsWith("Client assertion ") ||
+                      message === "Missing private_key_jwt client assertion."
+                    ? 401
+                    : message === "No valid scopes were granted."
+                      ? 400
+                      : message.startsWith("Client already exists")
+                        ? 409
+                : message.startsWith("private_key_jwt clients do not support")
+                  ? 400
                 : message.startsWith("Reviewer has already reviewed")
                   ? 409
                 : message.startsWith("Missing required role")
@@ -428,11 +464,13 @@ async function handleOAuthToken(
   const form = await readFormBody(req, app.config.maxRequestBytes);
   const scope = form.get("scope")?.split(/\s+/).filter(Boolean) as AccessScope[] | undefined;
   const payload = tokenIssueInputSchema.parse({
-    clientId: basicAuth?.clientId ?? form.get("client_id"),
-    clientSecret: basicAuth?.clientSecret ?? form.get("client_secret"),
-    grantType: form.get("grant_type"),
+    clientId: basicAuth?.clientId ?? form.get("client_id") ?? undefined,
+    clientSecret: basicAuth?.clientSecret ?? form.get("client_secret") ?? undefined,
+    grantType: form.get("grant_type") ?? undefined,
     scope,
     resource: form.get("resource") ?? undefined,
+    clientAssertionType: form.get("client_assertion_type") ?? undefined,
+    clientAssertion: form.get("client_assertion") ?? undefined,
   });
   const token = await app.auth.issueToken(payload);
   respondJson(res, 200, token);
@@ -673,6 +711,42 @@ async function handleApiRequest(
     return;
   }
 
+  if (url.pathname === "/v1/system/trace-exporter" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator", "auditor"]);
+    respondJson(res, 200, traceExportStatusOutputSchema.parse({ exporter: app.traceExports.status() }));
+    return;
+  }
+
+  if (url.pathname === "/v1/system/trace-exporter/flush" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "maintenance_operator"]);
+    respondJson(res, 200, traceExportStatusOutputSchema.parse({ exporter: await app.traceExports.flushNow() }));
+    return;
+  }
+
   if (url.pathname === "/v1/system/traces" && req.method === "GET") {
     const context = await authenticateRequest(
       app,
@@ -715,6 +789,138 @@ async function handleApiRequest(
     app.auth.requireRoles(context, ["admin", "maintenance_operator"]);
     const result = await app.maintenance.runOnce();
     respondJson(res, 200, { maintenance: app.maintenance.status(), result });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/rotations" && req.method === "GET") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:read"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:read", "admin:read"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator", "auditor"]);
+    const rotations = await app.rotations.list({
+      status: (url.searchParams.get("status") ?? undefined) as
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "failed"
+        | "cancelled"
+        | undefined,
+      credentialId: url.searchParams.get("credentialId") ?? undefined,
+    });
+    respondJson(res, 200, rotationRunListOutputSchema.parse({ rotations }));
+    return;
+  }
+
+  if (url.pathname === "/v1/system/rotations" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+    const body = rotationCreateInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const rotation = await app.rotations.createManual(context, body);
+    respondJson(res, 201, { rotation });
+    return;
+  }
+
+  if (url.pathname === "/v1/system/rotations/plan" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+    const body = rotationPlanInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const rotations = await app.rotations.planDue(context, body);
+    respondJson(res, 200, rotationRunListOutputSchema.parse({ rotations }));
+    return;
+  }
+
+  const rotationId = routeParam(url.pathname, "/v1/system/rotations/");
+  if (rotationId && req.method === "POST" && url.pathname.endsWith("/start")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+    const body = rotationTransitionInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = rotationId.replace(/\/start$/, "");
+    const rotation = await app.rotations.start(id, context, body.note);
+    respondJson(res, rotation ? 200 : 404, { rotation: rotation ?? null });
+    return;
+  }
+
+  if (rotationId && req.method === "POST" && url.pathname.endsWith("/complete")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+    const body = rotationCompleteInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = rotationId.replace(/\/complete$/, "");
+    const rotation = await app.rotations.complete(id, context, body);
+    respondJson(res, rotation ? 200 : 404, { rotation: rotation ?? null });
+    return;
+  }
+
+  if (rotationId && req.method === "POST" && url.pathname.endsWith("/fail")) {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["system:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireAnyScope(context, ["system:write", "admin:write"]);
+    app.auth.requireRoles(context, ["admin", "operator", "maintenance_operator"]);
+    const body = rotationTransitionInputSchema.parse(await readJsonBody(req, app.config.maxRequestBytes));
+    const id = rotationId.replace(/\/fail$/, "");
+    const rotation = await app.rotations.fail(id, context, body.note);
+    respondJson(res, rotation ? 200 : 404, { rotation: rotation ?? null });
     return;
   }
 
