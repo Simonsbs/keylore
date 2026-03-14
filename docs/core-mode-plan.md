@@ -170,6 +170,10 @@ Acceptance criteria:
 
 - a user can verify a GitHub token against `https://api.github.com/rate_limit` without leaving the UI
 
+Status:
+- complete:
+  - `Credentials` now includes a `Test Credential` panel that runs brokered `http.get` checks through the existing access-request path and shows the redacted result in the UI
+
 ## Core-6
 
 MCP client connection flow.

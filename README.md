@@ -100,6 +100,10 @@ That uses the built-in loopback-only development bootstrap client and gets you i
 
 That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
 
+6. In `Test Credential`, select the saved credential and run a brokered test such as `https://api.github.com/rate_limit`.
+
+The result shows the broker decision and a redacted response preview so you can verify the token works without revealing it.
+
 ## Optional local overrides
 
 If you want to override the local defaults, create `.env` from [.env.example](/home/simon/keylore/.env.example). KeyLore now auto-loads `.env` on startup, so you do not need to `source` it manually.

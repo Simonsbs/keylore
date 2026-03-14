@@ -638,7 +638,8 @@ const state = {
   data: {},
   lastBackup: null,
   lastClientSecret: null,
-  lastResponse: null
+  lastResponse: null,
+  lastCredentialTest: null
 };
 
 const storageKey = 'keylore-admin-session';
@@ -684,6 +685,19 @@ function formatDate(value) {
 
 function prettyJson(value) {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+function defaultTestUrlForCredential(credential) {
+  if (!credential) {
+    return '';
+  }
+  if (credential.service === 'github') {
+    return 'https://api.github.com/rate_limit';
+  }
+  if (credential.allowedDomains && credential.allowedDomains.length > 0) {
+    return 'https://' + credential.allowedDomains[0];
+  }
+  return '';
 }
 
 function setNotice(kind, message) {
@@ -750,6 +764,7 @@ function clearSession() {
   state.lastBackup = null;
   state.lastClientSecret = null;
   state.lastResponse = null;
+  state.lastCredentialTest = null;
   localStorage.removeItem(storageKey);
   syncSessionFields();
   renderAll();
@@ -911,6 +926,20 @@ function renderCredentials() {
       ].join('');
     }).join('');
   });
+
+  if (!state.data.credentials) {
+    byId('credential-test-id').innerHTML = '<option value="">Load credentials first</option>';
+  } else if (!state.data.credentials.ok) {
+    byId('credential-test-id').innerHTML = '<option value="">Credentials unavailable</option>';
+  } else {
+    byId('credential-test-id').innerHTML = state.data.credentials.data.credentials.map(function(credential) {
+      return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
+    }).join('');
+  }
+
+  byId('credential-test-result').innerHTML = state.lastCredentialTest
+    ? '<pre>' + escapeHtml(prettyJson(state.lastCredentialTest)) + '</pre>'
+    : '<div class="empty-state">Run a brokered test to verify a credential without exposing the raw token.</div>';
 }
 
 function renderTenants() {
@@ -1113,6 +1142,7 @@ async function refreshDashboard() {
     }
   }
   renderAll();
+  syncCredentialTestDefaults(false);
   setBusy(false);
 }
 
@@ -1207,6 +1237,25 @@ function serializeCredentialForm() {
   };
 }
 
+function syncCredentialTestDefaults(force) {
+  const credentials = state.data.credentials && state.data.credentials.ok
+    ? state.data.credentials.data.credentials
+    : [];
+  if (!credentials.length) {
+    return;
+  }
+  const selectedId = byId('credential-test-id').value;
+  const selected = credentials.find(function(credential) {
+    return credential.id === selectedId;
+  }) || credentials[0];
+  if (force || !byId('credential-test-id').value) {
+    byId('credential-test-id').value = selected.id;
+  }
+  if (force || !byId('credential-test-url').value.trim()) {
+    byId('credential-test-url').value = defaultTestUrlForCredential(selected);
+  }
+}
+
 async function handleLogin(event) {
   if (event) {
     event.preventDefault();
@@ -1259,6 +1308,28 @@ async function handleCreateCredential(event) {
   byId('credential-storage').value = 'local';
   applyCredentialTemplate();
   syncCredentialSourceFields();
+  syncCredentialTestDefaults(true);
+}
+
+async function handleCredentialTest(event) {
+  event.preventDefault();
+  const credentialId = byId('credential-test-id').value.trim();
+  const targetUrl = byId('credential-test-url').value.trim();
+  const result = await withAction('Credential test completed.', async function() {
+    return fetchJson('/v1/access/request', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        credentialId: credentialId,
+        operation: 'http.get',
+        targetUrl: targetUrl
+      })
+    });
+  });
+  state.lastCredentialTest = result;
+  renderCredentials();
 }
 
 async function handleCreateTenant(event) {
@@ -1505,8 +1576,12 @@ async function initialize() {
     localQuickstartButton.addEventListener('click', handleLocalQuickstartLogin);
   }
   byId('credential-form').addEventListener('submit', handleCreateCredential);
+  byId('credential-test-form').addEventListener('submit', handleCredentialTest);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
+  byId('credential-test-id').addEventListener('change', function() {
+    syncCredentialTestDefaults(true);
+  });
   byId('tenant-form').addEventListener('submit', handleCreateTenant);
   byId('auth-client-form').addEventListener('submit', handleCreateClient);
   byId('refresh-dashboard').addEventListener('click', refreshDashboard);
@@ -1678,7 +1753,23 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Creating credential..." data-idle-label="Create credential">Create credential</button></div>
                 </form>
               </div>
-              <div class="span-7 panel"><div id="credential-list"></div></div>
+              <div class="span-7 code-stack">
+                <div class="panel"><div id="credential-list"></div></div>
+                <div class="panel">
+                  <div class="section-heading">
+                    <div>
+                      <h2 style="font-size:1.4rem;">Test Credential</h2>
+                      <p>Run a brokered HTTP test and inspect the redacted result without exposing the raw token.</p>
+                    </div>
+                  </div>
+                  <form id="credential-test-form" class="form-grid">
+                    <div class="field"><label for="credential-test-id">Credential</label><select id="credential-test-id"></select></div>
+                    <div class="field-wide"><label for="credential-test-url">Test URL</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
+                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Test credential">Test credential</button></div>
+                  </form>
+                  <div id="credential-test-result" style="margin-top: 18px;"></div>
+                </div>
+              </div>
             </div>
           </section>
 

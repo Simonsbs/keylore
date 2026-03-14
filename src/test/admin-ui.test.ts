@@ -28,6 +28,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     const html = await response.text();
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Create credential/);
+    assert.match(html, /Test credential/);
     assert.match(html, /Local encrypted store/);
     assert.match(html, /Open operator session/);
     assert.match(html, /Use local admin quickstart/);

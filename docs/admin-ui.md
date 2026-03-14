@@ -7,6 +7,7 @@ KeyLore now ships a minimal operator UI at `/admin`.
 The UI is intentionally narrow and stays on top of the frozen REST contract:
 
 - create credentials through the new core onboarding flow
+- test credentials through brokered access from the UI
 - open an operator session with `client_credentials` or a pasted bearer token
 - inspect readiness and recent operator responses
 - create and toggle tenants
@@ -32,8 +33,9 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 4. Use `Credentials` to create a token-backed credential with either:
    - `Local encrypted store`
    - `Environment reference`
-5. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
-6. Work through the tenant, auth, review, backup, audit, and system panels.
+5. Use `Test Credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+6. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+7. Work through the tenant, auth, review, backup, audit, and system panels.
 
 ## Validation
 
