@@ -39,7 +39,7 @@ import { TenantService } from "./services/tenant-service.js";
 import { TraceExportService } from "./services/trace-export-service.js";
 import { TraceService } from "./services/trace-service.js";
 import { bootstrapFromFiles } from "./storage/bootstrap.js";
-import { createPostgresDatabase, SqlDatabase } from "./storage/database.js";
+import { createSqlDatabase, SqlDatabase } from "./storage/database.js";
 import { runMigrations } from "./storage/migrations.js";
 import { SandboxRunner } from "./runtime/sandbox-runner.js";
 
@@ -76,7 +76,7 @@ export interface KeyLoreApp {
 export async function createKeyLoreApp(): Promise<KeyLoreApp> {
   const config = loadConfig();
   const logger = pino({ name: config.appName, level: config.logLevel });
-  const database = createPostgresDatabase(config);
+  const database = await createSqlDatabase(config);
   const telemetry = new TelemetryService();
   const traces = new TraceService(config.traceCaptureEnabled, config.traceRecentSpanLimit);
   const traceExports = new TraceExportService(

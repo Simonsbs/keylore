@@ -10,11 +10,21 @@ class InMemoryDatabase implements SqlDatabase {
     return this.pool.query(text, params);
   }
 
+  public async exec(text: string): Promise<void> {
+    await this.pool.query(text);
+  }
+
   public async withTransaction<T>(fn: (client: TransactionClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const result = await fn(client);
+      const transactionalClient: TransactionClient = {
+        query: (text, params) => client.query(text, params),
+        exec: async (text) => {
+          await client.query(text);
+        },
+      };
+      const result = await fn(transactionalClient);
       await client.query("COMMIT");
       return result;
     } catch (error) {

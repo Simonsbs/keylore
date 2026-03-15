@@ -9,7 +9,7 @@ npm install
 npm run quickstart
 ```
 
-Then open `http://127.0.0.1:8787/admin` and use the `Use local admin quickstart` button.
+Then open `http://127.0.0.1:8787/`. KeyLore redirects to `/admin` and should open a local session automatically; use `Start working locally` only if the automatic session fallback appears.
 
 That path is intentionally `core` mode. When you outgrow it, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) before enabling broader self-hosted controls.
 
@@ -28,8 +28,7 @@ That flow:
 1. creates an isolated OS user
 2. clones KeyLore fresh into that user's home
 3. installs dependencies with a clean `HOME` and empty environment
-4. starts a dedicated PostgreSQL container on an isolated port
-5. starts KeyLore on a separate HTTP port so you can open the UI and connect Gemini or Codex there
+4. starts KeyLore on a separate HTTP port with its own local data directory so you can open the UI and connect Gemini or Codex there
 
 By default it clones from your current local repo source, which works even while the repository is private. If you want to force a remote clone instead, set `KEYLORE_FRESH_REPO_URL` before running it.
 
@@ -39,7 +38,7 @@ Clean it up afterward:
 npm run ops:fresh-user-env:cleanup
 ```
 
-Start only the local PostgreSQL dependency:
+Start only the local PostgreSQL dependency for advanced-mode testing:
 
 ```bash
 npm run db:up
@@ -56,7 +55,7 @@ npm run db:down
 On process startup KeyLore now:
 
 1. validates environment configuration
-2. opens a PostgreSQL connection pool
+2. opens the default local embedded database or an external PostgreSQL connection when configured
 3. runs SQL migrations from `migrations/`
 4. optionally bootstraps catalogue, policy, and OAuth client data from `data/` when the tables are empty
 5. starts the background maintenance loop
@@ -65,7 +64,7 @@ On process startup KeyLore now:
 ## Readiness
 
 - `GET /healthz`: process liveness
-- `GET /readyz`: database-backed readiness plus current credential count and maintenance status
+- `GET /readyz`: persistence-backed readiness plus current credential count and maintenance status
 - `GET /metrics`: Prometheus-style counters, gauges, and summaries
 - `GET /.well-known/oauth-authorization-server`: token metadata
 - `GET /.well-known/oauth-protected-resource/api`: REST protected-resource metadata
@@ -74,7 +73,7 @@ On process startup KeyLore now:
 ## Current hardening controls
 
 - bounded HTTP request body size
-- PostgreSQL-backed client rate limiting
+- persistence-backed client rate limiting
 - resource-bound bearer token validation
 - role-aware endpoint authorization
 - outbound request timeout
@@ -96,11 +95,11 @@ On process startup KeyLore now:
 
 ## Local verification flow
 
-With `.env` populated, a minimal smoke test is:
+With local defaults or a populated `.env`, a minimal smoke test is:
 
 1. `npm run quickstart`
 2. open `http://127.0.0.1:8787/admin`
-3. use `Use local admin quickstart`
+3. use `Use local admin quickstart` or `Start working locally`
 4. create a credential
 5. test it through the broker
 6. copy an MCP config snippet from `Connect MCP`
@@ -143,7 +142,7 @@ Tenant-scoped auth administrators are also narrower than global operators:
 - token and refresh-token actions are limited to their own tenant
 - cross-tenant revoke attempts are rejected before state mutation
 
-Automate the drill end to end:
+Automate the drill end to end in advanced Postgres mode:
 
 ```bash
 KEYLORE_DATABASE_URL=postgresql://... \

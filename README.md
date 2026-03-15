@@ -22,7 +22,7 @@ This repository is incubating privately today, but it is structured to be publis
 - MCP server for `stdio` and Streamable HTTP
 - metadata-only catalogue search and retrieval tools
 - default-deny policy engine with domain and operation constraints
-- PostgreSQL-backed catalogue, policy, and audit persistence with startup migrations
+- file-backed local persistence by default with startup migrations, plus explicit PostgreSQL support for advanced deployments
 - OAuth-style client credentials token issuance for remote HTTP and MCP access
 - PKCE-bound `authorization_code` plus rotating `refresh_token` support for interactive public or confidential clients
 - protected-resource metadata for REST and MCP surfaces
@@ -95,7 +95,7 @@ npm install -g @simonsbs/keylore@next
 keylore-http
 ```
 
-That starts KeyLore from the packaged migrations and seed data, while writable state defaults to `~/.keylore`.
+That starts KeyLore from the packaged migrations and seed data with no Docker or external PostgreSQL required. Writable state defaults to `~/.keylore`.
 
 To simulate a brand-new user install on the same machine without reusing your normal checkout or shell environment:
 
@@ -105,7 +105,7 @@ npm run ops:fresh-user-env
 
 That launches an isolated disposable user, a fresh clone, and a separate KeyLore UI port for onboarding and MCP testing. By default it clones from the current local repo source so it also works while the repo is private.
 
-This starts local PostgreSQL, waits for readiness, and boots KeyLore at `http://127.0.0.1:8787`.
+This boots KeyLore at `http://127.0.0.1:8787` with a local embedded database and encrypted local secret store.
 If KeyLore is already running locally on that port, the command reuses the existing instance instead of failing.
 
 3. Open KeyLore in your browser:
@@ -164,11 +164,13 @@ KEYLORE_SANDBOX_COMMAND_ALLOWLIST=/usr/bin/env,node
 
 ## Advanced local usage
 
-Start PostgreSQL only:
+If you want production-style external persistence locally, start PostgreSQL first:
 
 ```bash
 npm run db:up
 ```
+
+Then either set `KEYLORE_DATABASE_MODE=postgres` and `KEYLORE_DATABASE_URL=...` in `.env`, or export them for one run.
 
 Start the HTTP server directly:
 

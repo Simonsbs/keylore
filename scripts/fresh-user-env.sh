@@ -7,18 +7,11 @@ fresh_user="${KEYLORE_FRESH_USER:-keylore-fresh}"
 fresh_home="/home/${fresh_user}"
 repo_dir="${fresh_home}/keylore"
 http_port="${KEYLORE_FRESH_HTTP_PORT:-8879}"
-postgres_port="${KEYLORE_FRESH_POSTGRES_PORT:-55432}"
-postgres_container="${KEYLORE_FRESH_POSTGRES_CONTAINER:-keylore-fresh-postgres}"
 log_file="${fresh_home}/keylore-http.log"
 pid_file="${fresh_home}/keylore-http.pid"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run this script as root so it can create the disposable test user." >&2
-  exit 1
-fi
-
-if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required." >&2
   exit 1
 fi
 
@@ -33,9 +26,9 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 if id -u "${fresh_user}" >/dev/null 2>&1; then
-  usermod -aG docker "${fresh_user}"
+  true
 else
-  useradd --create-home --shell /bin/bash --groups docker "${fresh_user}"
+  useradd --create-home --shell /bin/bash "${fresh_user}"
 fi
 
 mkdir -p "${fresh_home}/snap/node"
@@ -48,30 +41,6 @@ if [[ -d "${repo_dir}" ]]; then
 fi
 mkdir -p "${repo_dir}"
 chown "${fresh_user}:${fresh_user}" "${repo_dir}"
-
-if docker ps -a --format '{{.Names}}' | grep -qx "${postgres_container}"; then
-  docker rm -f "${postgres_container}" >/dev/null
-fi
-
-docker run -d \
-  --name "${postgres_container}" \
-  -e POSTGRES_DB=keylore \
-  -e POSTGRES_USER=keylore \
-  -e POSTGRES_PASSWORD=keylore \
-  -p "127.0.0.1:${postgres_port}:5432" \
-  postgres:17-alpine >/dev/null
-
-for _ in $(seq 1 30); do
-  if docker exec "${postgres_container}" pg_isready -U keylore -d keylore >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-
-if ! docker exec "${postgres_container}" pg_isready -U keylore -d keylore >/dev/null 2>&1; then
-  echo "Disposable PostgreSQL did not become ready in time." >&2
-  exit 1
-fi
 
 source_description="${repo_url}"
 if [[ -d "${repo_url}" ]]; then
@@ -106,7 +75,6 @@ runuser -u "${fresh_user}" -- env -i \
   bash -lc "cd '${repo_dir}' && npm run build" >/dev/null
 
 cat > "${repo_dir}/.env" <<EOF
-KEYLORE_DATABASE_URL=postgresql://keylore:keylore@127.0.0.1:${postgres_port}/keylore
 KEYLORE_HTTP_PORT=${http_port}
 KEYLORE_PUBLIC_BASE_URL=http://127.0.0.1:${http_port}
 KEYLORE_OAUTH_ISSUER_URL=http://127.0.0.1:${http_port}/oauth
@@ -150,7 +118,6 @@ Repo: ${repo_dir}
 Source clone: ${source_description}
 HTTP UI: http://127.0.0.1:${http_port}/
 MCP HTTP: http://127.0.0.1:${http_port}/mcp
-Postgres container: ${postgres_container}
 App log: ${log_file}
 
 This environment does not reuse your /home/simon checkout at runtime or your shell environment.

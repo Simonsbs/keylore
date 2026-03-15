@@ -15,7 +15,9 @@ export interface KeyLoreConfig {
   migrationsDir: string;
   localSecretsFilePath: string;
   localSecretsKeyPath: string;
-  databaseUrl: string;
+  databaseMode: "local" | "postgres";
+  localDatabasePath: string;
+  databaseUrl: string | undefined;
   databasePoolMax: number;
   httpHost: string;
   httpPort: number;
@@ -85,7 +87,6 @@ export interface KeyLoreConfig {
     | undefined;
 }
 
-const LOCAL_DATABASE_URL = "postgresql://keylore:keylore@127.0.0.1:5432/keylore";
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOCAL_ADMIN_CLIENT_ID = "keylore-admin-local";
 const LOCAL_ADMIN_CLIENT_SECRET = "keylore-local-admin";
@@ -173,10 +174,6 @@ function hydrateEnvironment(cwd: string): {
     ...process.env,
   };
 
-  if (isMissing(effectiveEnv.KEYLORE_DATABASE_URL)) {
-    effectiveEnv.KEYLORE_DATABASE_URL = LOCAL_DATABASE_URL;
-  }
-
   const environment = effectiveEnv.KEYLORE_ENVIRONMENT?.trim() || "development";
   const httpHost = effectiveEnv.KEYLORE_HTTP_HOST?.trim() || "127.0.0.1";
   const bootstrapFromFiles = effectiveEnv.KEYLORE_BOOTSTRAP_FROM_FILES !== "false";
@@ -223,14 +220,16 @@ function resolveDefaultDataDir(cwd: string): string {
 }
 
 const envSchema = z.object({
+  KEYLORE_DATABASE_MODE: z.enum(["local", "postgres"]).optional(),
   KEYLORE_DATA_DIR: z.string().optional(),
   KEYLORE_CATALOG_FILE: z.string().optional(),
   KEYLORE_POLICY_FILE: z.string().optional(),
   KEYLORE_AUTH_CLIENTS_FILE: z.string().optional(),
   KEYLORE_MIGRATIONS_DIR: z.string().optional(),
+  KEYLORE_LOCAL_DATABASE_FILE: z.string().optional(),
   KEYLORE_LOCAL_SECRETS_FILE: z.string().optional(),
   KEYLORE_LOCAL_SECRETS_KEY_FILE: z.string().optional(),
-  KEYLORE_DATABASE_URL: z.string().min(1),
+  KEYLORE_DATABASE_URL: optionalString,
   KEYLORE_DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   KEYLORE_HTTP_HOST: z.string().default("127.0.0.1"),
   KEYLORE_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -307,6 +306,7 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
   const env = envSchema.parse(hydrated.env);
   const runtimeRoot = resolveRuntimeRoot(cwd);
   const dataDir = path.resolve(env.KEYLORE_DATA_DIR ?? resolveDefaultDataDir(cwd));
+  const databaseMode = env.KEYLORE_DATABASE_MODE ?? (env.KEYLORE_DATABASE_URL ? "postgres" : "local");
   const publicBaseUrl =
     env.KEYLORE_PUBLIC_BASE_URL ?? `http://${env.KEYLORE_HTTP_HOST}:${env.KEYLORE_HTTP_PORT}`;
   const oauthIssuerUrl = env.KEYLORE_OAUTH_ISSUER_URL ?? `${publicBaseUrl}/oauth`;
@@ -314,6 +314,10 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
     env.KEYLORE_ENVIRONMENT !== "production" &&
     env.KEYLORE_BOOTSTRAP_FROM_FILES &&
     isLoopbackHost(env.KEYLORE_HTTP_HOST);
+
+  if (databaseMode === "postgres" && isMissing(env.KEYLORE_DATABASE_URL)) {
+    throw new Error("KEYLORE_DATABASE_URL is required when KEYLORE_DATABASE_MODE=postgres.");
+  }
 
   return {
     appName: "keylore",
@@ -327,9 +331,11 @@ export function loadConfig(cwd = process.cwd()): KeyLoreConfig {
       env.KEYLORE_AUTH_CLIENTS_FILE ?? "auth-clients.json",
     ),
     migrationsDir: path.resolve(runtimeRoot, env.KEYLORE_MIGRATIONS_DIR ?? "migrations"),
+    databaseMode,
+    localDatabasePath: path.resolve(dataDir, env.KEYLORE_LOCAL_DATABASE_FILE ?? "keylore.db"),
     localSecretsFilePath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_FILE ?? "local-secrets.enc.json"),
     localSecretsKeyPath: path.resolve(dataDir, env.KEYLORE_LOCAL_SECRETS_KEY_FILE ?? "local-secrets.key"),
-    databaseUrl: env.KEYLORE_DATABASE_URL,
+    databaseUrl: env.KEYLORE_DATABASE_URL || undefined,
     databasePoolMax: env.KEYLORE_DATABASE_POOL_MAX,
     httpHost: env.KEYLORE_HTTP_HOST,
     httpPort: env.KEYLORE_HTTP_PORT,

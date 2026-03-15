@@ -7,7 +7,7 @@ export async function runMigrations(
   database: SqlDatabase,
   migrationsDir: string,
 ): Promise<void> {
-  await database.query(`
+  await database.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -33,7 +33,7 @@ export async function runMigrations(
 
     const sql = await fs.readFile(path.join(migrationsDir, fileName), "utf8");
     await database.withTransaction(async (client) => {
-      await client.query(sql);
+      await client.exec(sql);
       await client.query("INSERT INTO schema_migrations(version) VALUES ($1)", [version]);
     });
   }

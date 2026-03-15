@@ -3,41 +3,20 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
-
-if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required for local quickstart." >&2
-  exit 1
-fi
-
-echo "Starting local PostgreSQL..."
-docker compose up -d postgres >/dev/null
-
-container_id=""
-for _ in $(seq 1 30); do
-  container_id="$(docker compose ps -q postgres)"
-  if [[ -n "$container_id" ]] && docker exec "$container_id" pg_isready -U keylore -d keylore >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-
-if [[ -z "$container_id" ]] || ! docker exec "$container_id" pg_isready -U keylore -d keylore >/dev/null 2>&1; then
-  echo "local PostgreSQL did not become ready in time." >&2
-  exit 1
-fi
+http_port="${KEYLORE_HTTP_PORT:-8787}"
 
 echo "KeyLore local quickstart is ready."
-echo "Open http://127.0.0.1:8787/."
+echo "Open http://127.0.0.1:${http_port}/."
 echo "KeyLore will redirect to /admin and try to open a local session automatically."
 
-if curl -fsS http://127.0.0.1:8787/healthz >/tmp/keylore-healthz.$$ 2>/dev/null; then
+if curl -fsS "http://127.0.0.1:${http_port}/healthz" >/tmp/keylore-healthz.$$ 2>/dev/null; then
   if grep -q '"service": "keylore"' /tmp/keylore-healthz.$$; then
     rm -f /tmp/keylore-healthz.$$
-    echo "KeyLore is already running on http://127.0.0.1:8787. Reusing the existing local instance."
+    echo "KeyLore is already running on http://127.0.0.1:${http_port}. Reusing the existing local instance."
     exit 0
   fi
   rm -f /tmp/keylore-healthz.$$
-  echo "Port 8787 is already in use by another service. Stop it or change the KeyLore HTTP port before retrying." >&2
+  echo "Port ${http_port} is already in use by another service. Stop it or change the KeyLore HTTP port before retrying." >&2
   exit 1
 fi
 

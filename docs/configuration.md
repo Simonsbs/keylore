@@ -4,7 +4,8 @@ KeyLore auto-loads `.env` from the working directory when it exists. Shell expor
 
 For loopback development instances, KeyLore also enables a bounded local quickstart profile by default:
 
-- `KEYLORE_DATABASE_URL` falls back to `postgresql://keylore:keylore@127.0.0.1:5432/keylore`
+- `KEYLORE_DATABASE_MODE` falls back to `local`
+- `KEYLORE_LOCAL_DATABASE_FILE` falls back to `keylore.db` inside the data dir
 - `KEYLORE_BOOTSTRAP_ADMIN_CLIENT_SECRET` falls back to `keylore-local-admin`
 - `KEYLORE_BOOTSTRAP_CONSUMER_CLIENT_SECRET` falls back to `keylore-local-consumer`
 
@@ -24,7 +25,9 @@ Use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md)
 
 ## Environment variables
 
-- `KEYLORE_DATABASE_URL`: PostgreSQL connection string
+- `KEYLORE_DATABASE_MODE`: `local` or `postgres`; defaults to `local` unless a PostgreSQL URL is explicitly set
+- `KEYLORE_LOCAL_DATABASE_FILE`: local embedded database filename inside the data dir
+- `KEYLORE_DATABASE_URL`: PostgreSQL connection string for advanced mode
 - `KEYLORE_DATABASE_POOL_MAX`: max PostgreSQL pool size
 - `KEYLORE_DATA_DIR`: base directory for catalogue, policy, and auth-client seed files
 - `KEYLORE_CATALOG_FILE`: catalogue filename inside the data dir
@@ -43,7 +46,7 @@ Use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md)
 - `KEYLORE_MAX_REQUEST_BYTES`: HTTP request body limit
 - `KEYLORE_OUTBOUND_TIMEOUT_MS`: outbound proxy timeout
 - `KEYLORE_MAX_RESPONSE_BYTES`: outbound response capture limit
-- `KEYLORE_RATE_LIMIT_WINDOW_MS`: shared PostgreSQL-backed rate limit window
+- `KEYLORE_RATE_LIMIT_WINDOW_MS`: shared persistence-backed rate limit window
 - `KEYLORE_RATE_LIMIT_MAX_REQUESTS`: max requests per client address per window
 - `KEYLORE_MAINTENANCE_ENABLED`: enable periodic maintenance
 - `KEYLORE_MAINTENANCE_INTERVAL_MS`: maintenance interval

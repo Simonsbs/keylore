@@ -11,7 +11,6 @@ test("loadConfig treats blank optional environment values as unset", () => {
 
   process.env = {
     ...originalEnv,
-    KEYLORE_DATABASE_URL: "postgresql://keylore:keylore@127.0.0.1:5432/keylore",
     KEYLORE_VAULT_ADDR: "",
     KEYLORE_VAULT_TOKEN: "",
     KEYLORE_VAULT_NAMESPACE: "",
@@ -24,6 +23,7 @@ test("loadConfig treats blank optional environment values as unset", () => {
   try {
     const config = loadConfig("/tmp/keylore-config-test");
 
+    assert.equal(config.databaseMode, "local");
     assert.equal(config.vaultAddr, undefined);
     assert.equal(config.vaultToken, undefined);
     assert.equal(config.vaultNamespace, undefined);
@@ -54,6 +54,7 @@ test("loadConfig auto-loads a local .env file", async () => {
   try {
     const config = loadConfig(tempDir);
 
+    assert.equal(config.databaseMode, "postgres");
     assert.equal(config.databaseUrl, "postgresql://from-file/keylore");
     assert.equal(config.httpPort, 9911);
     assert.equal(config.logLevel, "debug");
@@ -63,7 +64,7 @@ test("loadConfig auto-loads a local .env file", async () => {
   }
 });
 
-test("loadConfig enables loopback local quickstart defaults when bootstrap secrets are missing", () => {
+test("loadConfig enables loopback local quickstart defaults with local database mode when bootstrap secrets are missing", () => {
   const originalEnv = process.env;
 
   process.env = {
@@ -74,7 +75,9 @@ test("loadConfig enables loopback local quickstart defaults when bootstrap secre
   try {
     const config = loadConfig("/tmp/keylore-config-test-local");
 
-    assert.equal(config.databaseUrl, "postgresql://keylore:keylore@127.0.0.1:5432/keylore");
+    assert.equal(config.databaseMode, "local");
+    assert.match(config.localDatabasePath, /keylore\.db$/);
+    assert.equal(config.databaseUrl, undefined);
     assert.equal(config.localQuickstartEnabled, true);
     assert.deepEqual(config.localQuickstartBootstrap, {
       clientId: "keylore-admin-local",
@@ -190,6 +193,8 @@ test("loadConfig falls back to packaged assets and user-home data outside the re
     const config = loadConfig(tempDir);
 
     assert.equal(config.dataDir, path.join(os.homedir(), ".keylore"));
+    assert.equal(config.databaseMode, "local");
+    assert.equal(config.localDatabasePath, path.join(os.homedir(), ".keylore", "keylore.db"));
     assert.match(config.bootstrapCatalogPath, /\/data\/catalog\.json$/);
     assert.match(config.bootstrapPolicyPath, /\/data\/policies\.json$/);
     assert.match(config.bootstrapAuthClientsPath, /\/data\/auth-clients\.json$/);
@@ -201,5 +206,22 @@ test("loadConfig falls back to packaged assets and user-home data outside the re
   } finally {
     process.env = originalEnv;
     await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("loadConfig requires a database URL when postgres mode is selected explicitly", () => {
+  const originalEnv = process.env;
+
+  process.env = {
+    KEYLORE_DATABASE_MODE: "postgres",
+  };
+
+  try {
+    assert.throws(
+      () => loadConfig("/tmp/keylore-config-postgres-required"),
+      /KEYLORE_DATABASE_URL is required when KEYLORE_DATABASE_MODE=postgres/,
+    );
+  } finally {
+    process.env = originalEnv;
   }
 });
