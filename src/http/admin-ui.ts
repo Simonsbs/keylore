@@ -1234,16 +1234,31 @@ function renderCoreJourney() {
           ? 'Open Connect your AI tool, copy a snippet, and try the first prompt.'
           : 'Restart your MCP client and try the suggested first prompt.';
 
+  const steps = !state.token
+    ? [
+        '<article class="step-card"><span class="state-warning">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="login-panel">Go there</button></div></article>',
+        '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Add a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open tokens</button></div></article>',
+        '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
+        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
+      ]
+    : [
+        '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Add a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" id="journey-open-token-modal">Add token</button></div></article>',
+        '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
+        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
+      ];
+
   node.innerHTML = [
     '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Follow the short path. Everything else can wait until later.</p></div></div>',
     '<div class="step-grid">',
-    '<article class="step-card"><span class="' + (state.token ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="' + escapeHtml(state.token ? 'credentials-section' : 'login-panel') + '">Go there</button></div></article>',
-    '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Save a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open tokens</button></div></article>',
-    '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
-    '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
+    steps.join(''),
     '</div>',
     '<p class="panel-footnote" style="margin-top:12px;"><strong>Next:</strong> ' + escapeHtml(nextAction) + '</p>'
   ].join('');
+
+  const journeyOpenTokenModal = byId('journey-open-token-modal');
+  if (journeyOpenTokenModal) {
+    journeyOpenTokenModal.addEventListener('click', openCreateCredentialModal);
+  }
 }
 
 function renderCredentials() {
