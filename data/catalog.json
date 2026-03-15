@@ -13,6 +13,8 @@
       "expiresAt": null,
       "rotationPolicy": "Rotate every 90 days",
       "lastValidatedAt": "2026-03-13T00:00:00.000Z",
+      "userContext": "Shared example credential for GitHub metadata lookups in local demos. Keep it read-only and prefer a real user-owned token when one exists.",
+      "llmContext": "Fallback GitHub read-only demo credential. Use for repository metadata, issue lookup, release inspection, and rate-limit reads only when no better user-owned GitHub token is available. Never use for write operations.",
       "selectionNotes": "Use for repository metadata, issue lookup, and release inspection. Never use for write operations.",
       "binding": {
         "adapter": "env",
@@ -37,6 +39,8 @@
       "expiresAt": null,
       "rotationPolicy": "Rotate every 90 days",
       "lastValidatedAt": "2026-03-13T00:00:00.000Z",
+      "userContext": "Shared example credential for npm package metadata inspection in local demos. Keep it read-only and do not use it for publish workflows.",
+      "llmContext": "Fallback npm read-only demo credential. Use for package metadata inspection, dependency lookup, and registry read operations only. Never use for publish or package mutation workflows.",
       "selectionNotes": "Use for package metadata inspection only. Publishing is intentionally excluded from the default demo policy.",
       "binding": {
         "adapter": "env",

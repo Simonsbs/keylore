@@ -40,8 +40,11 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /npm read-only/);
     assert.match(html, /Internal service token/);
     assert.match(html, /Advanced token settings/);
-    assert.match(html, /Inspect or edit AI-facing context/);
-    assert.match(html, /Current AI-visible record/);
+    assert.match(html, /Inspect or edit context/);
+    assert.match(html, /Current MCP-visible record/);
+    assert.match(html, /Explain this token for people/);
+    assert.match(html, /Good LLM context/);
+    assert.match(html, /Good user context/);
     assert.match(html, /Save context changes/);
     assert.match(html, /Token to check/);
     assert.match(html, /URL to call with this token/);

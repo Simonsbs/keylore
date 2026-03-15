@@ -72,7 +72,8 @@ The context store should contain:
 - allowed domains
 - permitted operations
 - tags
-- selection notes written for LLM/tool selection
+- user context written for humans
+- LLM context written for tool selection
 - runtime mode (`proxy` first, sandbox only when explicitly needed)
 
 This is the data the LLM should search.
@@ -141,7 +142,7 @@ Acceptance criteria:
 LLM-friendly context authoring.
 
 - add a dedicated context editor to the UI
-- make `selectionNotes` and allowed-domain guidance easier to write than raw JSON
+- make separate user context and LLM context plus allowed-domain guidance easier to write than raw JSON
 - add preset templates for:
   - GitHub read-only
   - npm read-only
@@ -157,11 +158,12 @@ Status:
 - partially complete:
   - the core credential form now includes a live MCP-visible metadata preview
   - the preview shows the agent-facing record without binding refs or raw secret values
-  - inline warnings now flag empty or weak selection notes and obvious secret-like content in notes
+  - inline warnings now flag empty or weak LLM context, short user context, and obvious secret-like content in either field
   - the core credential form now includes stronger templates for GitHub read-only, GitHub write-capable, npm read-only, and internal service tokens
   - templates now prefill the intended read or read/write operation profile instead of forcing every credential into `http.get`
-  - template-specific guidance and submit-time validation now push users away from vague or secret-like `selectionNotes`
+  - template-specific guidance and submit-time validation now push users away from vague or secret-like `LLM context`
   - saved credentials can now be inspected and edited through a context-only flow without re-entering or exposing the stored secret
+  - `User context` and `LLM context` are now stored separately and exposed together in MCP-visible metadata, while `selectionNotes` remains as a compatibility alias of `LLM context`
   - the UI now provides explicit next-step guidance, built-in first prompts for Codex and Gemini, and lightweight rename/retag/archive actions in core mode
 
 ## Core-5

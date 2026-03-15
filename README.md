@@ -123,11 +123,12 @@ If that local session bootstrap fails for any reason, use `Start working locally
 - `Token key`
 - `Paste token`
 - `Where can it be used?`
+- `Explain this token for people`
 - `Tell the AI when to use this token`
 
-That stores the raw token outside the searchable catalogue and keeps only the LLM-facing metadata in the credential record.
+That stores the raw token outside the searchable catalogue and keeps only the metadata record in the credential catalogue.
 
-5. Review `Writing help` and `What the AI will see` in the form to confirm the agent-facing record is specific, useful, and secret-free. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
+5. Review `Writing help` and `What the AI will see` in the form to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
 
 6. In `Saved tokens`, look under `Your tokens` for the ones you added yourself. `Included examples` are seeded local records and are shown separately so they do not get confused with your own tokens.
 
@@ -139,7 +140,7 @@ The check makes a real brokered `http.get` call with that token and URL. Success
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
-After creation, use `Inspect or edit AI-facing context` inside `Save token` if you need to refine the metadata without re-entering or exposing the stored secret. Saved token cards also support lightweight lifecycle actions such as rename, retag, and archive/restore under `More actions`.
+After creation, use `Inspect or edit context` inside `Save token` if you need to refine the metadata without re-entering or exposing the stored secret. The context editor keeps `User context` and `LLM context` separate while still mirroring `LLM context` into `selectionNotes` for older clients. Saved token cards also support lightweight lifecycle actions such as rename, retag, and archive/restore under `More actions`.
 
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 

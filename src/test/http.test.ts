@@ -1040,7 +1040,7 @@ test("core credential onboarding rejects vague or secret-like selection notes", 
     });
     assert.equal(createResponse.status, 400);
     const errorPayload = (await createResponse.json()) as { error?: string };
-    assert.match(errorPayload.error ?? "", /Selection notes/i);
+    assert.match(errorPayload.error ?? "", /LLM context/i);
   } finally {
     await server.close();
     await close();
@@ -1104,9 +1104,15 @@ test("core credential context endpoints inspect and update metadata without expo
     );
     assert.equal(getResponse.status, 200);
     const getPayload = (await getResponse.json()) as {
-      credential: Record<string, unknown> & { selectionNotes: string };
+      credential: Record<string, unknown> & {
+        selectionNotes: string;
+        userContext?: string;
+        llmContext?: string;
+      };
     };
     assert.equal(getPayload.credential.selectionNotes, "Use for GitHub repository metadata reads only.");
+    assert.equal(getPayload.credential.llmContext, "Use for GitHub repository metadata reads only.");
+    assert.equal(getPayload.credential.userContext, "Use for GitHub repository metadata reads only.");
     assert.equal("binding" in getPayload.credential, false);
 
     const patchResponse = await fetch(
@@ -1129,9 +1135,20 @@ test("core credential context endpoints inspect and update metadata without expo
     );
     assert.equal(patchResponse.status, 200);
     const patchPayload = (await patchResponse.json()) as {
-      credential: { selectionNotes: string; tags: string[]; status: string };
+      credential: {
+        selectionNotes: string;
+        llmContext?: string;
+        userContext?: string;
+        tags: string[];
+        status: string;
+      };
     };
     assert.match(patchPayload.credential.selectionNotes, /Avoid write actions/);
+    assert.match(patchPayload.credential.llmContext ?? "", /Avoid write actions/);
+    assert.equal(
+      patchPayload.credential.userContext,
+      "Use for GitHub repository metadata reads only.",
+    );
     assert.deepEqual(patchPayload.credential.tags, ["github", "readonly", "managed"]);
     assert.equal(patchPayload.credential.status, "active");
   } finally {

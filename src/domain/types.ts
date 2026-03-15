@@ -117,6 +117,8 @@ export const credentialRecordSchema = z.object({
   rotationPolicy: z.string().min(1),
   lastValidatedAt: z.string().datetime().nullable(),
   selectionNotes: z.string().min(1),
+  userContext: z.string().min(1).optional(),
+  llmContext: z.string().min(1).optional(),
   binding: credentialBindingSchema,
   tags: z.array(z.string().min(1)).default([]),
   status: credentialStatusSchema.default("active"),
@@ -230,6 +232,76 @@ const secretLikeSelectionNotesPattern =
 const vagueSelectionNotesPattern =
   /^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i;
 
+function normalizedLlmContext(value: {
+  selectionNotes?: string;
+  llmContext?: string;
+}): string {
+  return (value.llmContext ?? value.selectionNotes ?? "").trim();
+}
+
+function normalizedUserContext(value: {
+  selectionNotes?: string;
+  llmContext?: string;
+  userContext?: string;
+}): string {
+  return (value.userContext ?? normalizedLlmContext(value)).trim();
+}
+
+function validateLlmContext(
+  llmContext: string,
+  ctx: z.core.$RefinementCtx<unknown>,
+  path: PropertyKey[],
+): void {
+  if (!llmContext) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message: "LLM context is required. Explain when the agent should use this credential.",
+    });
+    return;
+  }
+
+  if (llmContext.length < 16) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message:
+        "LLM context must explain when the agent should use this credential in more detail.",
+    });
+  }
+
+  if (vagueSelectionNotesPattern.test(llmContext)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message:
+        "LLM context is too vague. Describe the target service, intended use, and what the agent should avoid.",
+    });
+  }
+
+  if (secretLikeSelectionNotesPattern.test(llmContext)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message: "LLM context must not contain token-like secret material.",
+    });
+  }
+}
+
+function validateUserContext(
+  userContext: string,
+  ctx: z.core.$RefinementCtx<unknown>,
+  path: PropertyKey[],
+): void {
+  if (!userContext) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message: "User context is required. Describe the human purpose of this credential.",
+    });
+  }
+}
+
 export const coreCredentialCreateInputSchema = z
   .object({
     credentialId: z.string().min(1),
@@ -241,7 +313,9 @@ export const coreCredentialCreateInputSchema = z
     sensitivity: sensitivitySchema.default("high"),
     allowedDomains: z.array(z.string().min(1)).min(1),
     permittedOperations: z.array(operationSchema).min(1).default(["http.get"]),
-    selectionNotes: z.string().min(1),
+    selectionNotes: z.string().min(1).optional(),
+    userContext: z.string().min(1).optional(),
+    llmContext: z.string().min(1).optional(),
     rotationPolicy: z.string().default("Managed locally"),
     tags: z.array(z.string().min(1)).default([]),
     status: credentialStatusSchema.default("active"),
@@ -274,32 +348,8 @@ export const coreCredentialCreateInputSchema = z
       });
     }
 
-    const selectionNotes = value.selectionNotes.trim();
-    if (selectionNotes.length < 16) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["selectionNotes"],
-        message:
-          "Selection notes must explain when the agent should use this credential in more detail.",
-      });
-    }
-
-    if (vagueSelectionNotesPattern.test(selectionNotes)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["selectionNotes"],
-        message:
-          "Selection notes are too vague. Describe the target service, intended use, and what the agent should avoid.",
-      });
-    }
-
-    if (secretLikeSelectionNotesPattern.test(selectionNotes)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["selectionNotes"],
-        message: "Selection notes must not contain token-like secret material.",
-      });
-    }
+    validateLlmContext(normalizedLlmContext(value), ctx, ["llmContext"]);
+    validateUserContext(normalizedUserContext(value), ctx, ["userContext"]);
 
     if (value.permittedOperations.includes("http.post") && value.scopeTier === "read_only") {
       ctx.addIssue({
@@ -323,6 +373,8 @@ export const coreCredentialContextUpdateInputSchema = z
     allowedDomains: z.array(z.string().min(1)).min(1).optional(),
     permittedOperations: z.array(operationSchema).min(1).optional(),
     selectionNotes: z.string().min(1).optional(),
+    userContext: z.string().min(1).optional(),
+    llmContext: z.string().min(1).optional(),
     tags: z.array(z.string().min(1)).optional(),
     status: credentialStatusSchema.optional(),
   })
@@ -330,33 +382,13 @@ export const coreCredentialContextUpdateInputSchema = z
     message: "At least one context field must be provided.",
   })
   .superRefine((value, ctx) => {
-    if (value.selectionNotes !== undefined) {
-      const selectionNotes = value.selectionNotes.trim();
-      if (selectionNotes.length < 16) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["selectionNotes"],
-          message:
-            "Selection notes must explain when the agent should use this credential in more detail.",
-        });
-      }
-
-      if (vagueSelectionNotesPattern.test(selectionNotes)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["selectionNotes"],
-          message:
-            "Selection notes are too vague. Describe the target service, intended use, and what the agent should avoid.",
-        });
-      }
-
-      if (secretLikeSelectionNotesPattern.test(selectionNotes)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["selectionNotes"],
-          message: "Selection notes must not contain token-like secret material.",
-        });
-      }
+    if (
+      value.selectionNotes !== undefined ||
+      value.llmContext !== undefined ||
+      value.userContext !== undefined
+    ) {
+      validateLlmContext(normalizedLlmContext(value), ctx, ["llmContext"]);
+      validateUserContext(normalizedUserContext(value), ctx, ["userContext"]);
     }
 
     const scopeTier = value.scopeTier;

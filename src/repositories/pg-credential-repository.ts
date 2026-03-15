@@ -22,12 +22,16 @@ interface CredentialRow {
   rotation_policy: string;
   last_validated_at: string | Date | null;
   selection_notes: string;
+  user_context: string | null;
+  llm_context: string | null;
   binding: CredentialRecord["binding"];
   tags: string[];
   status: CredentialRecord["status"];
 }
 
 function mapRow(row: CredentialRow): CredentialRecord {
+  const llmContext = row.llm_context?.trim() || row.selection_notes;
+  const userContext = row.user_context?.trim() || llmContext;
   return credentialRecordSchema.parse({
     id: row.id,
     tenantId: row.tenant_id,
@@ -44,7 +48,9 @@ function mapRow(row: CredentialRow): CredentialRecord {
       row.last_validated_at instanceof Date
         ? row.last_validated_at.toISOString()
         : row.last_validated_at,
-    selectionNotes: row.selection_notes,
+    selectionNotes: llmContext,
+    userContext,
+    llmContext,
     binding: row.binding,
     tags: row.tags,
     status: row.status,
@@ -67,7 +73,7 @@ function makeSearchClauses(input: CatalogSearchInput): {
     params.push(input.query);
     const placeholder = `$${params.length}`;
     conditions.push(
-      `(id ILIKE '%' || ${placeholder} || '%' OR display_name ILIKE '%' || ${placeholder} || '%' OR service ILIKE '%' || ${placeholder} || '%' OR owner ILIKE '%' || ${placeholder} || '%' OR selection_notes ILIKE '%' || ${placeholder} || '%')`,
+      `(id ILIKE '%' || ${placeholder} || '%' OR display_name ILIKE '%' || ${placeholder} || '%' OR service ILIKE '%' || ${placeholder} || '%' OR owner ILIKE '%' || ${placeholder} || '%' OR selection_notes ILIKE '%' || ${placeholder} || '%' OR COALESCE(user_context, '') ILIKE '%' || ${placeholder} || '%' OR COALESCE(llm_context, '') ILIKE '%' || ${placeholder} || '%')`,
     );
   }
 
@@ -97,6 +103,32 @@ function makeSearchClauses(input: CatalogSearchInput): {
 
   const clause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return { clause, params };
+}
+
+function normalizedCreateContexts(record: Pick<CredentialRecord, "selectionNotes" | "userContext" | "llmContext">): {
+  llmContext: string;
+  userContext: string;
+} {
+  const llmContext = record.llmContext?.trim() || record.selectionNotes;
+  return {
+    llmContext,
+    userContext: record.userContext?.trim() || llmContext,
+  };
+}
+
+function normalizedUpdateContexts(
+  current: CredentialRecord,
+  patch: Partial<Omit<CredentialRecord, "id">>,
+): { llmContext: string; userContext: string } {
+  const llmContext =
+    patch.llmContext?.trim() ??
+    patch.selectionNotes?.trim() ??
+    current.llmContext?.trim() ??
+    current.selectionNotes;
+  return {
+    llmContext,
+    userContext: patch.userContext?.trim() ?? current.userContext?.trim() ?? llmContext,
+  };
 }
 
 export class PgCredentialRepository implements CredentialRepository {
@@ -140,15 +172,16 @@ export class PgCredentialRepository implements CredentialRepository {
 
   public async create(record: CredentialRecord): Promise<CredentialRecord> {
     const parsed = createCredentialInputSchema.parse(record);
+    const { llmContext, userContext } = normalizedCreateContexts(parsed);
     await this.database.query(
       `INSERT INTO credentials (
         id, tenant_id, display_name, service, owner, scope_tier, sensitivity,
         allowed_domains, permitted_operations, expires_at, rotation_policy,
-        last_validated_at, selection_notes, binding, tags, status
+        last_validated_at, selection_notes, user_context, llm_context, binding, tags, status
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11,
-        $12, $13, $14::jsonb, $15, $16
+        $12, $13, $14, $15, $16::jsonb, $17, $18
       )`,
       [
         parsed.id,
@@ -163,13 +196,20 @@ export class PgCredentialRepository implements CredentialRepository {
         parsed.expiresAt,
         parsed.rotationPolicy,
         parsed.lastValidatedAt,
-        parsed.selectionNotes,
+        llmContext,
+        userContext,
+        llmContext,
         JSON.stringify(parsed.binding),
         parsed.tags,
         parsed.status,
       ],
     );
-    return parsed;
+    return credentialRecordSchema.parse({
+      ...parsed,
+      selectionNotes: llmContext,
+      userContext,
+      llmContext,
+    });
   }
 
   public async update(
@@ -187,6 +227,7 @@ export class PgCredentialRepository implements CredentialRepository {
       ...parsedPatch,
       id,
     });
+    const { llmContext, userContext } = normalizedUpdateContexts(current, parsedPatch);
 
     await this.database.query(
       `UPDATE credentials SET
@@ -201,9 +242,11 @@ export class PgCredentialRepository implements CredentialRepository {
         rotation_policy = $10,
         last_validated_at = $11,
         selection_notes = $12,
-        binding = $13::jsonb,
-        tags = $14,
-        status = $15,
+        user_context = $13,
+        llm_context = $14,
+        binding = $15::jsonb,
+        tags = $16,
+        status = $17,
         updated_at = NOW()
       WHERE id = $1`,
       [
@@ -218,14 +261,21 @@ export class PgCredentialRepository implements CredentialRepository {
         merged.expiresAt,
         merged.rotationPolicy,
         merged.lastValidatedAt,
-        merged.selectionNotes,
+        llmContext,
+        userContext,
+        llmContext,
         JSON.stringify(merged.binding),
         merged.tags,
         merged.status,
       ],
     );
 
-    return merged;
+    return credentialRecordSchema.parse({
+      ...merged,
+      selectionNotes: llmContext,
+      userContext,
+      llmContext,
+    });
   }
 
   public async delete(id: string): Promise<boolean> {

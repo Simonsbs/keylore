@@ -126,7 +126,13 @@ export class CoreModeService {
       expiresAt: parsed.expiresAt,
       rotationPolicy: parsed.rotationPolicy,
       lastValidatedAt: null,
-      selectionNotes: parsed.selectionNotes,
+      selectionNotes: parsed.llmContext?.trim() || parsed.selectionNotes?.trim() || "",
+      userContext:
+        parsed.userContext?.trim() ||
+        parsed.llmContext?.trim() ||
+        parsed.selectionNotes?.trim() ||
+        "",
+      llmContext: parsed.llmContext?.trim() || parsed.selectionNotes?.trim() || "",
       binding,
       tags: parsed.tags,
       status: parsed.status,

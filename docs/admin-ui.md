@@ -7,7 +7,7 @@ KeyLore now ships a minimal operator UI at `/admin`.
 The UI is intentionally narrow and stays on top of the frozen REST contract:
 
 - create credentials through a simplified `save token -> test token -> connect AI tool` flow
-- preview the exact AI-visible credential metadata before saving
+- preview the exact MCP-visible credential metadata before saving
 - get template-specific context guidance and inline validation before saving
 - inspect and update MCP-visible context after creation without touching the stored secret
 - test credentials through brokered access from the UI
@@ -43,6 +43,7 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - name the token
    - set the `Token key`
    - paste the token
+   - explain the token for people
    - say when the AI should use it
 6. Start from a stronger template when possible:
    - `GitHub read-only`
@@ -50,25 +51,26 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - `npm read-only`
    - `Internal service token`
    - `Generic bearer API`
-7. Review `What the AI will see` to confirm the agent-facing record is useful and contains no secret material.
-8. Use `Writing help` plus the inline validation messages to improve weak or overly generic `selectionNotes` before save.
-9. `Token key` is the unique identifier for the token. If the UI says a token already exists, change that field and save again.
-10. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
-11. In `Saved tokens`, use `Your tokens` for the records you created yourself. `Included examples` are seeded local records.
-12. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-13. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
-14. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
-15. Use the built-in `First prompt to try` examples after restarting the MCP client.
-16. Open `Remote or advanced connection options` only if you need HTTP MCP.
-17. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-18. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+7. Review `What the AI will see` to confirm the MCP-visible record is useful and contains no secret material.
+8. `Explain this token for people` is for human operators. `Tell the AI when to use this token` is the primary retrieval hint for the agent.
+9. Use `Writing help` plus the inline validation messages to improve weak or overly generic `LLM context` before save.
+10. `Token key` is the unique identifier for the token. If the UI says a token already exists, change that field and save again.
+11. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
+12. In `Saved tokens`, use `Your tokens` for the records you created yourself. `Included examples` are seeded local records.
+13. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+14. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
+15. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
+16. Use the built-in `First prompt to try` examples after restarting the MCP client.
+17. Open `Remote or advanced connection options` only if you need HTTP MCP.
+18. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+19. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Context editing
 
-Inside `Save token`, use `Inspect or edit AI-facing context` to:
+Inside `Save token`, use `Inspect or edit context` to:
 
 - inspect the current MCP-visible record for a saved credential
-- update display name, service, sensitivity, domains, tags, operations, and `selectionNotes`
+- update display name, service, sensitivity, domains, tags, operations, `User context`, and `LLM context`
 - apply lightweight lifecycle actions such as rename, retag, archive, and restore from `More actions`
 - keep secret storage and binding details out of the edit path entirely
 

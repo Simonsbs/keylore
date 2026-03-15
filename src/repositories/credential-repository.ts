@@ -14,6 +14,32 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function normalizedLlmContext(credential: Pick<CredentialRecord, "selectionNotes" | "llmContext">): string {
+  return credential.llmContext?.trim() || credential.selectionNotes;
+}
+
+function normalizedUserContext(
+  credential: Pick<CredentialRecord, "selectionNotes" | "llmContext" | "userContext">,
+): string {
+  return credential.userContext?.trim() || normalizedLlmContext(credential);
+}
+
+function normalizedUpdateContexts(
+  current: CredentialRecord,
+  patch: Partial<Omit<CredentialRecord, "id">>,
+): { selectionNotes: string; llmContext: string; userContext: string } {
+  const llmContext =
+    patch.llmContext?.trim() ??
+    patch.selectionNotes?.trim() ??
+    current.llmContext?.trim() ??
+    current.selectionNotes;
+  return {
+    selectionNotes: llmContext,
+    llmContext,
+    userContext: patch.userContext?.trim() ?? current.userContext?.trim() ?? llmContext,
+  };
+}
+
 function matchesQuery(credential: CredentialRecord, query?: string): boolean {
   if (!query) {
     return true;
@@ -24,6 +50,8 @@ function matchesQuery(credential: CredentialRecord, query?: string): boolean {
     credential.displayName,
     credential.service,
     credential.owner,
+    credential.userContext ?? "",
+    credential.llmContext ?? "",
     credential.selectionNotes,
     ...credential.tags,
   ]
@@ -73,15 +101,21 @@ export class JsonCredentialRepository {
 
   public async create(record: CredentialRecord): Promise<CredentialRecord> {
     const parsed = createCredentialInputSchema.parse(record);
+    const normalized = {
+      ...parsed,
+      userContext: normalizedUserContext(parsed),
+      llmContext: normalizedLlmContext(parsed),
+      selectionNotes: normalizedLlmContext(parsed),
+    };
     const catalog = await this.readCatalog();
 
-    if (catalog.credentials.some((credential) => credential.id === parsed.id)) {
-      throw new Error(`Credential ${parsed.id} already exists.`);
+    if (catalog.credentials.some((credential) => credential.id === normalized.id)) {
+      throw new Error(`Credential ${normalized.id} already exists.`);
     }
 
-    catalog.credentials.push(parsed);
+    catalog.credentials.push(normalized);
     await this.writeCatalog(catalog);
-    return parsed;
+    return normalized;
   }
 
   public async createWithDefaults(
@@ -105,15 +139,20 @@ export class JsonCredentialRepository {
       throw new Error(`Credential ${id} was not found.`);
     }
 
+    const current = catalog.credentials[index]!;
     const merged = createCredentialInputSchema.parse({
-      ...catalog.credentials[index],
+      ...current,
       ...parsedPatch,
       id,
     });
+    const normalized = {
+      ...merged,
+      ...normalizedUpdateContexts(current, parsedPatch),
+    };
 
-    catalog.credentials[index] = merged;
+    catalog.credentials[index] = normalized;
     await this.writeCatalog(catalog);
-    return merged;
+    return normalized;
   }
 
   public async delete(id: string): Promise<boolean> {

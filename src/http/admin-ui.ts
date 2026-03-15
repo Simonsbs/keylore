@@ -1175,9 +1175,10 @@ function renderCredentials() {
         '<span class="pill"><strong>Scope</strong> ' + escapeHtml(credential.scopeTier) + '</span>',
         '<span class="pill"><strong>Sensitivity</strong> ' + escapeHtml(credential.sensitivity) + '</span>',
         '</div>',
-        '<p class="panel-footnote">' + escapeHtml(credential.selectionNotes) + '</p>',
+        '<p class="panel-footnote"><strong>LLM context:</strong> ' + escapeHtml(credential.llmContext || credential.selectionNotes) + '</p>',
+        '<p class="panel-footnote"><strong>User context:</strong> ' + escapeHtml(credential.userContext || credential.llmContext || credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
-        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit AI notes</button></div>',
+        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit context</button></div>',
         '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button>' + (credential.owner === 'local' ? '<button class="button-danger" type="button" data-credential-context-action="delete" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Delete</button>' : '') + '</div></details>',
         '</article>'
       ].join('');
@@ -1282,14 +1283,21 @@ function selectedCredentialSummary() {
 function credentialContextAssessment(payload) {
   const errors = [];
   const warnings = [];
-  const notes = String(payload.selectionNotes || '');
-  const normalizedNotes = notes.trim().toLowerCase();
-  if (!notes.trim()) {
-    errors.push('Selection notes are required. Explain when the agent should use this credential.');
-  } else if (notes.trim().length < 16) {
-    errors.push('Selection notes are too short. Add enough detail for the agent to distinguish this credential from others.');
-  } else if (notes.trim().length < 40) {
-    warnings.push('Selection notes are short. Add when-to-use guidance so the agent can choose this credential reliably.');
+  const llmContext = String(payload.llmContext || payload.selectionNotes || '');
+  const userContext = String(payload.userContext || '');
+  const normalizedLlmContext = llmContext.trim().toLowerCase();
+  if (!llmContext.trim()) {
+    errors.push('LLM context is required. Explain when the agent should use this credential.');
+  } else if (llmContext.trim().length < 16) {
+    errors.push('LLM context is too short. Add enough detail for the agent to distinguish this credential from others.');
+  } else if (llmContext.trim().length < 40) {
+    warnings.push('LLM context is short. Add when-to-use guidance so the agent can choose this credential reliably.');
+  }
+
+  if (!userContext.trim()) {
+    errors.push('User context is required. Explain the human purpose of this credential.');
+  } else if (userContext.trim().length < 24) {
+    warnings.push('User context is short. Add ownership, intent, or caveats so humans can understand why this credential exists.');
   }
 
   if (!payload.allowedDomains || !payload.allowedDomains.length) {
@@ -1300,12 +1308,12 @@ function credentialContextAssessment(payload) {
     warnings.push('Permitted operations are empty. The preview should make the intended read or write capability explicit.');
   }
 
-  if (/^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i.test(normalizedNotes)) {
-    errors.push('Selection notes are too vague. Say what the credential is for, when the agent should choose it, and what it should avoid.');
+  if (/^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i.test(normalizedLlmContext)) {
+    errors.push('LLM context is too vague. Say what the credential is for, when the agent should choose it, and what it should avoid.');
   }
 
-  if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(notes)) {
-    errors.push('Selection notes look like they may contain a secret. Keep raw tokens out of the agent-visible context.');
+  if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(llmContext + '\n' + userContext)) {
+    errors.push('Context text looks like it may contain a secret. Keep raw tokens out of the human and agent-visible context.');
   }
 
   return { errors: errors, warnings: warnings };
@@ -1315,30 +1323,35 @@ function credentialGuidanceForTemplate() {
   const template = byId('credential-template').value;
   if (template === 'github-readonly') {
     return {
-      good: 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.',
-      avoid: 'GitHub token'  
+      good: 'LLM: Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.',
+      user: 'User: Primary read-only GitHub token for routine repository lookups.',
+      avoid: 'GitHub token'
     };
   }
   if (template === 'github-write') {
     return {
-      good: 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, labels, or pull request updates. Prefer the read-only GitHub credential when writes are not needed.',
+      good: 'LLM: Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, labels, or pull request updates. Prefer the read-only GitHub credential when writes are not needed.',
+      user: 'User: Higher-risk GitHub token for controlled write workflows.',
       avoid: 'Main GitHub token'
     };
   }
   if (template === 'npm-readonly') {
     return {
-      good: 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use it for publish workflows.',
+      good: 'LLM: Use for npm package metadata, dependency lookup, and registry read operations. Do not use it for publish workflows.',
+      user: 'User: Read-only npm registry token for package inspection.',
       avoid: 'npm token'
     };
   }
   if (template === 'internal-service') {
     return {
-      good: 'Use only for the listed internal service domain when the task explicitly targets that API. Avoid unrelated external services.',
+      good: 'LLM: Use only for the listed internal service domain when the task explicitly targets that API. Avoid unrelated external services.',
+      user: 'User: Internal service credential scoped to one API or workflow.',
       avoid: 'Internal token'
     };
   }
   return {
-    good: 'Describe the target service, the intended domain, when the agent should choose this credential, and what kinds of actions it should avoid.',
+    good: 'LLM: Describe the target service, the intended domain, when the agent should choose this credential, and what kinds of actions it should avoid.',
+    user: 'User: Describe why this token exists, who it is for, and any caveats for humans.',
     avoid: 'Use when needed'
   };
 }
@@ -1350,9 +1363,10 @@ function renderCredentialGuidance() {
   }
   const guidance = credentialGuidanceForTemplate();
   node.innerHTML = [
-    '<div class="panel-footnote"><strong>Good context:</strong> ' + escapeHtml(guidance.good) + '</div>',
+    '<div class="panel-footnote"><strong>Good LLM context:</strong> ' + escapeHtml(guidance.good) + '</div>',
+    '<div class="panel-footnote"><strong>Good user context:</strong> ' + escapeHtml(guidance.user) + '</div>',
     '<div class="panel-footnote"><strong>Avoid:</strong> ' + escapeHtml(guidance.avoid) + '</div>',
-    '<div class="panel-footnote">Good notes should answer: what service is this for, when should the agent choose it, and what should it avoid doing?</div>'
+    '<div class="panel-footnote">LLM context should answer: when should the agent choose this credential, and what should it avoid doing? User context should explain the human purpose and ownership.</div>'
   ].join('');
 }
 
@@ -1378,7 +1392,9 @@ function renderCredentialPreview() {
       expiresAt: payload.expiresAt || null,
       rotationPolicy: payload.rotationPolicy || 'Managed locally',
       lastValidatedAt: null,
-      selectionNotes: payload.selectionNotes || '',
+      userContext: payload.userContext || '',
+      llmContext: payload.llmContext || payload.selectionNotes || '',
+      selectionNotes: payload.llmContext || payload.selectionNotes || '',
       tags: payload.tags,
       status: payload.status,
     },
@@ -1394,7 +1410,7 @@ function renderCredentialPreview() {
     messages.push('<div class="panel-footnote">' + escapeHtml(message) + '</div>');
   });
   if (!messages.length) {
-    messages.push('<div class="panel-footnote">This is the MCP-visible metadata shape. Secret storage details, binding refs, and raw token values do not appear here.</div>');
+    messages.push('<div class="panel-footnote">This is the MCP-visible metadata shape. Secret storage details, binding refs, and raw token values do not appear here. KeyLore also mirrors <span class="mono">llmContext</span> into <span class="mono">selectionNotes</span> for older clients.</div>');
   }
   warningNode.innerHTML = messages.join('');
   renderCredentialGuidance();
@@ -1421,7 +1437,9 @@ function renderContextPreview(previewNodeId, warningNodeId, payload, currentId) 
       expiresAt: null,
       rotationPolicy: 'Managed separately',
       lastValidatedAt: null,
-      selectionNotes: payload.selectionNotes || '',
+      userContext: payload.userContext || '',
+      llmContext: payload.llmContext || payload.selectionNotes || '',
+      selectionNotes: payload.llmContext || payload.selectionNotes || '',
       tags: payload.tags,
       status: payload.status || 'active',
     },
@@ -1437,7 +1455,7 @@ function renderContextPreview(previewNodeId, warningNodeId, payload, currentId) 
     messages.push('<div class="panel-footnote">' + escapeHtml(message) + '</div>');
   });
   if (!messages.length) {
-    messages.push('<div class="panel-footnote">This preview is agent-facing metadata only. Secret bindings and raw tokens stay separate and are not editable here.</div>');
+    messages.push('<div class="panel-footnote">This preview is metadata only. Secret bindings and raw tokens stay separate and are not editable here. Older clients still receive <span class="mono">selectionNotes</span> as a compatibility alias of <span class="mono">llmContext</span>.</div>');
   }
   warningNode.innerHTML = messages.join('');
 }
@@ -1452,7 +1470,8 @@ function populateCredentialContextForm(credential) {
     ? 'http.get,http.post'
     : 'http.get';
   byId('credential-context-domains').value = credential.allowedDomains.join(', ');
-  byId('credential-context-notes').value = credential.selectionNotes;
+  byId('credential-context-user-context').value = credential.userContext || credential.llmContext || credential.selectionNotes;
+  byId('credential-context-llm-context').value = credential.llmContext || credential.selectionNotes;
   byId('credential-context-tags').value = credential.tags.join(', ');
 }
 
@@ -1466,7 +1485,9 @@ function serializeCredentialContextForm() {
     status: byId('credential-context-status').value,
     allowedDomains: splitList(byId('credential-context-domains').value),
     permittedOperations: operations.length ? operations : ['http.get'],
-    selectionNotes: byId('credential-context-notes').value.trim(),
+    userContext: byId('credential-context-user-context').value.trim(),
+    llmContext: byId('credential-context-llm-context').value.trim(),
+    selectionNotes: byId('credential-context-llm-context').value.trim(),
     tags: splitList(byId('credential-context-tags').value),
   };
 }
@@ -1784,7 +1805,8 @@ function applyCredentialTemplate() {
     byId('credential-service').value = 'github';
     byId('credential-operations').value = 'http.get';
     byId('credential-domains').value = 'api.github.com';
-    byId('credential-notes').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
+    byId('credential-user-context').value = 'Primary read-only GitHub token for routine repository metadata and issue lookups.';
+    byId('credential-llm-context').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
     byId('credential-tags').value = 'github,readonly';
     byId('credential-sensitivity').value = 'high';
     renderCredentialPreview();
@@ -1796,7 +1818,8 @@ function applyCredentialTemplate() {
     byId('credential-service').value = 'github';
     byId('credential-operations').value = 'http.get,http.post';
     byId('credential-domains').value = 'api.github.com';
-    byId('credential-notes').value = 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, pull request updates, labels, or status changes. Prefer the read-only GitHub credential when writes are not required.';
+    byId('credential-user-context').value = 'Higher-risk GitHub token for controlled repository writes and authenticated maintenance workflows.';
+    byId('credential-llm-context').value = 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, pull request updates, labels, or status changes. Prefer the read-only GitHub credential when writes are not required.';
     byId('credential-tags').value = 'github,write';
     byId('credential-sensitivity').value = 'critical';
     renderCredentialPreview();
@@ -1808,7 +1831,8 @@ function applyCredentialTemplate() {
     byId('credential-service').value = 'npm';
     byId('credential-operations').value = 'http.get';
     byId('credential-domains').value = 'registry.npmjs.org';
-    byId('credential-notes').value = 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use this credential for publish or package mutation workflows.';
+    byId('credential-user-context').value = 'Read-only npm registry token for package inspection and dependency lookup.';
+    byId('credential-llm-context').value = 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use this credential for publish or package mutation workflows.';
     byId('credential-tags').value = 'npm,readonly';
     byId('credential-sensitivity').value = 'high';
     renderCredentialPreview();
@@ -1820,7 +1844,8 @@ function applyCredentialTemplate() {
     byId('credential-service').value = 'internal_api';
     byId('credential-operations').value = 'http.get,http.post';
     byId('credential-domains').value = 'internal.example.com';
-    byId('credential-notes').value = 'Use only for the listed internal service domain when the task explicitly targets that service. Keep this credential scoped to the documented internal API workflow and avoid unrelated external APIs.';
+    byId('credential-user-context').value = 'Internal service credential scoped to one documented API workflow.';
+    byId('credential-llm-context').value = 'Use only for the listed internal service domain when the task explicitly targets that service. Keep this credential scoped to the documented internal API workflow and avoid unrelated external APIs.';
     byId('credential-tags').value = 'internal,bearer';
     byId('credential-sensitivity').value = 'critical';
     renderCredentialPreview();
@@ -1833,7 +1858,8 @@ function applyCredentialTemplate() {
     byId('credential-service').value = '';
     byId('credential-operations').value = 'http.get';
     byId('credential-domains').value = '';
-    byId('credential-notes').value = '';
+    byId('credential-user-context').value = '';
+    byId('credential-llm-context').value = '';
     byId('credential-tags').value = '';
     byId('credential-sensitivity').value = 'moderate';
     renderCredentialPreview();
@@ -1873,7 +1899,9 @@ function serializeCredentialForm() {
     sensitivity: byId('credential-sensitivity').value,
     allowedDomains: splitList(byId('credential-domains').value),
     permittedOperations: operations.length ? operations : ['http.get'],
-    selectionNotes: byId('credential-notes').value.trim(),
+    userContext: byId('credential-user-context').value.trim(),
+    llmContext: byId('credential-llm-context').value.trim(),
+    selectionNotes: byId('credential-llm-context').value.trim(),
     tags: splitList(byId('credential-tags').value),
     authType: 'bearer',
     headerName: 'Authorization',
@@ -2731,7 +2759,8 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="field-wide panel-footnote" style="margin-top:-4px;">This is the unique key for the token. It appears in the saved-token list and is what you change if KeyLore says a token key already exists.</div>
                   <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
                   <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
-                  <div class="field-wide"><label for="credential-notes">Tell the AI when to use this token</label><textarea id="credential-notes" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
+                  <div class="field-wide"><label for="credential-user-context">Explain this token for people</label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea></div>
+                  <div class="field-wide"><label for="credential-llm-context">Tell the AI when to use this token</label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
                   <div class="field-wide">
                     <label for="credential-guidance">Writing help</label>
                     <div id="credential-guidance"></div>
@@ -2760,7 +2789,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="section-heading">
                     <div>
                       <h2 style="font-size:1.4rem;">Saved tokens</h2>
-                      <p>Use these after you save something. The main next step is usually Test credential.</p>
+                      <p>Use these after you save something. Each token now shows both its human context and the AI-facing context used for selection.</p>
                     </div>
                   </div>
                   <div id="credential-list"></div>
@@ -2781,11 +2810,11 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div id="credential-test-result" style="margin-top: 18px;"></div>
                 </div>
                 <details class="panel disclosure">
-                  <summary>Inspect or edit AI-facing context</summary>
-                  <div class="panel-footnote">This is metadata only. Secret storage and raw token values stay separate and are not shown here.</div>
+                  <summary>Inspect or edit context</summary>
+                  <div class="panel-footnote">This is metadata only. Secret storage and raw token values stay separate and are not shown here. LLM context drives selection; user context explains human purpose.</div>
                   <div class="panel-grid" style="margin-top: 16px;">
                     <div class="span-6 panel">
-                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current AI-visible record</h2></div></div>
+                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current MCP-visible record</h2></div></div>
                       <div id="credential-context-current"></div>
                     </div>
                     <div class="span-6 panel">
@@ -2798,10 +2827,11 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                         <div class="field"><label for="credential-context-status">Lifecycle</label><select id="credential-context-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
                         <div class="field"><label for="credential-context-operations">Allow writes?</label><select id="credential-context-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
                         <div class="field-wide"><label for="credential-context-domains">Where can it be used?</label><textarea id="credential-context-domains"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-notes">Tell the AI when to use this token</label><textarea id="credential-context-notes"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-user-context">Explain this token for people</label><textarea id="credential-context-user-context"></textarea></div>
+                        <div class="field-wide"><label for="credential-context-llm-context">Tell the AI when to use this token</label><textarea id="credential-context-llm-context"></textarea></div>
                         <div class="field-wide"><label for="credential-context-tags">Tags</label><input id="credential-context-tags" type="text" /></div>
                         <div class="field-wide">
-                          <label for="credential-context-preview">Updated AI-visible preview</label>
+                          <label for="credential-context-preview">Updated MCP-visible preview</label>
                           <div id="credential-context-preview-warnings" style="margin-bottom: 12px;"></div>
                           <div id="credential-context-preview"></div>
                         </div>

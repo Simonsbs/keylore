@@ -57,6 +57,8 @@ interface BackupCredentialRow {
   rotation_policy: string;
   last_validated_at: string | Date | null;
   selection_notes: string;
+  user_context: string | null;
+  llm_context: string | null;
   binding: unknown;
   tags: string[];
   status: string;
@@ -360,7 +362,9 @@ export class BackupService {
         expiresAt: toIso(row.expires_at),
         rotationPolicy: row.rotation_policy,
         lastValidatedAt: toIso(row.last_validated_at),
-        selectionNotes: row.selection_notes,
+        selectionNotes: row.llm_context?.trim() || row.selection_notes,
+        userContext: row.user_context?.trim() || row.llm_context?.trim() || row.selection_notes,
+        llmContext: row.llm_context?.trim() || row.selection_notes,
         binding: row.binding,
         tags: row.tags,
         status: row.status,
@@ -578,15 +582,17 @@ export class BackupService {
       }
 
       for (const credential of backup.credentials) {
+        const llmContext = credential.llmContext?.trim() || credential.selectionNotes;
+        const userContext = credential.userContext?.trim() || llmContext;
         await client.query(
           `INSERT INTO credentials (
              id, tenant_id, display_name, service, owner, scope_tier, sensitivity,
              allowed_domains, permitted_operations, expires_at, rotation_policy,
-             last_validated_at, selection_notes, binding, tags, status
+             last_validated_at, selection_notes, user_context, llm_context, binding, tags, status
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7,
              $8, $9, $10, $11,
-             $12, $13, $14, $15, $16
+             $12, $13, $14, $15, $16, $17, $18
            )`,
           [
             credential.id,
@@ -601,7 +607,9 @@ export class BackupService {
             credential.expiresAt,
             credential.rotationPolicy,
             credential.lastValidatedAt,
-            credential.selectionNotes,
+            llmContext,
+            userContext,
+            llmContext,
             credential.binding,
             credential.tags,
             credential.status,
