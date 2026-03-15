@@ -74,7 +74,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
     "catalog_search",
     {
       description:
-        "Search credential metadata without exposing secret values. Use this before attempting access.",
+        "Search credential metadata without exposing secret values. Use this first to find the best credential by purpose, service, domain, permitted operation, tags, and LLM/user context. Do not assume the requested token name matches the credential ID.",
       inputSchema: {
         query: z.string().optional(),
         service: z.string().optional(),
@@ -106,7 +106,8 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
   server.registerTool(
     "catalog_get",
     {
-      description: "Return one credential metadata record by identifier, still without secrets.",
+      description:
+        "Return one credential metadata record by identifier, still without secrets. Use this after search when you need to inspect one candidate more closely before choosing it for access.",
       inputSchema: {
         credentialId: z.string().min(1),
       },
@@ -159,7 +160,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
     "access_request",
     {
       description:
-        "Evaluate policy and, if allowed, execute a constrained authenticated proxy request without returning secret material.",
+        "Evaluate policy and, if allowed, execute a constrained authenticated proxy request without returning secret material. Use the credential selected from metadata context, domains, and allowed operations, not just because its name looks similar to the request.",
       inputSchema: {
         credentialId: z.string().min(1),
         operation: operationSchema,
@@ -187,7 +188,7 @@ export function createKeyLoreMcpServer(app: KeyLoreApp): McpServer {
     "policy_simulate",
     {
       description:
-        "Evaluate policy for a proposed access request without executing the outbound call or creating approval side effects.",
+        "Evaluate policy for a proposed access request without executing the outbound call or creating approval side effects. Use this to compare likely credentials and confirm the context-matched choice before making a live request.",
       inputSchema: {
         credentialId: z.string().min(1),
         operation: operationSchema,

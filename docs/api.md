@@ -456,19 +456,19 @@ Headers include:
 
 ### `catalog_search`
 
-Search credential metadata only.
+Search credential metadata only. Agents should use this first to find the best credential by service, target domain, permitted operation, tags, and context, not just by token name.
 
 ### `catalog_get`
 
-Read one credential metadata record by ID.
+Read one credential metadata record by ID after search narrows the candidate set.
 
 ### `access_request`
 
-Evaluate policy and execute a constrained proxy call if authorized.
+Evaluate policy and execute a constrained proxy call if authorized. The chosen credential should come from metadata/context matching, not from name similarity alone.
 
 ### `policy_simulate`
 
-Evaluate policy for a proposed access request without executing it.
+Evaluate policy for a proposed access request without executing it. Use this to compare likely credentials before a live request.
 
 ### `catalog_report`
 
