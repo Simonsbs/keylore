@@ -513,6 +513,16 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.field.has-error input,
+.field.has-error textarea,
+.field.has-error select,
+.field-wide.has-error input,
+.field-wide.has-error textarea,
+.field-wide.has-error select {
+  border-color: rgba(143, 45, 35, 0.45);
+  box-shadow: 0 0 0 3px rgba(143, 45, 35, 0.08);
+}
+
 .field label,
 .field-wide label {
   font-size: 0.84rem;
@@ -541,6 +551,18 @@ textarea {
   font-family: var(--font-mono);
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.field-error {
+  display: none;
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.field-error.is-visible {
+  display: block;
 }
 
 pre {
@@ -1190,6 +1212,44 @@ function clearCredentialModalFeedback() {
   setCredentialModalFeedback('error', '');
 }
 
+function clearCredentialFieldErrors() {
+  [
+    'credential-name',
+    'credential-id',
+    'credential-service',
+    'credential-domains',
+    'credential-secret',
+    'credential-user-context',
+    'credential-llm-context',
+  ].forEach(function(fieldId) {
+    const input = byId(fieldId);
+    const container = input?.closest('.field, .field-wide');
+    const errorNode = byId(fieldId + '-error');
+    container?.classList.remove('has-error');
+    if (errorNode) {
+      errorNode.textContent = '';
+      errorNode.classList.remove('is-visible');
+    }
+  });
+}
+
+function setCredentialFieldErrors(fieldErrors) {
+  clearCredentialFieldErrors();
+  Object.entries(fieldErrors || {}).forEach(function([fieldId, message]) {
+    if (!message) {
+      return;
+    }
+    const input = byId(fieldId);
+    const container = input?.closest('.field, .field-wide');
+    const errorNode = byId(fieldId + '-error');
+    container?.classList.add('has-error');
+    if (errorNode) {
+      errorNode.textContent = humanizeErrorMessage(String(message));
+      errorNode.classList.add('is-visible');
+    }
+  });
+}
+
 function setBusy(value) {
   state.busy = value;
   document.body.dataset.busy = value ? 'true' : 'false';
@@ -1588,19 +1648,26 @@ function selectedCredentialSummary() {
 function credentialContextAssessment(payload) {
   const errors = [];
   const warnings = [];
+  const fieldErrors = {};
   const llmContext = String(payload.llmContext || payload.selectionNotes || '');
   const userContext = String(payload.userContext || '');
   const normalizedLlmContext = llmContext.trim().toLowerCase();
   if (!llmContext.trim()) {
-    errors.push('LLM context is required. Explain when the agent should use this credential.');
+    const message = 'LLM context is required. Explain when the agent should use this credential.';
+    errors.push(message);
+    fieldErrors['credential-llm-context'] = message;
   } else if (llmContext.trim().length < 16) {
-    errors.push('LLM context is too short. Add enough detail for the agent to distinguish this credential from others.');
+    const message = 'LLM context is too short. Add enough detail for the agent to distinguish this credential from others.';
+    errors.push(message);
+    fieldErrors['credential-llm-context'] = message;
   } else if (llmContext.trim().length < 40) {
     warnings.push('LLM context is short. Add when-to-use guidance so the agent can choose this credential reliably.');
   }
 
   if (!userContext.trim()) {
-    errors.push('User context is required. Explain the human purpose of this credential.');
+    const message = 'User context is required. Explain the human purpose of this credential.';
+    errors.push(message);
+    fieldErrors['credential-user-context'] = message;
   } else if (userContext.trim().length < 24) {
     warnings.push('User context is short. Add ownership, intent, or caveats so humans can understand why this credential exists.');
   }
@@ -1614,40 +1681,47 @@ function credentialContextAssessment(payload) {
   }
 
   if (/^(use when needed|general use|general purpose|for api|api token|token for api|default token|main token)$/i.test(normalizedLlmContext)) {
-    errors.push('LLM context is too vague. Say what the credential is for, when the agent should choose it, and what it should avoid.');
+    const message = 'LLM context is too vague. Say what the credential is for, when the agent should choose it, and what it should avoid.';
+    errors.push(message);
+    fieldErrors['credential-llm-context'] = message;
   }
 
   if (/(gh[pousr]_[A-Za-z0-9_]+|github_pat_|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{16})/.test(llmContext + '\n' + userContext)) {
-    errors.push('Context text looks like it may contain a secret. Keep raw tokens out of the human and agent-visible context.');
+    const message = 'Context text looks like it may contain a secret. Keep raw tokens out of the human and agent-visible context.';
+    errors.push(message);
+    fieldErrors['credential-user-context'] = fieldErrors['credential-user-context'] || message;
+    fieldErrors['credential-llm-context'] = fieldErrors['credential-llm-context'] || message;
   }
 
-  return { errors: errors, warnings: warnings };
+  return { errors: errors, warnings: warnings, fieldErrors: fieldErrors };
 }
 
-function credentialGuidanceForTemplate() {
-  const template = byId('credential-template').value;
-  if (template === 'github-readonly') {
+function credentialGuidance() {
+  const service = byId('credential-service')?.value.trim().toLowerCase();
+  const operations = splitList(byId('credential-operations')?.value || '');
+  const canWrite = operations.includes('http.post');
+  if (service === 'github' && !canWrite) {
     return {
       good: 'LLM: Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.',
       user: 'User: Primary read-only GitHub token for routine repository lookups.',
       avoid: 'GitHub token'
     };
   }
-  if (template === 'github-write') {
+  if (service === 'github' && canWrite) {
     return {
       good: 'LLM: Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, labels, or pull request updates. Prefer the read-only GitHub credential when writes are not needed.',
       user: 'User: Higher-risk GitHub token for controlled write workflows.',
       avoid: 'Main GitHub token'
     };
   }
-  if (template === 'npm-readonly') {
+  if (service === 'npm') {
     return {
       good: 'LLM: Use for npm package metadata, dependency lookup, and registry read operations. Do not use it for publish workflows.',
       user: 'User: Read-only npm registry token for package inspection.',
       avoid: 'npm token'
     };
   }
-  if (template === 'internal-service') {
+  if (service && (service.includes('internal') || service.includes('private'))) {
     return {
       good: 'LLM: Use only for the listed internal service domain when the task explicitly targets that API. Avoid unrelated external services.',
       user: 'User: Internal service credential scoped to one API or workflow.',
@@ -1666,7 +1740,7 @@ function renderCredentialGuidance() {
   if (!node) {
     return;
   }
-  const guidance = credentialGuidanceForTemplate();
+  const guidance = credentialGuidance();
   node.innerHTML = [
     '<div class="panel-footnote"><strong>Good LLM context:</strong> ' + escapeHtml(guidance.good) + '</div>',
     '<div class="panel-footnote"><strong>Good user context:</strong> ' + escapeHtml(guidance.user) + '</div>',
@@ -1706,7 +1780,7 @@ function renderCredentialPreview() {
   };
 
   previewNode.innerHTML = '<pre>' + escapeHtml(prettyJson(preview)) + '</pre>';
-  const assessment = credentialContextAssessment(payload);
+  const assessment = validateCredentialFormPayload(payload);
   const messages = [];
   assessment.errors.forEach(function(message) {
     messages.push('<div class="error-state">' + escapeHtml(message) + '</div>');
@@ -1824,18 +1898,28 @@ function renderCredentialContextManager() {
   );
 }
 
+function applyCredentialDefaults() {
+  byId('credential-storage').value = 'local';
+  byId('credential-service').value = '';
+  byId('credential-sensitivity').value = 'high';
+  byId('credential-operations').value = 'http.get';
+  byId('credential-tags').value = '';
+  byId('credential-domains').value = '';
+  byId('credential-user-context').value = '';
+  byId('credential-llm-context').value = '';
+}
+
 function resetCredentialFormForCreate() {
   state.credentialModalMode = 'create';
   state.credentialIdManuallyEdited = false;
   clearCredentialModalFeedback();
+  clearCredentialFieldErrors();
   byId('credential-modal-title').textContent = 'Add token';
   byId('credential-modal-copy').textContent = 'Paste the token, add the human and AI context, and save it into KeyLore.';
   byId('credential-submit').dataset.idleLabel = 'Save token';
   byId('credential-submit').textContent = 'Save token';
-  byId('credential-template').disabled = false;
   byId('credential-form').reset();
-  byId('credential-template').value = 'github-readonly';
-  byId('credential-storage').value = 'local';
+  applyCredentialDefaults();
   byId('credential-id').readOnly = false;
   byId('credential-secret-field').hidden = false;
   byId('credential-secret-label').textContent = 'Paste token';
@@ -1843,7 +1927,6 @@ function resetCredentialFormForCreate() {
   byId('credential-secret').placeholder = 'Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue.';
   byId('credential-secret').disabled = false;
   byId('credential-storage').disabled = false;
-  applyCredentialTemplate();
   syncCredentialSourceFields();
   renderCredentialPreview();
 }
@@ -1858,11 +1941,11 @@ function openEditCredentialModal(credential) {
   state.selectedCredentialId = credential.id;
   state.currentCredentialContext = credential;
   clearCredentialModalFeedback();
+  clearCredentialFieldErrors();
   byId('credential-modal-title').textContent = 'Edit token';
   byId('credential-modal-copy').textContent = 'Update the token metadata and context. Stored secret material stays separate and is not shown here.';
   byId('credential-submit').dataset.idleLabel = 'Save changes';
   byId('credential-submit').textContent = 'Save changes';
-  byId('credential-template').disabled = true;
   byId('credential-name').value = credential.displayName;
   byId('credential-id').value = credential.id;
   byId('credential-id').readOnly = true;
@@ -2238,85 +2321,14 @@ function serializeAuthClientForm() {
   };
 }
 
-function applyCredentialTemplate() {
-  const template = byId('credential-template').value;
-  state.credentialIdManuallyEdited = false;
-  if (template === 'github-readonly') {
-    byId('credential-name').value = 'GitHub Read-Only Token';
-    byId('credential-service').value = 'github';
-    byId('credential-operations').value = 'http.get';
-    byId('credential-domains').value = 'api.github.com';
-    byId('credential-user-context').value = 'Primary read-only GitHub token for routine repository metadata and issue lookups.';
-    byId('credential-llm-context').value = 'Use for GitHub repository metadata, issues, pull requests, and rate-limit reads. Never use it for write operations.';
-    byId('credential-tags').value = 'github,readonly';
-    byId('credential-sensitivity').value = 'high';
-    renderCredentialPreview();
-    return;
-  }
-
-  if (template === 'github-write') {
-    byId('credential-name').value = 'GitHub Write Token';
-    byId('credential-service').value = 'github';
-    byId('credential-operations').value = 'http.get,http.post';
-    byId('credential-domains').value = 'api.github.com';
-    byId('credential-user-context').value = 'Higher-risk GitHub token for controlled repository writes and authenticated maintenance workflows.';
-    byId('credential-llm-context').value = 'Use for GitHub workflows that need authenticated reads plus controlled writes such as issue comments, pull request updates, labels, or status changes. Prefer the read-only GitHub credential when writes are not required.';
-    byId('credential-tags').value = 'github,write';
-    byId('credential-sensitivity').value = 'critical';
-    renderCredentialPreview();
-    return;
-  }
-
-  if (template === 'npm-readonly') {
-    byId('credential-name').value = 'npm Read-Only Token';
-    byId('credential-service').value = 'npm';
-    byId('credential-operations').value = 'http.get';
-    byId('credential-domains').value = 'registry.npmjs.org';
-    byId('credential-user-context').value = 'Read-only npm registry token for package inspection and dependency lookup.';
-    byId('credential-llm-context').value = 'Use for npm package metadata, dependency lookup, and registry read operations. Do not use this credential for publish or package mutation workflows.';
-    byId('credential-tags').value = 'npm,readonly';
-    byId('credential-sensitivity').value = 'high';
-    renderCredentialPreview();
-    return;
-  }
-
-  if (template === 'internal-service') {
-    byId('credential-name').value = 'Internal Service Token';
-    byId('credential-service').value = 'internal_api';
-    byId('credential-operations').value = 'http.get,http.post';
-    byId('credential-domains').value = 'internal.example.com';
-    byId('credential-user-context').value = 'Internal service credential scoped to one documented API workflow.';
-    byId('credential-llm-context').value = 'Use only for the listed internal service domain when the task explicitly targets that service. Keep this credential scoped to the documented internal API workflow and avoid unrelated external APIs.';
-    byId('credential-tags').value = 'internal,bearer';
-    byId('credential-sensitivity').value = 'critical';
-    renderCredentialPreview();
-    return;
-  }
-
-  if (template === 'generic-bearer') {
-    byId('credential-id').value = '';
-    byId('credential-name').value = '';
-    byId('credential-service').value = '';
-    byId('credential-operations').value = 'http.get';
-    byId('credential-domains').value = '';
-    byId('credential-user-context').value = '';
-    byId('credential-llm-context').value = '';
-    byId('credential-tags').value = '';
-    byId('credential-sensitivity').value = 'moderate';
-    renderCredentialPreview();
-  }
-
-  syncCredentialIdFromName(true);
-}
-
 function syncCredentialIdFromName(force) {
   if (state.credentialIdManuallyEdited && !force) {
     return;
   }
 
   const name = byId('credential-name').value.trim();
-  const template = byId('credential-template').value;
-  const fallback = template === 'generic-bearer' ? 'token' : template.replace(/[^a-z0-9]+/g, '-');
+  const service = byId('credential-service').value.trim();
+  const fallback = slugifyTokenKey(service || 'token');
   byId('credential-id').value = slugifyTokenKey(name || fallback) + '-local';
   renderCredentialPreview();
 }
@@ -2357,6 +2369,39 @@ function serializeCredentialForm() {
           adapter: 'env',
           ref: byId('credential-env-ref').value.trim()
         }
+  };
+}
+
+function validateCredentialFormPayload(payload) {
+  const assessment = credentialContextAssessment(payload);
+  const fieldErrors = { ...assessment.fieldErrors };
+
+  if (!payload.credentialId) {
+    fieldErrors['credential-id'] = 'Token key is required.';
+  }
+  if (!payload.displayName) {
+    fieldErrors['credential-name'] = 'Name shown in KeyLore is required.';
+  }
+  if (!payload.service) {
+    fieldErrors['credential-service'] = 'Service name is required.';
+  }
+  if (!payload.allowedDomains?.length) {
+    fieldErrors['credential-domains'] = 'Add at least one allowed domain so the token is clearly scoped.';
+  }
+  if (payload.secretSource?.adapter === 'local' && state.credentialModalMode === 'create' && !payload.secretSource.secretValue.trim()) {
+    fieldErrors['credential-secret'] = 'Paste the token before saving.';
+  }
+
+  const errorValues = Object.values(fieldErrors);
+  return {
+    errors: [
+      ...errorValues,
+      ...assessment.errors.filter(function(message) {
+        return !errorValues.includes(message);
+      }),
+    ],
+    warnings: assessment.warnings,
+    fieldErrors: fieldErrors,
   };
 }
 
@@ -2437,14 +2482,16 @@ async function handleLocalQuickstartLogin() {
 async function handleCreateCredential(event) {
   event.preventDefault();
   const payload = serializeCredentialForm();
-  const assessment = credentialContextAssessment(payload);
+  const assessment = validateCredentialFormPayload(payload);
   if (assessment.errors.length) {
     renderCredentialPreview();
+    setCredentialFieldErrors(assessment.fieldErrors);
     setCredentialModalFeedback('error', assessment.errors[0]);
     setNotice('error', assessment.errors[0]);
     return;
   }
   clearCredentialModalFeedback();
+  clearCredentialFieldErrors();
   try {
     const result = await withAction(
       state.credentialModalMode === 'edit'
@@ -2495,7 +2542,9 @@ async function handleCreateCredential(event) {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (message.includes('already exists')) {
-            throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+            const duplicateMessage = 'Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.';
+            setCredentialFieldErrors({ 'credential-id': duplicateMessage });
+            throw new Error(duplicateMessage);
           }
           throw error;
         }
@@ -2508,7 +2557,11 @@ async function handleCreateCredential(event) {
     resetCredentialFormForCreate();
     syncCredentialTestDefaults(true);
   } catch (error) {
-    setCredentialModalFeedback('error', error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('already exists')) {
+      setCredentialFieldErrors({ 'credential-id': message });
+    }
+    setCredentialModalFeedback('error', message);
   }
 }
 
@@ -3005,8 +3058,10 @@ async function initialize() {
   byId('credential-form').addEventListener('submit', handleCreateCredential);
   byId('credential-test-form').addEventListener('submit', handleCredentialTest);
   byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
-  byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-name').addEventListener('input', function() {
+    syncCredentialIdFromName(false);
+  });
+  byId('credential-service').addEventListener('input', function() {
     syncCredentialIdFromName(false);
   });
   byId('credential-id').addEventListener('input', function() {
@@ -3014,7 +3069,18 @@ async function initialize() {
     renderCredentialPreview();
   });
   byId('credential-storage').addEventListener('change', syncCredentialSourceFields);
-  byId('credential-form').addEventListener('input', renderCredentialPreview);
+  byId('credential-form').addEventListener('input', function(event) {
+    if (event.target instanceof HTMLElement && event.target.id) {
+      const container = event.target.closest('.field, .field-wide');
+      const errorNode = byId(event.target.id + '-error');
+      container?.classList.remove('has-error');
+      if (errorNode) {
+        errorNode.textContent = '';
+        errorNode.classList.remove('is-visible');
+      }
+    }
+    renderCredentialPreview();
+  });
   byId('credential-form').addEventListener('change', renderCredentialPreview);
   byId('credential-test-id').addEventListener('change', function() {
     syncCredentialTestDefaults(true);
@@ -3086,7 +3152,7 @@ async function initialize() {
   } else {
     renderAll();
     populateLoginDefaults(false);
-    applyCredentialTemplate();
+    applyCredentialDefaults();
     syncCredentialSourceFields();
     renderCredentialPreview();
     if (state.localQuickstartEnabled) {
@@ -3282,14 +3348,19 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <div class="modal-body">
                 <div id="credential-modal-feedback" class="modal-feedback" aria-live="assertive"></div>
                 <form id="credential-form" class="form-grid">
-                  <div class="field-wide"><label for="credential-template">What is this token for?</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
-                  <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /></div>
-                  <div class="field"><label for="credential-id">Token key</label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /></div>
+                  <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /><div id="credential-name-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label for="credential-id">Token key</label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /><div id="credential-id-error" class="field-error" aria-live="polite"></div></div>
                   <div class="field-wide panel-footnote" style="margin-top:-4px;">This is the unique key for the token. It appears in the saved-token list and is what you change if KeyLore says a token key already exists.</div>
-                  <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
-                  <div id="credential-secret-field" class="field-wide"><label id="credential-secret-label" for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
-                  <div class="field-wide"><label for="credential-user-context">Explain this token for people</label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea></div>
-                  <div class="field-wide"><label for="credential-llm-context">Tell the AI when to use this token</label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
+                  <div class="field"><label for="credential-storage">Where to store the token</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
+                  <div class="field"><label for="credential-service">Service name</label><input id="credential-service" type="text" required placeholder="github" /><div id="credential-service-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label for="credential-sensitivity">Risk level</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                  <div class="field"><label for="credential-operations">Allow writes?</label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
+                  <div class="field"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea><div id="credential-domains-error" class="field-error" aria-live="polite"></div></div>
+                  <div id="credential-secret-field" class="field-wide"><label id="credential-secret-label" for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea><div id="credential-secret-error" class="field-error" aria-live="polite"></div></div>
+                  <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment variable name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
+                  <div class="field-wide"><label for="credential-user-context">Explain this token for people</label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea><div id="credential-user-context-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field-wide"><label for="credential-llm-context">Tell the AI when to use this token</label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea><div id="credential-llm-context-error" class="field-error" aria-live="polite"></div></div>
                   <div class="field-wide">
                     <label for="credential-guidance">Writing help</label>
                     <div id="credential-guidance"></div>
@@ -3302,17 +3373,6 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                       <div id="credential-mcp-preview" style="margin-top: 12px;"></div>
                     </details>
                   </div>
-                  <details class="disclosure field-wide">
-                    <summary>Advanced token settings</summary>
-                    <div class="form-grid">
-                      <div class="field"><label for="credential-storage">Where to store the token</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
-                      <div class="field"><label for="credential-service">Service name</label><input id="credential-service" type="text" required /></div>
-                      <div class="field"><label for="credential-sensitivity">Risk level</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
-                      <div class="field"><label for="credential-operations">Allow writes?</label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
-                      <div class="field"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
-                      <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment variable name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
-                    </div>
-                  </details>
                   <div class="form-actions field-wide"><button class="button" id="credential-submit" type="submit" data-busy-label="Saving token..." data-idle-label="Save token">Save token</button></div>
                 </form>
               </div>

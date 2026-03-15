@@ -48,10 +48,10 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Apply to my Claude settings/);
     assert.match(html, /data-connect-tab="codex"/);
     assert.match(html, /data-copy-target="codex-stdio-snippet"/);
-    assert.match(html, /GitHub write-capable/);
-    assert.match(html, /npm read-only/);
-    assert.match(html, /Internal service token/);
-    assert.match(html, /Advanced token settings/);
+    assert.match(html, /Where to store the token/);
+    assert.match(html, /Service name/);
+    assert.match(html, /Risk level/);
+    assert.match(html, /Allow writes\?/);
     assert.match(html, /Explain this token for people/);
     assert.match(html, /Good LLM context/);
     assert.match(html, /Good user context/);
