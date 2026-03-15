@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Why .env Is a Bad Default for AI Agents | KeyLore</title>
+    <meta
+      name="description"
+      content="Learn why .env files are a weak security boundary for AI agents and MCP clients, and why brokered credential access is safer."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/security/why-not-env.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Security</p>
+              <h1>Why <code>.env</code> is the wrong default for AI agents</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Security</a>
+            <a href="../docs/">Docs</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Security</a> / Why not .env</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">The issue</p>
+            <h2><code>.env</code> distributes secrets. It does not govern them.</h2>
+          </div>
+          <div class="problem-grid">
+            <article class="problem-card">
+              <h3>Process-wide exposure</h3>
+              <p>Any tool that can inspect the environment can read the secret, whether it needs it or not.</p>
+            </article>
+            <article class="problem-card">
+              <h3>Weak semantics</h3>
+              <p>The variable name rarely explains what the secret is for or when an agent should avoid it.</p>
+            </article>
+            <article class="problem-card">
+              <h3>Easy leakage path</h3>
+              <p>Shells, logs, crashes, copied configs, and ad hoc debugging can all surface environment-based secrets.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-contrast">
+          <div class="section-heading">
+            <p class="eyebrow">Better model</p>
+            <h2>Use context plus brokered access instead.</h2>
+          </div>
+          <p class="lede">
+            KeyLore stores the raw token separately, exposes metadata that helps the
+            model choose the right credential, and brokers the live access request so
+            the token value never has to enter the agent workflow.
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

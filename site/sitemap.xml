@@ -11,6 +11,21 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://keylore.bestdev.co.il/docs/install.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://keylore.bestdev.co.il/docs/ui.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://keylore.bestdev.co.il/docs/mcp.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://keylore.bestdev.co.il/integrations/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -36,7 +51,22 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://keylore.bestdev.co.il/security/why-not-env.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://keylore.bestdev.co.il/security/mcp-risks.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://keylore.bestdev.co.il/kb/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://keylore.bestdev.co.il/kb/migrate-from-env.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>

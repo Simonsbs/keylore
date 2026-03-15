@@ -26,7 +26,8 @@ This plan turns the current research report into a staged execution backlog. The
 
 Target: next 7 days
 
-- Add GitHub repository description, homepage URL, and topics aligned to:
+- Completed:
+  - Added GitHub repository description, homepage URL, and topics aligned to:
   - `mcp`
   - `model-context-protocol`
   - `ai-agents`
@@ -37,9 +38,17 @@ Target: next 7 days
   - `codex`
   - `gemini-cli`
   - `claude`
-- Keep the site architecture stable and crawlable.
-- Add internal links between homepage, integrations, security, and KB pages.
-- Mirror the strongest GitHub docs into the public site over time so more search intent lands on the KeyLore domain instead of only on GitHub.
+  - Expanded the site architecture into stable crawlable sections under `/docs/`, `/integrations/`, `/security/`, and `/kb/`.
+  - Added internal linking between homepage, docs, integrations, security, and KB pages.
+  - Mirrored the strongest high-intent docs content onto the public domain with on-site pages for:
+    - install
+    - UI workflow
+    - MCP behavior
+    - `.env` migration
+    - `.env` security rationale
+    - MCP risk framing
+
+Phase 1 is now complete. The next work starts at Phase 2.
 
 ## Phase 2: Highest-ROI content pages
 

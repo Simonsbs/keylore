@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install KeyLore | Local-first MCP Credential Broker Setup</title>
+    <meta
+      name="description"
+      content="Install KeyLore in local-first mode with npm, start the background service, open the UI, add a token, and connect your MCP client."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/docs/install.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Docs</p>
+              <h1>Install KeyLore</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Docs</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Docs</a> / Install</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Local-first install</p>
+            <h2>Default setup takes two commands.</h2>
+          </div>
+          <div class="install-shell">
+            <pre><code>npm install -g @simonsbs/keylore
+keylore-http start</code></pre>
+          </div>
+          <p class="lede">
+            Then open <code>http://127.0.0.1:8787/</code>. KeyLore runs in the
+            background and stores writable state under <code>~/.keylore</code>.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">What happens next</p>
+            <h2>First-run checklist.</h2>
+          </div>
+          <div class="timeline three-up">
+            <article class="timeline-step">
+              <span class="step-index">1</span>
+              <h3>Add a token</h3>
+              <p>Store the real secret in KeyLore instead of leaving it in shell env or project files.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">2</span>
+              <h3>Add context</h3>
+              <p>Write human context and LLM context so the agent can pick the credential by purpose.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">3</span>
+              <h3>Test and connect</h3>
+              <p>Run the brokered token test, then connect Codex, Gemini CLI, Claude CLI, or another MCP client.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section page-card-grid compact-grid">
+          <a class="feature-card" href="./ui.html">
+            <p class="panel-label">Next step</p>
+            <h3>Use the UI</h3>
+            <p>See the actual add token, test token, and connect MCP workflow.</p>
+          </a>
+          <a class="feature-card" href="../integrations/">
+            <p class="panel-label">Then integrate</p>
+            <h3>Connect your MCP client</h3>
+            <p>Pick Codex, Gemini CLI, or Claude CLI and follow the client-specific setup path.</p>
+          </a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

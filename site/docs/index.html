@@ -33,31 +33,32 @@
         <p class="breadcrumb"><a href="../">Home</a> / Docs</p>
         <p class="lede">
           Start with the shortest route to a working KeyLore install, then move into
-          architecture, operations, and the deeper GitHub-hosted reference docs.
+          the UI workflow, MCP behavior, and the deeper GitHub reference material only
+          when you need it.
         </p>
       </header>
 
       <main class="section-stack">
         <section class="section page-card-grid compact-grid">
-          <a class="feature-card" href="https://github.com/Simonsbs/keylore#readme">
+          <a class="feature-card" href="./install.html">
             <p class="panel-label">Getting started</p>
-            <h3>README and install path</h3>
-            <p>Local-first install, service lifecycle, and the first route through the UI.</p>
+            <h3>Install and first run</h3>
+            <p>Local-first install, service lifecycle, and the shortest route through the UI.</p>
           </a>
-          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/admin-ui.md">
+          <a class="feature-card" href="./ui.html">
             <p class="panel-label">Product use</p>
-            <h3>Admin UI guide</h3>
+            <h3>UI workflow</h3>
             <p>How token storage, context authoring, token testing, and MCP connection work.</p>
           </a>
-          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/deployment.md">
-            <p class="panel-label">Deployment</p>
-            <h3>Advanced deployment notes</h3>
-            <p>When to stay in local mode and when to move to external stores and stronger controls.</p>
+          <a class="feature-card" href="./mcp.html">
+            <p class="panel-label">MCP</p>
+            <h3>How agents use KeyLore</h3>
+            <p>What the model sees, how search works, and how brokered access is selected safely.</p>
           </a>
-          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/api.md">
-            <p class="panel-label">Reference</p>
-            <h3>API and MCP reference</h3>
-            <p>HTTP endpoints, MCP tool behavior, and the system’s model-visible contract.</p>
+          <a class="feature-card" href="../security/why-not-env.html">
+            <p class="panel-label">Security</p>
+            <h3>Why not .env for agents?</h3>
+            <p>The short security argument for moving secrets out of shell env and into a brokered path.</p>
           </a>
         </section>
 
@@ -83,6 +84,19 @@
               <p>Use the built-in token test, then connect Codex, Gemini CLI, Claude CLI, or another MCP client.</p>
             </article>
           </div>
+        </section>
+
+        <section class="section page-card-grid compact-grid">
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/api.md">
+            <p class="panel-label">Deeper reference</p>
+            <h3>Full API and MCP docs on GitHub</h3>
+            <p>Use the GitHub-hosted reference docs when you need endpoint-level and protocol-level detail.</p>
+          </a>
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/deployment.md">
+            <p class="panel-label">Advanced operations</p>
+            <h3>Production deployment notes</h3>
+            <p>PostgreSQL, external secret stores, and advanced deployment concerns remain documented in the repo.</p>
+          </a>
         </section>
       </main>
     </div>

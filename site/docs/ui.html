@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore UI Guide | Add Tokens, Context, and Connect MCP</title>
+    <meta
+      name="description"
+      content="Use the KeyLore UI to add a token, write human and LLM context, test brokered access, and connect Codex, Gemini CLI, or Claude CLI."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/docs/ui.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Docs</p>
+              <h1>KeyLore UI guide</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Docs</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Docs</a> / UI</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Core workflow</p>
+            <h2>The UI is built around one path: add token, test token, connect AI tool.</h2>
+          </div>
+          <div class="timeline">
+            <article class="timeline-step">
+              <span class="step-index">1</span>
+              <h3>Save token</h3>
+              <p>Store the real secret and give it a unique token key, service name, allowed domains, and risk profile.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">2</span>
+              <h3>Write context</h3>
+              <p><strong>User context</strong> explains the token for people. <strong>LLM context</strong> tells the agent when it should use the token.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">3</span>
+              <h3>Preview what the AI sees</h3>
+              <p>KeyLore shows the metadata record that will be visible over MCP so you can confirm the token itself is absent.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">4</span>
+              <h3>Check this token</h3>
+              <p>Run a brokered live test such as a GitHub rate-limit check to verify the secret, policy, and target domain all line up.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section page-card-grid compact-grid">
+          <a class="feature-card" href="./mcp.html">
+            <p class="panel-label">Next step</p>
+            <h3>Connect MCP</h3>
+            <p>Use the client-specific connection flow after the token passes its brokered test.</p>
+          </a>
+          <a class="feature-card" href="../kb/migrate-from-env.html">
+            <p class="panel-label">Common question</p>
+            <h3>Migrating from .env</h3>
+            <p>See the shortest safe path for moving existing tokens into KeyLore.</p>
+          </a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

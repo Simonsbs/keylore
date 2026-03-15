@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore MCP Guide | How Agents Find and Use Credentials Safely</title>
+    <meta
+      name="description"
+      content="Understand how KeyLore presents metadata to MCP clients, how agents should search for credentials, and how brokered access works."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/docs/mcp.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Docs</p>
+              <h1>How KeyLore works over MCP</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Docs</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Docs</a> / MCP</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Selection model</p>
+            <h2>Agents should choose by context fit, not token name similarity.</h2>
+          </div>
+          <div class="problem-grid">
+            <article class="problem-card">
+              <h3>Search metadata first</h3>
+              <p>Use service, domain, permitted operation, tags, and context to find the best candidate.</p>
+            </article>
+            <article class="problem-card">
+              <h3>Inspect the record</h3>
+              <p>Read the metadata record to confirm it matches the intended task and that the domains and operations are appropriate.</p>
+            </article>
+            <article class="problem-card">
+              <h3>Request brokered access</h3>
+              <p>Use the live access path only after the credential has been selected by context, not by guesswork.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Model-visible contract</p>
+            <h2>What the agent sees.</h2>
+          </div>
+          <div class="comparison-grid">
+            <article class="comparison-card">
+              <h3>Visible over MCP</h3>
+              <pre><code>{
+  "service": "github",
+  "allowedDomains": ["api.github.com"],
+  "permittedOperations": ["http.get"],
+  "userContext": "Human explanation",
+  "llmContext": "Use for repo metadata and rate-limit reads"
+}</code></pre>
+            </article>
+            <article class="comparison-card">
+              <h3>Not returned</h3>
+              <pre><code>{
+  "rawToken": "not exposed",
+  "secretBinding": "not exposed",
+  "envDump": "not part of the flow"
+}</code></pre>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

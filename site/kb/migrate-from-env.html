@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How to Move from .env to KeyLore | Secure AI Agent Credential Migration</title>
+    <meta
+      name="description"
+      content="Migrate existing API tokens from .env files into KeyLore, attach human and LLM context, connect your MCP client, and rotate the old secrets."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/kb/migrate-from-env.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Knowledge base</p>
+              <h1>Migrate from <code>.env</code> to KeyLore</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Knowledge Base</a>
+            <a href="../docs/install.html">Install</a>
+            <a href="../security/why-not-env.html">Why not .env</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Knowledge Base</a> / Migrate from .env</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Migration path</p>
+            <h2>Move the token, then remove the old trust path.</h2>
+          </div>
+          <div class="timeline">
+            <article class="timeline-step">
+              <span class="step-index">1</span>
+              <h3>Install and start KeyLore</h3>
+              <p>Run the local-first install and open the UI.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">2</span>
+              <h3>Add the token</h3>
+              <p>Import the existing token into KeyLore and give it a unique token key.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">3</span>
+              <h3>Add context</h3>
+              <p>Write the human and LLM context that tells the agent when the token is the right choice.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">4</span>
+              <h3>Rotate away from env</h3>
+              <p>After the MCP flow works, remove the old environment-based secret and rotate it so the old path is no longer trusted.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
