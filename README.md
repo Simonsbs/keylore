@@ -118,7 +118,9 @@ KeyLore now redirects `/` to `/admin` and automatically opens a local operator s
 
 If that local session bootstrap fails for any reason, use `Start working locally` or the manual sign-in form shown on the page.
 
-4. In `Token management`, click `Add token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
+4. In `Quick start`, follow the short path: add token, test token, then connect your AI tool.
+
+5. In `Your tokens`, click `Add token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
 - `Name shown in KeyLore`
 - `Token key`
 - `Paste token`
@@ -128,15 +130,20 @@ If that local session bootstrap fails for any reason, use `Start working locally
 
 That stores the raw token outside the searchable catalogue and keeps only the metadata record in the credential catalogue.
 
-5. Review `Writing help` and `What the AI will see` in the form to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
+6. Review `Writing help` and `What the AI will see` in the form to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
 
-6. In `Saved tokens`, everything is now listed together in one place. Example records are marked as examples, and they can be edited or deleted from the same list.
+7. In `Saved tokens`, everything is now listed together in one place. Example records are marked as examples, and they can be edited or deleted from the same list.
 
-7. In `Test credential`, choose `Token to check`, set the `URL to call with this token`, and run the check.
+8. In `Test credential`, choose `Token to check`, set the `URL to call with this token`, and run the check.
 
 The check makes a real brokered `http.get` call with that token and URL. Success means the token, the target domain, and KeyLore policy all allowed the request.
 
-8. In `Connect your AI tool`, copy the generated Codex or Gemini CLI local snippet for the easiest setup. Use the built-in `First prompt to try` examples after you restart the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
+9. In `Connect your AI tool`, use the tool-specific steps:
+- `Codex`: open or create `~/.codex/config.toml`, paste the generated snippet under `mcp_servers`, save, and restart Codex
+- `Gemini CLI`: open `~/.gemini/settings.json`, merge the generated snippet into `mcpServers`, save, and restart Gemini
+- `Claude CLI`: run the generated `claude mcp add ...` command, confirm with `claude mcp list`, then restart Claude
+
+Use the built-in `First prompt to try` example after restarting the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 

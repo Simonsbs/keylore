@@ -962,6 +962,21 @@ function geminiHttpSnippet() {
   });
 }
 
+function claudeStdioSnippet() {
+  return [
+    'claude mcp add keylore_stdio -- node ' + config.stdioEntryPath + ' --transport stdio',
+    'claude mcp list'
+  ].join('\n');
+}
+
+function claudeHttpSnippet() {
+  return [
+    'export KEYLORE_MCP_ACCESS_TOKEN=' + mcpHttpTokenValue(),
+    'claude mcp add --transport http --header "Authorization: Bearer $KEYLORE_MCP_ACCESS_TOKEN" keylore_http ' + config.baseUrl.replace(/\/$/, '') + '/mcp',
+    'claude mcp list'
+  ].join('\n');
+}
+
 function genericHttpSnippet() {
   return [
     'MCP endpoint: ' + config.baseUrl.replace(/\/$/, '') + '/mcp',
@@ -1231,7 +1246,7 @@ function renderCoreJourney() {
       : !hasTest
         ? 'Run Test Credential to verify the broker path.'
         : !hasConnection
-          ? 'Open Connect your AI tool, copy a snippet, and try the first prompt.'
+          ? 'Open Connect your AI tool, copy the setup for Codex, Gemini, or Claude, and try the first prompt.'
           : 'Restart your MCP client and try the suggested first prompt.';
 
   const steps = !state.token
@@ -1239,16 +1254,16 @@ function renderCoreJourney() {
         '<article class="step-card"><span class="state-warning">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="login-panel">Go there</button></div></article>',
         '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Add a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open tokens</button></div></article>',
         '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
-        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
+        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Choose Codex, Gemini, or Claude, follow the setup steps, then try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
       ]
     : [
         '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Add a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" id="journey-open-token-modal">Add token</button></div></article>',
         '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
-        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
+        '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Connect your AI tool</h3><p>Choose Codex, Gemini, or Claude, follow the setup steps, then try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
       ];
 
   node.innerHTML = [
-    '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Follow the short path. Everything else can wait until later.</p></div></div>',
+    '<div class="section-heading"><div><h2 style="font-size:1.4rem;">Step by step</h2><p>Follow the short path. Everything else can wait until later.</p></div></div>',
     '<div class="step-grid">',
     steps.join(''),
     '</div>',
@@ -1668,17 +1683,17 @@ function renderConnect() {
   byId('codex-http-snippet').value = codexHttpSnippet();
   byId('gemini-stdio-snippet').value = geminiStdioSnippet();
   byId('gemini-http-snippet').value = geminiHttpSnippet();
+  byId('claude-stdio-snippet').value = claudeStdioSnippet();
+  byId('claude-http-snippet').value = claudeHttpSnippet();
   byId('generic-http-snippet').value = genericHttpSnippet();
   byId('mcp-token-export').value = "export KEYLORE_MCP_ACCESS_TOKEN='" + mcpHttpTokenValue() + "'";
   byId('connect-client-id').value = state.localAdminBootstrap ? state.localAdminBootstrap.clientId : (state.sessionClientId || '');
   if (state.localAdminBootstrap && !byId('connect-client-secret').value) {
     byId('connect-client-secret').value = state.localAdminBootstrap.clientSecret;
   }
-  byId('connect-stdio-status').innerHTML = config.stdioAvailable
-    ? '<div class="state-active">stdio entry is available at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span></div>'
-    : '<div class="error-state">The stdio entry point was not found at <span class="mono">' + escapeHtml(config.stdioEntryPath) + '</span>.</div>';
   byId('codex-first-prompt').value = firstPromptForClient('Codex');
   byId('gemini-first-prompt').value = firstPromptForClient('Gemini');
+  byId('claude-first-prompt').value = firstPromptForClient('Claude');
   byId('connect-result').innerHTML = state.lastMcpConnection
     ? '<pre>' + escapeHtml(prettyJson(state.lastMcpConnection)) + '</pre>'
     : '<div class="empty-state">For local use, copy a stdio snippet and restart your MCP client. For remote HTTP MCP, run the connection check here first.</div>';
@@ -2887,45 +2902,48 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             <span id="session-tenant">global operator</span>
             <span id="session-scopes">not loaded</span>
           </div>
+          <section id="quick-start-section" class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Quick start</h2>
+                <p>The shortest path is add token, test token, then connect your AI tool.</p>
+              </div>
+            </div>
+            <div id="core-journey"></div>
+            <div id="advanced-summary" class="advanced-summary" style="margin-top:18px;"></div>
+          </section>
+
           <section id="credentials-section" class="panel">
             <div class="section-heading">
               <div>
-                <h2>Token management</h2>
-                <p>All saved tokens live here. Add a token, edit it in a popup, test it, or remove it.</p>
+                <h2>Your tokens</h2>
+                <p>All saved tokens live here. Add one, edit it in a popup, test it, or remove it.</p>
               </div>
             </div>
-            <div id="core-journey" style="margin-bottom: 18px;"></div>
-            <div id="advanced-summary" class="advanced-summary" style="margin-bottom: 18px;"></div>
-            <div class="panel-grid">
-              <div class="span-7 code-stack">
-                <div class="panel">
-                  <div class="token-toolbar">
-                    <div>
-                      <h2 style="font-size:1.4rem;">Saved tokens</h2>
-                      <p>All tokens are listed together here, including examples. Edit or delete any row directly.</p>
-                    </div>
-                    <button class="button" id="open-credential-modal" type="button">Add token</button>
-                  </div>
-                  <div id="credential-list"></div>
+            <div class="panel">
+              <div class="token-toolbar">
+                <div>
+                  <h2 style="font-size:1.4rem;">Saved tokens</h2>
+                  <p>All tokens are listed together here, including examples. Edit or delete any row directly.</p>
+                </div>
+                <button class="button" id="open-credential-modal" type="button">Add token</button>
+              </div>
+              <div id="credential-list"></div>
+            </div>
+            <div class="panel" style="margin-top:18px;">
+              <div class="section-heading">
+                <div>
+                  <h2 style="font-size:1.4rem;">Test credential</h2>
+                  <p>Run a real safe check. KeyLore will make an <code>http.get</code> call with the selected token and URL, without exposing the raw secret.</p>
                 </div>
               </div>
-              <div class="span-5 code-stack">
-                <div class="panel">
-                  <div class="section-heading">
-                    <div>
-                      <h2 style="font-size:1.4rem;">Test credential</h2>
-                      <p>Run a real safe check. KeyLore will make an <code>http.get</code> call with the selected token and URL, without exposing the raw secret.</p>
-                    </div>
-                  </div>
-                  <form id="credential-test-form" class="form-grid">
-                    <div class="field"><label for="credential-test-id">Token to check</label><select id="credential-test-id"></select></div>
-                    <div class="field-wide"><label for="credential-test-url">URL to call with this token</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
-                    <div class="panel-footnote field-wide" style="margin-top:-4px;">Success means the token, the target domain, and KeyLore policy all allowed the request.</div>
-                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Check this token">Check this token</button></div>
-                  </form>
-                  <div id="credential-test-result" style="margin-top: 18px;"></div>
-                </div>
-              </div>
+              <form id="credential-test-form" class="form-grid">
+                <div class="field"><label for="credential-test-id">Token to check</label><select id="credential-test-id"></select></div>
+                <div class="field-wide"><label for="credential-test-url">URL to call with this token</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
+                <div class="panel-footnote field-wide" style="margin-top:-4px;">Success means the token, the target domain, and KeyLore policy all allowed the request.</div>
+                <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Check this token">Check this token</button></div>
+              </form>
+              <div id="credential-test-result" style="margin-top: 18px;"></div>
             </div>
           </section>
 
@@ -2978,35 +2996,57 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
             <div class="section-heading">
               <div>
                 <h2>Connect your AI tool</h2>
-                <p>For most local users, copy the local snippet below, restart the AI tool, and try the suggested first prompt.</p>
+                <p>Follow the tool-specific steps below. Each one tells you where to put the config, what to restart, and what to try first.</p>
               </div>
             </div>
             <div class="panel-grid">
-              <div class="span-6 code-stack">
+              <div class="span-4 code-stack">
                 <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex local setup</h2><p>Recommended for local use.</p></div></div>
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex</h2><p>Recommended for local use.</p></div></div>
+                  <ol class="panel-footnote">
+                    <li>Open or create <span class="mono">~/.codex/config.toml</span>.</li>
+                    <li>Paste the snippet below into that file under the top-level <span class="mono">mcp_servers</span> section.</li>
+                    <li>Save the file, then restart Codex.</li>
+                    <li>Use the first prompt after restart, or run <span class="mono">/mcp</span> inside Codex to confirm KeyLore is available.</li>
+                  </ol>
                   <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
-                  <div class="panel-footnote">Local stdio uses the KeyLore process on this machine and avoids extra token setup.</div>
                   <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Codex</h2></div></div>
                   <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
+              </div>
+              <div class="span-4 code-stack">
                 <div class="panel">
-                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini local setup</h2><p>Recommended for local use.</p></div></div>
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini CLI</h2><p>Recommended for local use.</p></div></div>
+                  <ol class="panel-footnote">
+                    <li>Open <span class="mono">~/.gemini/settings.json</span>.</li>
+                    <li>Merge the snippet below into the <span class="mono">mcpServers</span> object. If the file is empty, paste the whole snippet.</li>
+                    <li>Save the file, then restart Gemini CLI.</li>
+                    <li>Run <span class="mono">gemini mcp list</span> if you want to confirm KeyLore is connected, then use the first prompt below.</li>
+                  </ol>
                   <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
                   <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Gemini</h2></div></div>
                   <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
               </div>
-              <div class="span-6 panel">
-                <div class="section-heading"><div><h2 style="font-size:1.4rem;">Local connection check</h2></div></div>
-                <div id="connect-stdio-status"></div>
-                <div class="panel-footnote">If the local entry point is present, copy one of the local setup snippets above and restart your AI tool.</div>
+              <div class="span-4 code-stack">
+                <div class="panel">
+                  <div class="section-heading"><div><h2 style="font-size:1.4rem;">Claude CLI</h2><p>Recommended for local use.</p></div></div>
+                  <ol class="panel-footnote">
+                    <li>Run the command below in your shell. It adds KeyLore to Claude's MCP config for you.</li>
+                    <li>Confirm the server appears with <span class="mono">claude mcp list</span>.</li>
+                    <li>Start or restart Claude CLI.</li>
+                    <li>Use the first prompt after restart.</li>
+                  </ol>
+                  <textarea id="claude-stdio-snippet" style="width:100%; min-height: 160px;"></textarea>
+                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Claude</h2></div></div>
+                  <textarea id="claude-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                </div>
               </div>
               <div class="span-12">
                 <details class="panel disclosure">
                   <summary>Remote or advanced connection options</summary>
                   <div class="panel-grid" style="margin-top: 16px;">
-                    <div class="span-6 code-stack">
+                    <div class="span-4 code-stack">
                       <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex HTTP</h2></div></div>
                         <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
@@ -3016,11 +3056,17 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                         <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
                       </div>
                       <div class="panel">
+                        <div class="section-heading"><div><h2 style="font-size:1.4rem;">Claude HTTP</h2></div></div>
+                        <textarea id="claude-http-snippet" style="width:100%; min-height: 170px;"></textarea>
+                      </div>
+                    </div>
+                    <div class="span-4 code-stack">
+                      <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Generic HTTP</h2></div></div>
                         <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
                       </div>
                     </div>
-                    <div class="span-6 panel">
+                    <div class="span-4 panel">
                       <div class="section-heading">
                         <div>
                           <h2 style="font-size:1.4rem;">HTTP MCP token and check</h2>

@@ -38,7 +38,11 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 2. Open `<publicBaseUrl>/`.
 3. KeyLore redirects `/` to `/admin` and automatically opens a local operator session on loopback development installs.
 4. If that local bootstrap fails, use `Start working locally` or the manual sign-in form.
-5. Use `Token management` for the beginner path:
+5. Start in `Quick start` for the shortest path:
+   - add token
+   - test token
+   - connect your AI tool
+6. Use `Your tokens` for the beginner path:
    - click `Add token`
    - choose a template
    - name the token
@@ -46,29 +50,32 @@ This UI does not introduce new backend endpoints or change the existing auth mod
    - paste the token
    - explain the token for people
    - say when the AI should use it
-6. Start from a stronger template when possible:
+7. Start from a stronger template when possible:
    - `GitHub read-only`
    - `GitHub write-capable`
    - `npm read-only`
    - `Internal service token`
    - `Generic bearer API`
-7. Review `What the AI will see` to confirm the MCP-visible record is useful and contains no secret material.
-8. `Explain this token for people` is for human operators. `Tell the AI when to use this token` is the primary retrieval hint for the agent.
-9. Use `Writing help` plus the inline validation messages to improve weak or overly generic `LLM context` before save.
-10. `Token key` is the unique identifier for the token. If the UI says a token already exists, change that field and save again.
-11. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
-12. In `Saved tokens`, everything is listed together. Example records are marked as examples and can be edited or deleted from the same list.
-13. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
-14. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
-15. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
-16. Use the built-in `First prompt to try` examples after restarting the MCP client.
-17. Open `Remote or advanced connection options` only if you need HTTP MCP.
-18. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
-19. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
+8. Review `What the AI will see` to confirm the MCP-visible record is useful and contains no secret material.
+9. `Explain this token for people` is for human operators. `Tell the AI when to use this token` is the primary retrieval hint for the agent.
+10. Use `Writing help` plus the inline validation messages to improve weak or overly generic `LLM context` before save.
+11. `Token key` is the unique identifier for the token. If the UI says a token already exists, change that field and save again.
+12. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
+13. In `Saved tokens`, everything is listed together. Example records are marked as examples and can be edited or deleted from the same list.
+14. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
+15. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
+16. Use `Connect your AI tool` to follow the tool-specific setup:
+   - `Codex`: open or create `~/.codex/config.toml`, paste the snippet under `mcp_servers`, save, and restart Codex
+   - `Gemini CLI`: open `~/.gemini/settings.json`, merge the snippet into `mcpServers`, save, and restart Gemini
+   - `Claude CLI`: run the generated `claude mcp add ...` command, confirm with `claude mcp list`, then restart Claude
+17. Use the built-in `First prompt to try` example after restarting the MCP client.
+18. Open `Remote or advanced connection options` only if you need HTTP MCP.
+19. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.
+20. Otherwise use an existing operator OAuth client or paste an already minted bearer token.
 
 ## Context editing
 
-Inside `Token management`, use `Edit token` from any row to:
+Inside `Your tokens`, use `Edit token` from any row to:
 
 - inspect the current MCP-visible record for a saved credential
 - update display name, service, sensitivity, domains, tags, operations, `User context`, and `LLM context`
