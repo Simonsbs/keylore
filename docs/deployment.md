@@ -1,6 +1,6 @@
 # Deployment
 
-`v1.0.0-rc6` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the `rc1` contract and hardening gates, serves the minimal admin UI from the same HTTP service, and now adds a simpler local-first runtime alongside the advanced deployment path.
+`v1.0.0` keeps the Helm-based deployment path for self-hosted Kubernetes environments, carries tenant-aware partitioning in the application data model, preserves the stable compatibility contract, serves the minimal admin UI from the same HTTP service, and adds a simpler local-first runtime alongside the advanced deployment path.
 
 This is the `advanced` deployment path. If you only need a local brokered secret workflow on one machine, stay in the `core` quickstart path first and use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) before promoting yourself into full self-hosted operations.
 
@@ -104,7 +104,7 @@ If `helm` is not installed on the host, the validation script automatically fall
 For production rollouts:
 
 - validate `values.yaml` plus your environment override with `ops:helm-validate`
-- run `npm run ops:release-verify` before promoting a release candidate
+- run `npm run ops:release-verify` before promoting a release
 - perform `helm upgrade --install` with the exact values file set you validated
 - keep the previous chart package and values bundle so `helm rollback` can restore the prior release quickly
 - for replicated deployments, prefer the HA profile or equivalent affinity, topology spread, and pod disruption settings

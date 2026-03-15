@@ -6,7 +6,7 @@ The design goal comes directly from the local `KeyLore.md` production spec used 
 
 ## Status
 
-This repository is incubating privately today, but it is structured to be published as open source without a cleanup pass. The repo already includes:
+This repository is now public and open source. The repo already includes:
 
 - an Apache-2.0 project license and `NOTICE`
 - contributor and security policies
@@ -64,13 +64,14 @@ This repository is incubating privately today, but it is structured to be publis
 
 ## What is intentionally deferred
 
-The full `KeyLore.md` specification is broader than a sane `v1.0.0-rc6` delivery. The main remaining work before `v1.0.0` is:
+The full `KeyLore.md` specification is broader than a sane `v1.0.0` delivery. The main remaining work after `v1.0.0` is:
 
-- public release polish and final operator documentation cleanup
+- continued UX refinement for context authoring
+- stronger self-hosted production guidance for advanced deployments
 
 Those items are tracked in [docs/roadmap.md](/home/simon/keylore/docs/roadmap.md) and mapped back to the spec in [docs/keylore-spec-map.md](/home/simon/keylore/docs/keylore-spec-map.md).
 
-The active post-`v1.0.0-rc6` refocus is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md): make the default user journey "add secret, add context, connect MCP, use it" and push broader operator features behind an advanced path.
+The active post-`v1.0.0` refocus is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md): keep the default user journey "add secret, add context, connect MCP, use it" simple and push broader operator features behind an advanced path.
 
 The handoff from local core mode to advanced self-hosted mode is documented in [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md).
 
@@ -93,7 +94,7 @@ That starts KeyLore in the background. Use `keylore-http status`, `keylore-http 
 For a clean Linux VM install from npm instead of cloning the repo:
 
 ```bash
-npm install -g @simonsbs/keylore@next
+npm install -g @simonsbs/keylore
 keylore-http start
 ```
 
@@ -120,9 +121,11 @@ If that local session bootstrap fails for any reason, use `Start working locally
 
 4. In `Quick start`, follow the short path: add token, test token, then connect your AI tool.
 
-5. In `Your tokens`, click `Add token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
+5. In `Your tokens`, click `Add token`, then fill in:
 - `Name shown in KeyLore`
 - `Token key`
+- `Where to store the token`
+- `Service name`
 - `Paste token`
 - `Where can it be used?`
 - `Explain this token for people`
@@ -130,7 +133,7 @@ If that local session bootstrap fails for any reason, use `Start working locally
 
 That stores the raw token outside the searchable catalogue and keeps only the metadata record in the credential catalogue.
 
-6. Review `Writing help` and `What the AI will see` in the form to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
+6. Use the inline `(i)` help beside each field and review `What the AI will see` to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again.
 
 7. In `Saved tokens`, everything is now listed together in one place. Example records are marked as examples, and they can be edited or deleted from the same list.
 
@@ -234,7 +237,7 @@ Validate the Helm deployment path:
 npm run ops:helm-validate
 ```
 
-Run the release candidate gates:
+Run the release gates:
 
 ```bash
 npm run ops:release-verify

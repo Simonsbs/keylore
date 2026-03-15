@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc6` continues the release-candidate gates for KeyLore while keeping the local-first runtime and background HTTP lifecycle aligned with the same compatibility surface.
+`v1.0.0` keeps the release gates for KeyLore while preserving the same local-first runtime, background HTTP lifecycle, and stable compatibility surface.
 
 ## Purpose
 
@@ -32,7 +32,7 @@ These suites are also run in CI in addition to the broader `npm test` suite.
 
 ## Release expectation
 
-A release candidate should pass:
+A release should pass:
 
 ```bash
 npm run ops:release-verify
