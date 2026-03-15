@@ -539,6 +539,15 @@ textarea {
   line-height: 1.5;
 }
 
+pre {
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .form-actions,
 .panel-actions,
 .toolbar {
