@@ -1027,17 +1027,17 @@ function slugifyTokenKey(value) {
   return normalized || 'token';
 }
 
-function firstPromptForClient(clientName) {
+function firstPrompt() {
   const credential = state.currentCredentialContext || selectedCredentialSummary() || visibleCredentials()[0];
   if (!credential) {
-    return 'After you create a credential, ask ' + clientName + ': "Search KeyLore for the best credential for the target service, explain why you chose it, and use it through the broker without exposing the raw token."';
+    return 'Search KeyLore for the best credential for the target service, explain why you chose it, and use it through the broker without exposing the raw token.';
   }
 
   const domain = credential.allowedDomains && credential.allowedDomains.length > 0
     ? credential.allowedDomains[0]
     : 'target-service.example.com';
   const targetUrl = defaultTestUrlForCredential(credential) || ('https://' + domain);
-  return 'Ask ' + clientName + ': "Search KeyLore for the best credential for ' + credential.service + ' on ' + domain + '. Explain why you chose it, then use it through KeyLore to fetch ' + targetUrl + ' without exposing the raw token."';
+  return 'Search KeyLore for the best credential for ' + credential.service + ' on ' + domain + '. Explain why you chose it, then use it through KeyLore to fetch ' + targetUrl + ' without exposing the raw token.';
 }
 
 function mcpHttpTokenValue() {
@@ -1132,6 +1132,14 @@ function pushToast(kind, message) {
   node.prepend(toast);
   while (node.childElementCount > 6) {
     node.lastElementChild?.remove();
+  }
+  if (kind !== 'error') {
+    const dismissAfterMs = kind === 'warning' ? 7000 : 4000;
+    window.setTimeout(function() {
+      if (toast.isConnected) {
+        toast.remove();
+      }
+    }, dismissAfterMs);
   }
 }
 
@@ -1861,9 +1869,7 @@ function renderConnect() {
   if (state.localAdminBootstrap && !byId('connect-client-secret').value) {
     byId('connect-client-secret').value = state.localAdminBootstrap.clientSecret;
   }
-  byId('codex-first-prompt').value = firstPromptForClient('Codex');
-  byId('gemini-first-prompt').value = firstPromptForClient('Gemini');
-  byId('claude-first-prompt').value = firstPromptForClient('Claude');
+  byId('shared-first-prompt').value = firstPrompt();
   byId('connect-result').innerHTML = state.lastMcpConnection
     ? '<pre>' + escapeHtml(prettyJson(state.lastMcpConnection)) + '</pre>'
     : '<div class="empty-state">For local use, choose a tool tab, copy the setup snippet or apply it directly, then restart your MCP client. For remote HTTP MCP, run the connection check here first.</div>';
@@ -3290,13 +3296,6 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                       <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
                     </div>
                   </div>
-                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Codex</h2></div></div>
-                  <div class="snippet-stack">
-                    <div class="snippet-box">
-                      <button class="copy-glyph" type="button" data-copy-target="codex-first-prompt" data-copy-label="Codex first prompt" aria-label="Copy Codex first prompt">⧉</button>
-                      <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
-                    </div>
-                  </div>
                   <div class="panel-actions" style="margin-top:16px;">
                     <button class="button-secondary" type="button" data-apply-tool="codex">Apply to my Codex settings</button>
                   </div>
@@ -3315,13 +3314,6 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <div class="snippet-box">
                       <button class="copy-glyph" type="button" data-copy-target="gemini-stdio-snippet" data-copy-label="Gemini setup snippet" aria-label="Copy Gemini setup snippet">⧉</button>
                       <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
-                    </div>
-                  </div>
-                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Gemini</h2></div></div>
-                  <div class="snippet-stack">
-                    <div class="snippet-box">
-                      <button class="copy-glyph" type="button" data-copy-target="gemini-first-prompt" data-copy-label="Gemini first prompt" aria-label="Copy Gemini first prompt">⧉</button>
-                      <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                     </div>
                   </div>
                   <div class="panel-actions" style="margin-top:16px;">
@@ -3344,16 +3336,21 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                       <textarea id="claude-stdio-snippet" style="width:100%; min-height: 160px;"></textarea>
                     </div>
                   </div>
-                  <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Claude</h2></div></div>
-                  <div class="snippet-stack">
-                    <div class="snippet-box">
-                      <button class="copy-glyph" type="button" data-copy-target="claude-first-prompt" data-copy-label="Claude first prompt" aria-label="Copy Claude first prompt">⧉</button>
-                      <textarea id="claude-first-prompt" style="width:100%; min-height: 130px;"></textarea>
-                    </div>
-                  </div>
                   <div class="panel-actions" style="margin-top:16px;">
                     <button class="button-secondary" type="button" data-apply-tool="claude">Apply to my Claude settings</button>
                   </div>
+                </div>
+              </div>
+              <div class="span-12 panel">
+                <div class="section-heading">
+                  <div>
+                    <h2 style="font-size:1.4rem;">First prompt to try</h2>
+                    <p>Use the same prompt after connecting any supported tool.</p>
+                  </div>
+                </div>
+                <div class="snippet-box">
+                  <button class="copy-glyph" type="button" data-copy-target="shared-first-prompt" data-copy-label="Shared first prompt" aria-label="Copy shared first prompt">⧉</button>
+                  <textarea id="shared-first-prompt" style="width:100%; min-height: 130px;"></textarea>
                 </div>
               </div>
               <div class="span-12">
