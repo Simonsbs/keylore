@@ -3297,7 +3297,10 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="field-wide">
                     <label for="credential-mcp-preview">What the AI will see</label>
                     <div id="credential-preview-warnings" style="margin-bottom: 12px;"></div>
-                    <div id="credential-mcp-preview"></div>
+                    <details class="disclosure">
+                      <summary>Show the AI-visible record</summary>
+                      <div id="credential-mcp-preview" style="margin-top: 12px;"></div>
+                    </details>
                   </div>
                   <details class="disclosure field-wide">
                     <summary>Advanced token settings</summary>
