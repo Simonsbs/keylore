@@ -14,6 +14,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { authContextFromToken, localOperatorContext } from "../services/auth-context.js";
+import { LocalSecretStore } from "../services/local-secret-store.js";
 import { startHttpServer } from "../http/server.js";
 import { PgPolicyRepository } from "../repositories/pg-policy-repository.js";
 import { makeTestApp } from "./helpers.js";
@@ -1056,6 +1057,103 @@ test("core credential delete removes the credential and local secret", async () 
   const credentialPayload = (await credentialResponse.json()) as { credentials: Array<{ id: string }> };
   assert.equal(credentialPayload.credentials.some((credential) => credential.id === "delete-demo"), false);
 
+  await server.close();
+  await close();
+});
+
+test("core credential local secret can be replaced after secret loss", async () => {
+  const target = await startLocalTargetServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        authorized: req.headers.authorization === "Bearer ghp-replaced-token",
+      }),
+    );
+  });
+
+  const { app, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8922,
+      publicBaseUrl: "http://127.0.0.1:8922",
+      oauthIssuerUrl: "http://127.0.0.1:8922/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  const tokenResponse = await fetch("http://127.0.0.1:8922/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: "admin-client",
+      client_secret: "admin-secret",
+      scope: "catalog:read catalog:write broker:use",
+      resource: "http://127.0.0.1:8922/v1",
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokenPayload = (await tokenResponse.json()) as { access_token: string };
+
+  const createResponse = await fetch("http://127.0.0.1:8922/v1/core/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "replace-secret-demo",
+      displayName: "Replace Secret Demo",
+      service: "github",
+      allowedDomains: ["localhost"],
+      selectionNotes: "Use for local secret replacement validation only.",
+      secretSource: {
+        adapter: "local",
+        secretValue: "ghp-original-token",
+      },
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+
+  const localSecrets = new LocalSecretStore(app.config.localSecretsFilePath, app.config.localSecretsKeyPath);
+  await localSecrets.delete("local:default:replace-secret-demo");
+
+  const replaceResponse = await fetch("http://127.0.0.1:8922/v1/core/credentials/replace-secret-demo/local-secret", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      secretValue: "ghp-replaced-token",
+    }),
+  });
+  assert.equal(replaceResponse.status, 200);
+
+  const accessResponse = await fetch("http://127.0.0.1:8922/v1/access/request", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${tokenPayload.access_token}`,
+    },
+    body: JSON.stringify({
+      credentialId: "replace-secret-demo",
+      operation: "http.get",
+      targetUrl: `http://localhost:${target.port}/replace-secret`,
+    }),
+  });
+  assert.equal(accessResponse.status, 200);
+  const decision = (await accessResponse.json()) as {
+    decision: string;
+    httpResult?: {
+      bodyPreview: string;
+    };
+  };
+  assert.equal(decision.decision, "allowed");
+  assert.match(decision.httpResult?.bodyPreview ?? "", /true/);
+
+  await target.close();
   await server.close();
   await close();
 });

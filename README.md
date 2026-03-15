@@ -147,7 +147,7 @@ Use the built-in `First prompt to try` example after restarting the client. If y
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
-After creation, use `Edit token` from the saved-token list if you need to refine the metadata without re-entering or exposing the stored secret. Token creation and editing both happen in a popup now, while the main page stays focused on the token list, testing, and MCP connection.
+After creation, use `Edit token` from the saved-token list if you need to refine the metadata or replace the stored value for a locally stored token. Token creation and editing both happen in a popup now, while the main page stays focused on the token list, testing, and MCP connection.
 
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 

@@ -68,6 +68,10 @@ const applyToolConfigInputSchema = z.object({
   tool: z.enum(["codex", "gemini", "claude"]),
 });
 
+const replaceLocalSecretInputSchema = z.object({
+  secretValue: z.string().min(1),
+});
+
 function respondJson(
   res: ServerResponse,
   statusCode: number,
@@ -946,6 +950,28 @@ async function handleApiRequest(
     );
     const credential = await app.coreMode.updateCredentialContext(context, credentialId, patch);
     respondJson(res, 200, { credential });
+    return;
+  }
+
+  if (coreCredentialContextId && url.pathname.endsWith("/local-secret") && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    const credentialId = coreCredentialContextId.replace(/\/local-secret$/, "");
+    const body = replaceLocalSecretInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
+    const credential = await app.coreMode.replaceLocalSecret(context, credentialId, body.secretValue);
+    respondJson(res, 200, { credential, updatedSecret: true });
     return;
   }
 

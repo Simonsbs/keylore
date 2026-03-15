@@ -32,6 +32,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Your tokens/);
     assert.match(html, /Add token/);
     assert.match(html, /Token key/);
+    assert.match(html, /Replace stored token \(optional\)|Paste token/);
     assert.match(html, /Test credential/);
     assert.match(html, /What the AI will see/);
     assert.match(html, /Writing help/);

@@ -1099,7 +1099,7 @@ function genericHttpSnippet() {
 
 function humanizeErrorMessage(message) {
   if (message.includes('Missing secret material in local secret store for')) {
-    return 'This token record exists, but its stored secret is missing. Open Edit token and save the token again, or delete it and create it again.';
+    return 'This token record exists, but its stored secret is missing. Open Edit token, paste the token again, and save changes.';
   }
   return message;
 }
@@ -1511,7 +1511,7 @@ function renderCredentialTestError(message) {
     '<p><strong>Token:</strong> ' + escapeHtml(state.lastCredentialTestContext?.credentialId || 'the selected token') + '</p>',
     '<p><strong>URL:</strong> <span class="mono">' + escapeHtml(state.lastCredentialTestContext?.targetUrl || 'the selected URL') + '</span></p>',
     '<p>' + escapeHtml(friendly) + '</p>',
-    '<div class="panel-footnote">If the stored secret is missing, open <strong>Edit token</strong> and save the token again, or delete it and create it again.</div>',
+    '<div class="panel-footnote">Use <strong>Edit token</strong> to paste a replacement token and save changes.</div>',
     '</div>'
   ].join('');
 }
@@ -1781,7 +1781,9 @@ function resetCredentialFormForCreate() {
   byId('credential-storage').value = 'local';
   byId('credential-id').readOnly = false;
   byId('credential-secret-field').hidden = false;
+  byId('credential-secret-label').textContent = 'Paste token';
   byId('credential-secret').value = '';
+  byId('credential-secret').placeholder = 'Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue.';
   byId('credential-secret').disabled = false;
   byId('credential-storage').disabled = false;
   applyCredentialTemplate();
@@ -1815,11 +1817,16 @@ function openEditCredentialModal(credential) {
   byId('credential-user-context').value = credential.userContext || credential.llmContext || credential.selectionNotes;
   byId('credential-llm-context').value = credential.llmContext || credential.selectionNotes;
   byId('credential-tags').value = credential.tags.join(', ');
+  const localOwner = credential.owner === 'local';
   byId('credential-storage').value = credential.binding?.adapter === 'env' ? 'env' : 'local';
   byId('credential-storage').disabled = true;
-  byId('credential-secret-field').hidden = true;
+  byId('credential-secret-field').hidden = !localOwner;
+  byId('credential-secret-label').textContent = 'Replace stored token (optional)';
   byId('credential-secret').value = '';
-  byId('credential-secret').disabled = true;
+  byId('credential-secret').placeholder = localOwner
+    ? 'Paste a replacement token only if you want to update the stored secret.'
+    : 'Secret replacement is only available for locally stored tokens.';
+  byId('credential-secret').disabled = !localOwner;
   byId('credential-env-ref-field').hidden = true;
   renderCredentialPreview();
   showDialog('credential-modal');
@@ -2268,6 +2275,7 @@ function syncCredentialSourceFields() {
 function serializeCredentialForm() {
   const operations = splitList(byId('credential-operations').value);
   const adapter = byId('credential-storage').value;
+  const secretValue = byId('credential-secret').value;
   return {
     credentialId: byId('credential-id').value.trim(),
     displayName: byId('credential-name').value.trim(),
@@ -2287,7 +2295,7 @@ function serializeCredentialForm() {
     secretSource: adapter === 'local'
       ? {
           adapter: 'local',
-          secretValue: byId('credential-secret').value
+          secretValue: secretValue
         }
       : {
           adapter: 'env',
@@ -2386,7 +2394,7 @@ async function handleCreateCredential(event) {
     ,
     async function() {
       if (state.credentialModalMode === 'edit') {
-        return fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/context', {
+        const contextResult = await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/context', {
           method: 'PATCH',
           headers: {
             'content-type': 'application/json'
@@ -2404,6 +2412,18 @@ async function handleCreateCredential(event) {
             tags: payload.tags,
           })
         });
+        if (payload.secretSource.adapter === 'local' && payload.secretSource.secretValue.trim()) {
+          await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/local-secret', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+              secretValue: payload.secretSource.secretValue.trim()
+            })
+          });
+        }
+        return contextResult;
       }
       try {
         return await fetchJson('/v1/core/credentials', {
@@ -3204,7 +3224,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                   <div class="field"><label for="credential-id">Token key</label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /></div>
                   <div class="field-wide panel-footnote" style="margin-top:-4px;">This is the unique key for the token. It appears in the saved-token list and is what you change if KeyLore says a token key already exists.</div>
                   <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea></div>
-                  <div id="credential-secret-field" class="field-wide"><label for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
+                  <div id="credential-secret-field" class="field-wide"><label id="credential-secret-label" for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea></div>
                   <div class="field-wide"><label for="credential-user-context">Explain this token for people</label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea></div>
                   <div class="field-wide"><label for="credential-llm-context">Tell the AI when to use this token</label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea></div>
                   <div class="field-wide">

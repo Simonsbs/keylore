@@ -79,6 +79,7 @@ Inside `Your tokens`, use `Edit token` from any row to:
 
 - inspect the current MCP-visible record for a saved credential
 - update display name, service, sensitivity, domains, tags, operations, `User context`, and `LLM context`
+- replace the stored token value for locally stored tokens without deleting the metadata record
 - archive, restore, or delete the token directly from the row actions
 - keep secret storage and binding details out of the edit path entirely
 

@@ -176,6 +176,22 @@ export class CoreModeService {
     return updated;
   }
 
+  public async replaceLocalSecret(
+    context: AuthContext,
+    credentialId: string,
+    secretValue: string,
+  ): Promise<CredentialSummary> {
+    const existing = await this.broker.getCredential(context, credentialId);
+    if (!existing) {
+      throw new Error(`Credential ${credentialId} not found.`);
+    }
+    if (existing.owner !== "local") {
+      throw new Error("Only locally stored tokens can be replaced through the admin UI.");
+    }
+    await this.localSecrets.put(`local:${existing.tenantId}:${existing.id}`, secretValue);
+    return existing;
+  }
+
   public async deleteCredential(context: AuthContext, credentialId: string): Promise<boolean> {
     const existing = await this.broker.getCredential(context, credentialId);
     if (!existing) {
