@@ -11,6 +11,17 @@ npm run quickstart
 
 Then open `http://127.0.0.1:8787/`. KeyLore redirects to `/admin` and should open a local session automatically; use `Start working locally` only if the automatic session fallback appears.
 
+Lifecycle commands:
+
+```bash
+keylore-http start
+keylore-http status
+keylore-http restart
+keylore-http stop
+```
+
+Those commands manage the HTTP server in the background and persist the chosen working directory in `~/.keylore/service/http-service.json` so `start` and `restart` keep using the same local setup. Use `keylore-http run` only when you want foreground logs attached to the current terminal.
+
 That path is intentionally `core` mode. When you outgrow it, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) before enabling broader self-hosted controls.
 
 If you want to override defaults, create `.env` from `.env.example`. KeyLore auto-loads `.env` on startup; you do not need to export it manually.

@@ -23,6 +23,8 @@ In practice this creates two modes:
 
 Use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to move from one to the other.
 
+When you launch KeyLore with `keylore-http start`, it stores the background service metadata under `~/.keylore/service/http-service.json` and writes the HTTP log to `~/.keylore/service/http-service.log`. The stored working directory is reused by `keylore-http restart` and by later `keylore-http start` calls when you launch it outside the original project/config directory.
+
 ## Environment variables
 
 - `KEYLORE_DATABASE_MODE`: `local` or `postgres`; defaults to `local` unless a PostgreSQL URL is explicitly set

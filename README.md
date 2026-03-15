@@ -88,11 +88,13 @@ npm install
 npm run quickstart
 ```
 
+That starts KeyLore in the background. Use `keylore-http status`, `keylore-http stop`, and `keylore-http restart` to manage it later. Use `keylore-http run` only when you intentionally want the server attached to the terminal for debugging.
+
 For a clean Linux VM install from npm instead of cloning the repo:
 
 ```bash
 npm install -g @simonsbs/keylore@next
-keylore-http
+keylore-http start
 ```
 
 That starts KeyLore from the packaged migrations and seed data with no Docker or external PostgreSQL required. Writable state defaults to `~/.keylore`.
@@ -106,7 +108,7 @@ npm run ops:fresh-user-env
 That launches an isolated disposable user, a fresh clone, and a separate KeyLore UI port for onboarding and MCP testing. By default it clones from the current local repo source so it also works while the repo is private.
 
 This boots KeyLore at `http://127.0.0.1:8787` with a local embedded database and encrypted local secret store.
-If KeyLore is already running locally on that port, the command reuses the existing instance instead of failing.
+If KeyLore is already running locally, the command reuses the existing background instance instead of failing.
 
 3. Open KeyLore in your browser:
 
