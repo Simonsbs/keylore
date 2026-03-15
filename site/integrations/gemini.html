@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gemini CLI MCP Setup with KeyLore | Secure Token Brokering</title>
+    <title>Use KeyLore with Gemini CLI</title>
     <meta
       name="description"
-      content="Configure Gemini CLI to use KeyLore as an MCP credential broker so Gemini can request access safely without receiving raw token values."
+      content="Connect KeyLore to Gemini CLI for metadata-driven credential discovery and brokered access during local AI coding workflows."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/gemini.html" />
     <meta name="robots" content="index,follow" />
@@ -39,9 +39,9 @@
             <h2>Use Gemini through KeyLore, not through exported shell secrets.</h2>
           </div>
           <p class="lede">
-            Use KeyLore with the Gemini CLI to resolve credentials through the broker.
-            Gemini gets access to the action it needs, while the model only sees
-            metadata and never sees the raw token value.
+            Gemini CLI can benefit from the same boundary every AI coding tool needs:
+            enough information to choose the right credential, but not a direct dump of
+            every available secret into process state.
           </p>
           <div class="install-shell">
             <pre><code>{
@@ -52,6 +52,29 @@
     }
   }
 }</code></pre>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Recommended flow</p>
+            <h2>How to use Gemini CLI with KeyLore.</h2>
+          </div>
+          <ul class="copy-list">
+            <li>Start KeyLore locally and open the UI to add the credentials relevant to your Gemini CLI tasks.</li>
+            <li>Describe each credential with metadata that explains purpose, target service, and environment.</li>
+            <li>Configure Gemini CLI to use the local KeyLore or MCP path available in your setup.</li>
+            <li>Run an authenticated workflow and verify that Gemini CLI uses brokered access rather than relying on raw env-loaded secrets.</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Prompt example</p>
+            <h2>What to ask Gemini first.</h2>
+          </div>
+          <div class="install-shell">
+            <pre><code>Look up the available credential metadata for the staging API, choose the entry that matches deployment diagnostics, and request brokered access only for that task.</code></pre>
           </div>
         </section>
       </main>

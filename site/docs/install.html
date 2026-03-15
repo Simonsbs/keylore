@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Install KeyLore | Local-first MCP Credential Broker Setup</title>
+    <title>Install KeyLore</title>
     <meta
       name="description"
-      content="Install KeyLore in local-first mode with npm, start the background service, open the UI, add a token, and connect your MCP client."
+      content="Install KeyLore locally, start the HTTP service, and open the browser UI to begin managing credentials for AI coding tools and MCP clients."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/docs/install.html" />
     <meta name="robots" content="index,follow" />
@@ -40,14 +40,15 @@
             <p class="eyebrow">Local-first install</p>
             <h2>Default setup takes two commands.</h2>
           </div>
+          <p class="lede">
+            The default setup is local-first. You install the package globally, start
+            the local HTTP service, and manage credentials from the browser UI running
+            on your machine.
+          </p>
           <div class="install-shell">
             <pre><code>npm install -g @simonsbs/keylore
 keylore-http start</code></pre>
           </div>
-          <p class="lede">
-            Then open <code>http://127.0.0.1:8787/</code>. KeyLore runs in the
-            background and stores writable state under <code>~/.keylore</code>.
-          </p>
         </section>
 
         <section class="section">
@@ -58,19 +59,49 @@ keylore-http start</code></pre>
           <div class="timeline three-up">
             <article class="timeline-step">
               <span class="step-index">1</span>
-              <h3>Add a token</h3>
-              <p>Store the real secret in KeyLore instead of leaving it in shell env or project files.</p>
+              <h3>Install the package</h3>
+              <p>Run <code>npm install -g @simonsbs/keylore</code> to install the KeyLore CLI and supporting components on your system.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">2</span>
-              <h3>Add context</h3>
-              <p>Write human context and LLM context so the agent can pick the credential by purpose.</p>
+              <h3>Start the local HTTP service</h3>
+              <p>Run <code>keylore-http start</code>. This launches the local service used by the UI and client integrations.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">3</span>
-              <h3>Test and connect</h3>
-              <p>Run the brokered token test, then connect Codex, Gemini CLI, Claude CLI, or another MCP client.</p>
+              <h3>Open the local UI</h3>
+              <p>Visit <code>http://127.0.0.1:8787/</code> in your browser. From there you can add credentials and define the metadata that AI tools will use for discovery.</p>
             </article>
+            <article class="timeline-step">
+              <span class="step-index">4</span>
+              <h3>Connect a supported client</h3>
+              <p>After adding credentials, connect Codex, Gemini CLI, Claude CLI, or another MCP client so it can inspect metadata and request brokered access.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section faq-shell">
+          <div class="section-heading">
+            <p class="eyebrow">Install FAQ</p>
+            <h2>Two common install questions.</h2>
+          </div>
+          <div class="faq-list">
+            <details>
+              <summary>Is KeyLore local by default?</summary>
+              <p>
+                Yes. The standard install starts a local HTTP service and browser UI on
+                your machine. That makes evaluation straightforward and keeps the
+                initial deployment model simple.
+              </p>
+            </details>
+            <details>
+              <summary>Do I need to move everything out of <code>.env</code> immediately?</summary>
+              <p>
+                No. Most teams start by migrating the highest-risk credentials first:
+                tokens currently exposed to AI coding tools, broad-scope developer keys,
+                or secrets that are often copied between repos and shells.
+              </p>
+            </details>
           </div>
         </section>
 

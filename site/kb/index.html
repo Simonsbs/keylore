@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore Knowledge Base | MCP Setup Questions and Troubleshooting</title>
+    <title>Knowledge base</title>
     <meta
       name="description"
-      content="Common KeyLore questions: how it keeps raw tokens hidden, how to migrate from .env, and how to use it with MCP clients like Codex and Gemini CLI."
+      content="Answers to common questions about KeyLore, credential brokering, AI agent access, local installs, and moving away from .env files."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/kb/" />
     <meta name="robots" content="index,follow" />
@@ -63,7 +63,7 @@
           </div>
         </nav>
         <p class="breadcrumb"><a href="../">Home</a> / Knowledge Base</p>
-        <p class="lede">How-to guides and migration tips for moving AI tools off <code>.env</code>.</p>
+        <p class="lede">These articles cover the practical questions teams ask when deciding whether to trust AI coding tools with credentials and how to move to a better local default.</p>
       </header>
 
       <main class="section-stack">
@@ -82,28 +82,26 @@
               </p>
             </details>
             <details>
-              <summary>Can I start local-first and harden later?</summary>
+              <summary>Is KeyLore only for one AI client?</summary>
               <p>
-                Yes. The default install is designed for fast local adoption. Later you
-                can move to stronger deployment controls, external secret stores, and
-                wider team governance.
+                No. Supported clients include Codex, Gemini CLI, Claude CLI, and
+                generic MCP clients.
               </p>
             </details>
             <details>
-              <summary>How do I migrate from <code>.env</code> files?</summary>
+              <summary>Does KeyLore replace every secret-management system?</summary>
               <p>
-                Install and start KeyLore, move the token into KeyLore, add minimal
-                metadata, connect the MCP client, verify brokered access works, then
-                remove and rotate the old environment-based secret so the shell path is
-                no longer trusted.
+                No. Its role is narrower: improving how credentials are handled in
+                local AI-assisted development workflows, especially where .env files
+                would otherwise expose raw secrets to model-facing processes.
               </p>
             </details>
             <details>
-              <summary>What should the agent search for?</summary>
+              <summary>Why is metadata important?</summary>
               <p>
-                Service, domain, permitted operation, tags, and usage context. The
-                agent should prefer the best context match, not just the most familiar
-                token name.
+                Metadata gives the agent structured information about what a credential
+                is for. That is more reliable than asking the model to infer intent
+                from environment variable names alone.
               </p>
             </details>
           </div>

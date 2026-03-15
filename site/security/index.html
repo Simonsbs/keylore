@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore Security | MCP Risks, Threat Model, and .env Alternatives</title>
+    <title>Security model</title>
     <meta
       name="description"
-      content="Learn why .env files are the wrong default for AI agents, what MCP risks matter, and how KeyLore creates a safer credential boundary."
+      content="Understand the KeyLore security model: separate raw secrets from metadata, reduce unnecessary exposure to AI agents, and avoid the broad leakage patterns of .env-based workflows."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/security/" />
     <meta name="robots" content="index,follow" />
@@ -32,8 +32,11 @@
         </nav>
         <p class="breadcrumb"><a href="../">Home</a> / Security</p>
         <p class="lede">
-          KeyLore separates raw secret material from AI-facing metadata and brokers
-          access on request, so models and prompts never need to contain token values.
+          KeyLore is not magic, and it is not a claim that AI tools need no
+          credentials. Its value is narrower and more defensible: it gives
+          AI-assisted workflows a better credential boundary than plain environment
+          files by separating secret storage from AI-visible metadata and using a
+          brokered access model.
         </p>
       </header>
 
@@ -41,18 +44,18 @@
         <section class="section page-card-grid compact-grid">
           <article class="feature-card">
             <p class="panel-label">Principle 1</p>
-            <h3>Separate secrets from metadata</h3>
-            <p>Raw secrets live in a protected store. Searchable metadata is what the agent sees and reasons over.</p>
+            <h3>Separate knowledge from possession</h3>
+            <p>An AI agent often needs to know that a credential exists and what it is for. It does not automatically need possession of the raw token.</p>
           </article>
           <article class="feature-card">
             <p class="panel-label">Principle 2</p>
-            <h3>Broker access instead of returning tokens</h3>
-            <p>KeyLore performs the live authenticated call or governs the operation instead of handing the agent the token value.</p>
+            <h3>Expose less by default</h3>
+            <p>In a .env-based setup, every secret loaded into the process is potentially accessible to the model-facing environment. KeyLore aims to reduce that ambient exposure.</p>
           </article>
           <article class="feature-card">
             <p class="panel-label">Principle 3</p>
-            <h3>Reduce blast radius</h3>
-            <p>Keeping secrets out of prompts, shell env, and casual process inspection makes leaks and misuse easier to contain.</p>
+            <h3>Prefer structured intent over naming conventions</h3>
+            <p>Credential selection should not depend on reverse-engineering variable names. KeyLore uses metadata to express purpose and scope more clearly.</p>
           </article>
         </section>
 

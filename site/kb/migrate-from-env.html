@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>How to Move from .env to KeyLore | Secure AI Agent Credential Migration</title>
+    <title>Migrate from .env to KeyLore</title>
     <meta
       name="description"
-      content="Migrate existing API tokens from .env files into KeyLore, attach human and LLM context, connect your MCP client, and rotate the old secrets."
+      content="A practical path for moving AI-facing credentials out of .env files and into KeyLore's metadata-plus-broker model."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/kb/migrate-from-env.html" />
     <meta name="robots" content="index,follow" />
@@ -37,30 +37,45 @@
         <section class="section">
           <div class="section-heading">
             <p class="eyebrow">Migration path</p>
-            <h2>Move the token, then remove the old trust path.</h2>
+            <h2>You do not need a full rebuild of your credential setup to benefit from KeyLore.</h2>
           </div>
+          <p class="lede">
+            Start with the secrets most exposed to AI tooling and replace the flat
+            env-file pattern with metadata-driven discovery and brokered use.
+          </p>
           <div class="timeline">
             <article class="timeline-step">
               <span class="step-index">1</span>
-              <h3>Install and start KeyLore</h3>
-              <p>Run the local-first install and open the UI.</p>
+              <h3>Inventory AI-exposed secrets</h3>
+              <p>List the credentials currently loaded into shells, local apps, and AI coding tool processes through .env files or exported environment variables. Prioritize tokens with broad scope or frequent use.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">2</span>
-              <h3>Add the token</h3>
-              <p>Import the existing token into KeyLore and give it a unique token key.</p>
+              <h3>Move credentials into KeyLore</h3>
+              <p>Add each selected secret to KeyLore so the raw value is stored separately from the information an agent will use to identify it.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">3</span>
-              <h3>Add context</h3>
-              <p>Write the human and LLM context that tells the agent when the token is the right choice.</p>
+              <h3>Write usable metadata</h3>
+              <p>For each credential, describe the service, purpose, and environment in plain technical language. The goal is to let an agent choose correctly without seeing the token itself.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">4</span>
-              <h3>Rotate away from env</h3>
-              <p>After the MCP flow works, remove the old environment-based secret and rotate it so the old path is no longer trusted.</p>
+              <h3>Update client workflows</h3>
+              <p>Reconfigure Codex, Gemini CLI, Claude CLI, or your MCP client workflow so the tool discovers credentials through KeyLore and requests brokered access instead of depending on env-file injection.</p>
             </article>
           </div>
+        </section>
+
+        <section class="section section-contrast">
+          <div class="section-heading">
+            <p class="eyebrow">Closing note</p>
+            <h2>Treat migration as an interface improvement, not just a storage change.</h2>
+          </div>
+          <p class="lede">
+            The key shift is from raw secret possession by default to metadata-driven
+            discovery and brokered use.
+          </p>
         </section>
       </main>
     </div>

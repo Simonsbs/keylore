@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Why .env Is a Bad Default for AI Agents | KeyLore</title>
+    <title>Why not just use .env files?</title>
     <meta
       name="description"
-      content="Learn why .env files are a weak security boundary for AI agents and MCP clients, and why brokered credential access is safer."
+      content="A technical explanation of why .env files are a weak default for AI agents and how KeyLore offers a safer credential-handling model."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/security/why-not-env.html" />
     <meta name="robots" content="index,follow" />
@@ -37,20 +37,24 @@
         <section class="section">
           <div class="section-heading">
             <p class="eyebrow">The issue</p>
-            <h2><code>.env</code> distributes secrets. It does not govern them.</h2>
+            <h2>For ordinary scripts, <code>.env</code> files are simple. For AI agents, they are a poor default.</h2>
           </div>
+          <p class="lede">
+            They expose raw secrets to the process, provide little intent, and leak
+            through many routine developer paths.
+          </p>
           <div class="problem-grid">
             <article class="problem-card">
               <h3>Process-wide exposure</h3>
-              <p>Any tool that can inspect the environment can read the secret, whether it needs it or not.</p>
+              <p>Once secrets are loaded into environment variables, they become part of the runtime context of the process. An agent may gain access to far more credential material than any single task requires.</p>
             </article>
             <article class="problem-card">
-              <h3>Weak semantics</h3>
-              <p>The variable name rarely explains what the secret is for or when an agent should avoid it.</p>
+              <h3>Weak semantic signal</h3>
+              <p>Variable names are not a robust permission model. Names like <code>PROD_API_KEY</code> or <code>SERVICE_TOKEN</code> hint at purpose, but they do not give agents a reliable structured understanding of when a credential should or should not be used.</p>
             </article>
             <article class="problem-card">
               <h3>Easy leakage path</h3>
-              <p>Shells, logs, crashes, copied configs, and ad hoc debugging can all surface environment-based secrets.</p>
+              <p>Env-based secrets frequently escape through debugging output, shell commands, crash dumps, copied example configs, support messages, and screen sharing.</p>
             </article>
           </div>
         </section>
@@ -61,9 +65,10 @@
             <h2>Use context plus brokered access instead.</h2>
           </div>
           <p class="lede">
-            KeyLore stores the raw token separately, exposes metadata that helps the
-            model choose the right credential, and brokers the live access request so
-            the token value never has to enter the agent workflow.
+            KeyLore replaces the flat env-file pattern with a broker model. Raw secret
+            values are stored separately from AI-facing metadata. Agents use the
+            metadata layer to discover the right credential for a task, then request
+            brokered access instead of reading the token directly from process state.
           </p>
         </section>
       </main>

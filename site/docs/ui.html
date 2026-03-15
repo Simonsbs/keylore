@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore UI Guide | Add Tokens, Context, and Connect MCP</title>
+    <title>Using the KeyLore UI</title>
     <meta
       name="description"
-      content="Use the KeyLore UI to add a token, write human and LLM context, test brokered access, and connect Codex, Gemini CLI, or Claude CLI."
+      content="Learn how to use the KeyLore local UI to add credentials, define metadata, and prepare secrets for use by AI coding tools and MCP clients."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/docs/ui.html" />
     <meta name="robots" content="index,follow" />
@@ -38,30 +38,46 @@
         <section class="section">
           <div class="section-heading">
             <p class="eyebrow">Core workflow</p>
-            <h2>The UI is built around one path: add token, test token, connect AI tool.</h2>
+            <h2>The UI is where you define the boundary between secret material and AI-visible context.</h2>
           </div>
+          <p class="lede">
+            A useful KeyLore setup gives agents enough metadata to choose correctly
+            while keeping raw tokens out of their view.
+          </p>
           <div class="timeline">
             <article class="timeline-step">
               <span class="step-index">1</span>
               <h3>Save token</h3>
-              <p>Store the real secret and give it a unique token key, service name, allowed domains, and risk profile.</p>
+              <p>Create a new entry for the token, API key, or other secret you want KeyLore to manage. The raw value is stored separately from the metadata shown to AI clients.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">2</span>
               <h3>Write context</h3>
-              <p><strong>User context</strong> explains the token for people. <strong>LLM context</strong> tells the agent when it should use the token.</p>
+              <p>Write metadata that explains what service the credential belongs to, what it should be used for, and any scope or environment distinctions that matter.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">3</span>
               <h3>Preview what the AI sees</h3>
-              <p>KeyLore shows the metadata record that will be visible over MCP so you can confirm the token itself is absent.</p>
+              <p>Check the metadata as if you were the agent. It should be descriptive enough to support correct selection, but it should not contain the secret itself or unnecessary sensitive detail.</p>
             </article>
             <article class="timeline-step">
               <span class="step-index">4</span>
-              <h3>Check this token</h3>
-              <p>Run a brokered live test such as a GitHub rate-limit check to verify the secret, policy, and target domain all line up.</p>
+              <h3>Test a client workflow</h3>
+              <p>Use a supported AI coding tool or MCP client to confirm that it can find the credential through metadata and request brokered access when it needs to perform the task.</p>
             </article>
           </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Writing guidance</p>
+            <h2>What makes metadata useful to an agent.</h2>
+          </div>
+          <ul class="copy-list">
+            <li>Prefer metadata that states purpose and scope plainly, such as which API or environment a credential is for.</li>
+            <li>Avoid vague labels that force the agent to infer intent from abbreviations or internal naming habits.</li>
+            <li>Treat metadata as part of the interface contract with the AI tool: concise, accurate, and free of raw secret values.</li>
+          </ul>
         </section>
 
         <section class="section page-card-grid compact-grid">

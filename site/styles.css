@@ -198,6 +198,23 @@ pre {
   line-height: 1.65;
 }
 
+.copy-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.prose {
+  max-width: 920px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.prose p {
+  margin: 0 0 14px;
+}
+
 .hero-panel {
   display: grid;
   gap: 16px;

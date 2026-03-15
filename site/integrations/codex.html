@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Codex MCP Setup with KeyLore | Secure AI Agent Credentials</title>
+    <title>Use KeyLore with Codex</title>
     <meta
       name="description"
-      content="Set up Codex with KeyLore so Codex can search credential metadata and use brokered access without receiving raw token values."
+      content="Connect KeyLore to Codex so it can discover credential metadata and request brokered access instead of depending on raw secrets in .env files."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/codex.html" />
     <meta name="robots" content="index,follow" />
@@ -39,13 +39,38 @@
             <h2>Codex should ask KeyLore for access, not read your token directly.</h2>
           </div>
           <p class="lede">
-            Point Codex at KeyLore instead of handing Codex a raw token. Codex searches
-            metadata, requests brokered access, and never receives the secret value.
+            With Codex, the main goal is to stop treating the process environment as
+            the default secret interface. KeyLore gives Codex a narrower, more
+            intentional path: search metadata first, then request brokered access only
+            when the task actually requires a credential.
           </p>
           <div class="install-shell">
             <pre><code># ~/.codex/config.toml
 [mcp_servers.keylore]
 command = "keylore-stdio"</code></pre>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Recommended flow</p>
+            <h2>How to use Codex with KeyLore.</h2>
+          </div>
+          <ul class="copy-list">
+            <li>Install and start KeyLore locally, then add the credentials Codex may need.</li>
+            <li>Write metadata that clearly distinguishes services, environments, and intended use cases.</li>
+            <li>Connect Codex through the local KeyLore workflow or MCP-compatible path used in your setup.</li>
+            <li>Test a task that requires authenticated access and confirm Codex can complete it without being given the raw token value.</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Prompt example</p>
+            <h2>What to ask Codex first.</h2>
+          </div>
+          <div class="install-shell">
+            <pre><code>Find the credential metadata for the GitHub API token intended for repository read/write tasks in my local development environment, then use brokered access for the operation instead of asking me to paste the token.</code></pre>
           </div>
         </section>
       </main>

@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore | Secure Credentials for AI Agents and MCP Tools</title>
+    <title>KeyLore | Open-source credential broker for AI coding tools and MCP clients</title>
     <meta
       name="description"
-      content="KeyLore keeps raw tokens out of AI prompts, shells, and .env files. Let Codex, Gemini, Claude, and MCP clients discover the right credential by context and use it through a governed broker."
+      content="KeyLore is an open-source credential broker for AI coding tools and MCP clients. It stores raw secrets separately from AI-facing metadata so agents can find the right credential and request brokered access without being handed token values."
     />
     <meta
       name="keywords"
@@ -17,7 +17,7 @@
     <meta name="theme-color" content="#10332c" />
     <link rel="canonical" href="https://keylore.bestdev.co.il/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="KeyLore | Secure Credentials for AI Agents and MCP Tools" />
+    <meta property="og:title" content="KeyLore | Open-source credential broker for AI coding tools and MCP clients" />
     <meta
       property="og:description"
       content="Store secrets separately from AI-facing metadata so agents can request access without ever receiving raw token values."
@@ -25,7 +25,7 @@
     <meta property="og:url" content="https://keylore.bestdev.co.il/" />
     <meta property="og:site_name" content="KeyLore" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="KeyLore | Secure Credentials for AI Agents and MCP Tools" />
+    <meta name="twitter:title" content="KeyLore | Open-source credential broker for AI coding tools and MCP clients" />
     <meta
       name="twitter:description"
       content="A safer alternative to stuffing API tokens into .env files for AI coding tools."
@@ -73,12 +73,17 @@
         <div class="hero-grid">
           <section class="hero-copy">
             <p class="hero-kicker">Stop giving raw secrets to AI coding tools.</p>
-            <h2>Broker secrets for AI coding tools instead of leaking tokens through <code>.env</code>.</h2>
+            <h2>Credential brokering for AI agents, without handing them your raw secrets.</h2>
             <p class="lede">
-              KeyLore is a credential broker for Codex, Gemini CLI, Claude CLI, and
-              other MCP clients. It stores raw secrets separately from AI-facing
-              metadata, lets the agent discover the right credential by context, and
-              brokers the live authenticated action without returning the token value.
+              KeyLore is an open-source credential broker for AI coding tools and MCP
+              clients. Instead of loading every secret into a process-wide
+              <code>.env</code> and hoping the agent uses them correctly, KeyLore
+              separates raw secret storage from AI-visible metadata. Agents search the
+              metadata, select the credential that matches the task, and request
+              brokered access when they need it. The result is a better default for
+              developer machines and local AI workflows: less unnecessary secret
+              exposure, clearer intent, and a cleaner boundary between what the model
+              can see and what it can use.
             </p>
             <div class="cta-row">
               <a class="button button-primary" href="https://www.npmjs.com/package/@simonsbs/keylore">Install from npm</a>
@@ -96,9 +101,9 @@
             <div class="panel-card">
               <p class="panel-label">Why KeyLore exists</p>
               <p class="panel-copy">
-                AI agents need credentials to do useful work, but handing them raw
-                tokens is a bad security model. KeyLore gives the agent metadata and a
-                brokered path instead.
+                AI agents often need to know that a credential exists and what it is
+                for. They do not automatically need possession of the raw token. That
+                separation is the whole point of KeyLore.
               </p>
             </div>
             <div class="panel-card panel-code">
@@ -119,26 +124,29 @@ keylore-http start
           </div>
           <div class="problem-grid">
             <article class="problem-card">
-              <h3>Process-wide secret exposure</h3>
+              <h3>.env files expose too much, too early</h3>
               <p>
-                A `.env` file gives the process every secret it can read. That is a poor
-                fit for exploratory AI tools that inspect files, run shell commands, and
-                chain tools dynamically.
+                A plain <code>.env</code> file makes every listed secret available to
+                the running process up front. For AI-assisted coding workflows, that
+                means the agent operates inside a context where raw tokens may already
+                be present whether they are needed or not. This is convenient, but it
+                is a weak security default.
               </p>
             </article>
             <article class="problem-card">
-              <h3>Weak intent signals</h3>
+              <h3>Environment variables carry weak intent</h3>
               <p>
                 Token names rarely explain what access is safe, when the token should be
                 used, or what domains and operations actually match the task at hand.
               </p>
             </article>
             <article class="problem-card">
-              <h3>Easy to leak</h3>
+              <h3>Secrets leak through normal developer workflows</h3>
               <p>
-                Environment variables spill into shell output, copied configs, logs,
-                debug dumps, and agent sessions. Once secrets are in the process, blast
-                radius expands fast.
+                When secrets live in env files and process environments, they can spill
+                into logs, shell history, crash reports, copied configuration, debugging
+                output, and screenshots. The problem is not only malicious exfiltration;
+                it is ordinary operational leakage.
               </p>
             </article>
           </div>
@@ -152,35 +160,41 @@ keylore-http start
           <div class="timeline">
             <article class="timeline-step">
               <span class="step-index">1</span>
-              <h3>Store the real token</h3>
+              <h3>Store secrets separately from metadata</h3>
               <p>
-                KeyLore keeps the raw secret in a dedicated store. Local mode uses an
-                encrypted local store; advanced deployments can switch to external
-                secret backends later.
+                KeyLore keeps raw credential values distinct from the metadata shown to
+                AI tools. The metadata can describe what a credential is for, which
+                service it targets, and when to use it, without exposing the token
+                itself.
               </p>
             </article>
             <article class="timeline-step">
               <span class="step-index">2</span>
-              <h3>Add human and LLM context</h3>
+              <h3>Let agents search the AI-facing catalog</h3>
               <p>
-                You explain what the credential is for, when to use it, what domains it
-                can reach, and what the agent must never do with it.
+                Supported clients such as Codex, Gemini CLI, Claude CLI, and generic
+                MCP clients can inspect the metadata layer to discover available
+                credentials. This gives the agent a structured way to find the right
+                option for a task.
               </p>
             </article>
             <article class="timeline-step">
               <span class="step-index">3</span>
-              <h3>Let the agent search metadata</h3>
+              <h3>Broker access when a tool actually needs it</h3>
               <p>
-                Through MCP, the agent searches metadata only. It does not need raw
-                secret material to choose the right credential.
+                When the workflow requires a credential, the client requests brokered
+                access through KeyLore rather than reading a raw token from process
+                state. The agent works through the broker instead of being handed the
+                underlying value.
               </p>
             </article>
             <article class="timeline-step">
               <span class="step-index">4</span>
-              <h3>Broker the live request</h3>
+              <h3>Keep the default local-first</h3>
               <p>
-                When access is needed, KeyLore enforces policy and performs the live
-                authenticated call on the agent’s behalf.
+                The standard install runs locally on your machine. You install the
+                package, start the local HTTP service, and open the UI in your browser.
+                That keeps the initial trust model simple and inspectable.
               </p>
             </article>
           </div>
@@ -191,25 +205,31 @@ keylore-http start
             <p class="eyebrow">Why KeyLore beats plain .env</p>
             <h2>Use brokered credential access, not a process-wide secret dump.</h2>
           </div>
+          <div class="prose">
+            <p>
+              For AI coding agents, the real question is not whether credentials exist.
+              It is how much of them the model-facing process can see by default, and
+              whether the system expresses intent clearly enough for safe use.
+            </p>
+          </div>
           <div class="comparison-grid">
             <article class="comparison-card comparison-bad">
               <h3>Plain <code>.env</code></h3>
               <ul>
-                <li>Every process secret is readable if the agent can inspect env</li>
-                <li>No meaningful context beyond a token name</li>
-                <li>No brokered access boundary</li>
-                <li>Easy to leak through shell, logs, or copied files</li>
-                <li>Hard to explain to security reviewers</li>
+                <li>Loads raw secrets directly into the process environment</li>
+                <li>Makes unrelated credentials available even when a task needs only one</li>
+                <li>Relies on variable names as the main hint about purpose and scope</li>
+                <li>Commonly leaks through logs, shells, crashes, and copied config files</li>
               </ul>
             </article>
             <article class="comparison-card comparison-good">
               <h3>Why KeyLore over <code>.env</code> for AI agents</h3>
               <ul>
-                <li>Raw tokens are stored separately; agents see metadata and brokered access only</li>
-                <li>Per-request access goes through the broker instead of blanket env exposure</li>
-                <li>Agents choose credentials by service, domain, operation, and context fit</li>
+                <li>Separates raw secret values from AI-visible metadata</li>
+                <li>Lets agents discover credentials through descriptive metadata rather than guessing from env var names</li>
+                <li>Supports brokered access instead of direct token handling by the model-facing client</li>
+                <li>Reduces unnecessary secret exposure during routine coding workflows</li>
                 <li>Works with Codex, Gemini CLI, Claude CLI, and generic MCP clients</li>
-                <li>Local-first install is simple, with stronger controls available later</li>
               </ul>
             </article>
           </div>
@@ -223,6 +243,13 @@ keylore-http start
           <div class="section-heading">
             <p class="eyebrow">See the model</p>
             <h2>What the AI sees vs what stays secret.</h2>
+          </div>
+          <div class="prose">
+            <p>
+              What the agent sees in KeyLore is not the same as what the secret is. The
+              AI-visible layer is metadata: enough to identify the right credential for
+              a task, not a dump of raw token material.
+            </p>
           </div>
           <div class="comparison-grid">
             <article class="comparison-card">
@@ -279,9 +306,10 @@ keylore-http start
             <p class="eyebrow">Install</p>
             <h2>From zero to running in minutes.</h2>
             <p>
-              The default path is local-first. Install KeyLore globally, start the
-              background service, open the UI, add a token, test it, then connect your
-              AI tool.
+              The default local-first install is simple: install the package globally,
+              start the background service, and open the browser UI on your machine.
+              From there you can add a token, define metadata, test brokered access,
+              and connect your AI tool.
             </p>
             <div class="cta-row">
               <a class="button button-primary" href="https://www.npmjs.com/package/@simonsbs/keylore">Install from npm</a>
@@ -292,6 +320,38 @@ keylore-http start
             <pre><code>npm install -g @simonsbs/keylore
 keylore-http start
 # browser: http://127.0.0.1:8787/</code></pre>
+          </div>
+        </section>
+
+        <section class="section faq-shell">
+          <div class="section-heading">
+            <p class="eyebrow">Common questions</p>
+            <h2>What teams usually want to know first.</h2>
+          </div>
+          <div class="faq-list">
+            <details>
+              <summary>Does KeyLore replace secret managers?</summary>
+              <p>
+                No. Its role is narrower: improving how credentials are handled in
+                local AI-assisted development workflows so agents do not need direct
+                raw-token possession by default.
+              </p>
+            </details>
+            <details>
+              <summary>Does the AI ever see the token?</summary>
+              <p>
+                In the brokered path, the AI sees metadata and the result of the
+                governed action, not the raw token value itself.
+              </p>
+            </details>
+            <details>
+              <summary>Why is metadata so important?</summary>
+              <p>
+                Metadata gives the agent structured information about what a credential
+                is for. That is much more reliable than asking the model to infer
+                intent from environment variable names alone.
+              </p>
+            </details>
           </div>
         </section>
       </main>

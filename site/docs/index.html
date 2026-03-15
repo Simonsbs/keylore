@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore Docs | Install, Architecture, and MCP Setup</title>
+    <title>KeyLore Docs</title>
     <meta
       name="description"
-      content="KeyLore documentation hub: local-first install, architecture, first-run setup, MCP integration guidance, and links into the full GitHub docs."
+      content="Documentation for installing KeyLore, using the local UI, connecting MCP clients, and understanding the credential-broker model for AI coding tools."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/docs/" />
     <meta name="robots" content="index,follow" />
@@ -32,9 +32,9 @@
         </nav>
         <p class="breadcrumb"><a href="../">Home</a> / Docs</p>
         <p class="lede">
-          Start with the shortest route to a working KeyLore install, then move into
-          the UI workflow, MCP behavior, and the deeper GitHub reference material only
-          when you need it.
+          KeyLore is designed to be understandable from first principles. Install it
+          locally, add credentials, expose only useful metadata to AI clients, and let
+          tools request brokered access when needed.
         </p>
       </header>
 
@@ -42,23 +42,23 @@
         <section class="section page-card-grid compact-grid">
           <a class="feature-card" href="./install.html">
             <p class="panel-label">Getting started</p>
-            <h3>Install and first run</h3>
-            <p>Local-first install, service lifecycle, and the shortest route through the UI.</p>
+            <h3>Install and start locally</h3>
+            <p>Get a local KeyLore instance running with the default npm install and HTTP start flow.</p>
           </a>
           <a class="feature-card" href="./ui.html">
             <p class="panel-label">Product use</p>
-            <h3>UI workflow</h3>
-            <p>How token storage, context authoring, token testing, and MCP connection work.</p>
+            <h3>Use the local UI</h3>
+            <p>Open the browser UI, add credentials, and define metadata that helps AI tools select the right secret.</p>
           </a>
           <a class="feature-card" href="./mcp.html">
             <p class="panel-label">MCP</p>
-            <h3>How agents use KeyLore</h3>
-            <p>What the model sees, how search works, and how brokered access is selected safely.</p>
+            <h3>Connect MCP clients</h3>
+            <p>Understand how KeyLore fits into MCP-based workflows so agents can search metadata and request brokered access.</p>
           </a>
           <a class="feature-card" href="../security/why-not-env.html">
             <p class="panel-label">Security</p>
-            <h3>Why not .env for agents?</h3>
-            <p>The short security argument for moving secrets out of shell env and into a brokered path.</p>
+            <h3>Adopt a safer default than <code>.env</code></h3>
+            <p>Review why separating metadata from secret values is a better fit for AI-assisted coding than loading everything into process env.</p>
           </a>
         </section>
 
@@ -67,6 +67,12 @@
             <p class="eyebrow">Recommended first run</p>
             <h2>The shortest route to success.</h2>
           </div>
+          <ul class="copy-list">
+            <li>Install the package and start the local HTTP service.</li>
+            <li>Open the UI at <code>http://127.0.0.1:8787/</code> and add at least one credential.</li>
+            <li>Connect your AI coding tool or MCP client and verify it can discover metadata without receiving the raw token.</li>
+          </ul>
+          <div style="height:18px"></div>
           <div class="timeline three-up">
             <article class="timeline-step">
               <span class="step-index">1</span>

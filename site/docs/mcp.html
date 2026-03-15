@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KeyLore MCP Guide | How Agents Find and Use Credentials Safely</title>
+    <title>KeyLore and MCP clients</title>
     <meta
       name="description"
-      content="Understand how KeyLore presents metadata to MCP clients, how agents should search for credentials, and how brokered access works."
+      content="How KeyLore fits into MCP workflows so AI clients can search metadata and request brokered credential access without receiving raw token values."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/docs/mcp.html" />
     <meta name="robots" content="index,follow" />
@@ -37,29 +37,36 @@
       <main class="section-stack">
         <section class="section">
           <div class="section-heading">
-            <p class="eyebrow">Selection model</p>
-            <h2>Agents should choose by context fit, not token name similarity.</h2>
+            <p class="eyebrow">MCP behavior</p>
+            <h2>Why this model fits MCP clients better than flat env exposure.</h2>
           </div>
-          <div class="problem-grid">
-            <article class="problem-card">
-              <h3>Search metadata first</h3>
-              <p>Use service, domain, permitted operation, tags, and context to find the best candidate.</p>
-            </article>
-            <article class="problem-card">
-              <h3>Inspect the record</h3>
-              <p>Read the metadata record to confirm it matches the intended task and that the domains and operations are appropriate.</p>
-            </article>
-            <article class="problem-card">
-              <h3>Request brokered access</h3>
-              <p>Use the live access path only after the credential has been selected by context, not by guesswork.</p>
-            </article>
-          </div>
+          <p class="lede">
+            KeyLore works well with MCP-style interactions because MCP clients often
+            need a structured way to discover resources and invoke tools. In this
+            model, credentials are not dumped into process environment state for the
+            agent to read.
+          </p>
+          <ul class="copy-list">
+            <li>Expose enough metadata for the client to distinguish credentials by service, purpose, and environment.</li>
+            <li>Do not rely on raw secret names alone; make the intended use explicit in the metadata.</li>
+            <li>Keep the AI-visible layer descriptive but minimal so selection is accurate without oversharing.</li>
+            <li>Validate the workflow by confirming the client can complete the task without ever seeing the underlying token value.</li>
+          </ul>
         </section>
 
         <section class="section">
           <div class="section-heading">
             <p class="eyebrow">Model-visible contract</p>
             <h2>What the agent sees.</h2>
+          </div>
+          <div class="prose">
+            <p>
+              MCP clients are especially sensitive to interface design. If the only
+              interface to credentials is a flat list of env vars, the agent must infer
+              intent from weak signals. KeyLore gives that interaction a better
+              structure: searchable metadata for discovery, brokered access for use,
+              and a clearer separation between model context and secret material.
+            </p>
           </div>
           <div class="comparison-grid">
             <article class="comparison-card">

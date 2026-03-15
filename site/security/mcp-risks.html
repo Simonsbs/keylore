@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MCP Security Risks and Safer Credential Design | KeyLore</title>
+    <title>MCP credential risks</title>
     <meta
       name="description"
-      content="Understand the practical MCP security risks around agent tooling and why credential brokering is a safer design than direct token exposure."
+      content="Credential-handling risks in MCP and tool-using AI workflows, and how KeyLore reduces unnecessary raw secret exposure."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/security/mcp-risks.html" />
     <meta name="robots" content="index,follow" />
@@ -37,20 +37,24 @@
         <section class="section">
           <div class="section-heading">
             <p class="eyebrow">Threat surface</p>
-            <h2>Agent tooling is powerful. That makes its credential model important.</h2>
+            <h2>MCP clients and other tool-using agents need tighter credential boundaries, not looser ones.</h2>
           </div>
+          <p class="lede">
+            If secret handling is reduced to a set of environment variables, the
+            agent inherits a broad and poorly described surface area.
+          </p>
           <div class="problem-grid">
             <article class="problem-card">
-              <h3>Prompt injection</h3>
-              <p>An agent can be persuaded to use the wrong tool or overreach unless credentials are described and constrained well.</p>
+              <h3>Overbroad tool context</h3>
+              <p>An MCP client may operate with wide local visibility across files, processes, and tools. If credentials are also sitting in the environment, the model-facing context becomes needlessly rich in sensitive material.</p>
             </article>
             <article class="problem-card">
-              <h3>Confused deputy behavior</h3>
-              <p>A powerful token plus a weak selection model can let the agent do more than the task actually requires.</p>
+              <h3>Ambiguous credential selection</h3>
+              <p>When multiple tokens exist for similar services, weak labels or env names can cause an agent to choose incorrectly. That creates reliability and security problems at the same time.</p>
             </article>
             <article class="problem-card">
-              <h3>Overshared secret material</h3>
-              <p>If the token is directly available to the process, any failure mode can turn into a leak path.</p>
+              <h3>Leakage through tool output</h3>
+              <p>Tool calls, command output, traces, and debugging artifacts can all become paths for accidental secret disclosure if raw credentials are directly available to the agent process.</p>
             </article>
           </div>
         </section>
@@ -62,12 +66,12 @@
           </div>
           <div class="comparison-grid">
             <article class="comparison-card comparison-good">
-              <h3>Metadata-first selection</h3>
-              <p>Agents choose credentials by service, domain, operation, and context instead of seeing raw secrets.</p>
+              <h3>Metadata for discovery</h3>
+              <p>KeyLore gives agents a structured metadata layer for finding the right credential based on purpose and scope rather than direct access to token values.</p>
             </article>
             <article class="comparison-card comparison-good">
-              <h3>Brokered execution</h3>
-              <p>The live action goes through KeyLore, which keeps the token value out of the prompt path.</p>
+              <h3>Brokered access for use</h3>
+              <p>Instead of assuming the model should possess the secret, KeyLore routes usage through a brokered access pattern that keeps raw values separate from the AI-facing interface.</p>
             </article>
           </div>
         </section>

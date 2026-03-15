@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Claude CLI MCP Setup with KeyLore | Secure Credential Brokering</title>
+    <title>Use KeyLore with Claude CLI</title>
     <meta
       name="description"
-      content="Connect Claude CLI to KeyLore through MCP so Claude can search credential metadata and use brokered access without raw token exposure."
+      content="Connect KeyLore to Claude CLI so it can discover credentials through metadata and work through a broker instead of direct token exposure."
     />
     <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/claude.html" />
     <meta name="robots" content="index,follow" />
@@ -39,12 +39,35 @@
             <h2>Claude can use the credential safely without seeing it.</h2>
           </div>
           <p class="lede">
-            Configure Claude CLI to obtain brokered credentials from KeyLore. Claude
-            prompts stay free of raw secrets while the client still gets the access it
-            needs for the live task.
+            Claude CLI workflows often involve broad local file and tool access already.
+            KeyLore helps keep credential handling tighter by replacing flat env-file
+            exposure with metadata discovery and brokered use.
           </p>
           <div class="install-shell">
             <pre><code>claude mcp add keylore -- keylore-stdio</code></pre>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Recommended flow</p>
+            <h2>How to use Claude CLI with KeyLore.</h2>
+          </div>
+          <ul class="copy-list">
+            <li>Install and start KeyLore, then add the secrets Claude CLI may need for local development tasks.</li>
+            <li>Create metadata that makes each credential easy to distinguish without embedding the secret itself.</li>
+            <li>Wire Claude CLI into the local KeyLore or MCP-based workflow you are using.</li>
+            <li>Validate that Claude CLI can identify the correct credential and complete the task without being shown the raw token value.</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Prompt example</p>
+            <h2>What to ask Claude first.</h2>
+          </div>
+          <div class="install-shell">
+            <pre><code>Search KeyLore for the credential used for the internal issue tracker in development, confirm it matches the task, and request brokered access rather than asking for the token directly.</code></pre>
           </div>
         </section>
       </main>
