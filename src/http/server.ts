@@ -1,6 +1,12 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import http, { IncomingMessage, ServerResponse } from "node:http";
 import { URL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -56,6 +62,12 @@ interface RequestWithAuth extends IncomingMessage {
   };
 }
 
+const execFileAsync = promisify(execFile);
+
+const applyToolConfigInputSchema = z.object({
+  tool: z.enum(["codex", "gemini", "claude"]),
+});
+
 function respondJson(
   res: ServerResponse,
   statusCode: number,
@@ -78,6 +90,146 @@ function respondHtml(res: ServerResponse, statusCode: number, body: string): voi
 function respondRedirect(res: ServerResponse, location: string): void {
   res.writeHead(302, { location });
   res.end();
+}
+
+function userHomeDirectory(): string {
+  return process.env.HOME || os.homedir();
+}
+
+function resolveLocalStdioEntryPath(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageRoot = path.resolve(moduleDir, "..", "..");
+  const builtEntry = path.join(packageRoot, "dist", "index.js");
+  return builtEntry;
+}
+
+async function ensureParentDirectory(filePath: string): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+}
+
+async function readTextFileIfExists(filePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function codexManagedBlock(stdioEntryPath: string): string {
+  const escapedPath = JSON.stringify(stdioEntryPath.replace(/\\/g, "\\\\"));
+  return [
+    "# >>> keylore managed start",
+    "[mcp_servers.keylore_stdio]",
+    'command = "node"',
+    `args = [${escapedPath}, "--transport", "stdio"]`,
+    "# <<< keylore managed end",
+  ].join("\n");
+}
+
+function replaceManagedTomlBlock(
+  content: string,
+  tableName: string,
+  managedBlock: string,
+): { next: string; changed: boolean } {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const managedStart = "# >>> keylore managed start";
+  const managedEnd = "# <<< keylore managed end";
+  const managedPattern = new RegExp(
+    `${managedStart.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${managedEnd.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n?`,
+    "m",
+  );
+  if (managedPattern.test(normalized)) {
+    const next = normalized.replace(managedPattern, `${managedBlock}\n`);
+    return { next, changed: next !== normalized };
+  }
+
+  const lines = normalized.split("\n");
+  const tableHeader = `[${tableName}]`;
+  const startIndex = lines.findIndex((line) => line.trim() === tableHeader);
+  if (startIndex >= 0) {
+    let endIndex = lines.length;
+    for (let index = startIndex + 1; index < lines.length; index += 1) {
+      const candidate = lines[index];
+      if (candidate && candidate.trim().startsWith("[") && candidate.trim() !== tableHeader) {
+        endIndex = index;
+        break;
+      }
+    }
+    const before = lines.slice(0, startIndex).join("\n");
+    const after = lines.slice(endIndex).join("\n");
+    const next = `${before}${before ? "\n" : ""}${managedBlock}${after ? `\n${after}` : ""}`.replace(/\n{3,}/g, "\n\n");
+    return { next, changed: next !== normalized };
+  }
+
+  const next = `${normalized.trimEnd()}${normalized.trimEnd() ? "\n\n" : ""}${managedBlock}\n`;
+  return { next, changed: next !== normalized };
+}
+
+async function applyCodexLocalConfig(stdioEntryPath: string): Promise<{ path: string; action: string }> {
+  const filePath = path.join(userHomeDirectory(), ".codex", "config.toml");
+  const existing = (await readTextFileIfExists(filePath)) ?? "";
+  const managedBlock = codexManagedBlock(stdioEntryPath);
+  const { next, changed } = replaceManagedTomlBlock(existing, "mcp_servers.keylore_stdio", managedBlock);
+  await ensureParentDirectory(filePath);
+  if (changed || existing.length === 0) {
+    await writeFile(filePath, next, "utf8");
+  }
+  return {
+    path: filePath,
+    action: existing.length === 0 ? "created" : changed ? "updated" : "unchanged",
+  };
+}
+
+async function applyGeminiLocalConfig(stdioEntryPath: string): Promise<{ path: string; action: string }> {
+  const filePath = path.join(userHomeDirectory(), ".gemini", "settings.json");
+  const existing = (await readTextFileIfExists(filePath)) ?? "";
+  let parsed: Record<string, unknown> = {};
+  if (existing.trim().length > 0) {
+    parsed = JSON.parse(existing) as Record<string, unknown>;
+  }
+
+  const currentServers =
+    parsed.mcpServers && typeof parsed.mcpServers === "object" && !Array.isArray(parsed.mcpServers)
+      ? { ...(parsed.mcpServers as Record<string, unknown>) }
+      : {};
+
+  currentServers.keylore_stdio = {
+    command: "node",
+    args: [stdioEntryPath, "--transport", "stdio"],
+  };
+  parsed.mcpServers = currentServers;
+
+  const next = `${JSON.stringify(parsed, null, 2)}\n`;
+  await ensureParentDirectory(filePath);
+  if (next !== existing) {
+    await writeFile(filePath, next, "utf8");
+  }
+  return {
+    path: filePath,
+    action: existing.length === 0 ? "created" : next !== existing ? "updated" : "unchanged",
+  };
+}
+
+async function applyClaudeLocalConfig(stdioEntryPath: string): Promise<{ path: string; action: string }> {
+  const commandJson = JSON.stringify({
+    command: "node",
+    args: [stdioEntryPath, "--transport", "stdio"],
+  });
+
+  try {
+    await execFileAsync("claude", ["mcp", "remove", "-s", "user", "keylore_stdio"]);
+  } catch {
+    // Ignore missing existing config entries.
+  }
+
+  await execFileAsync("claude", ["mcp", "add-json", "-s", "user", "keylore_stdio", commandJson]);
+  return {
+    path: path.join(userHomeDirectory(), ".claude", "settings.json"),
+    action: "updated",
+  };
 }
 
 async function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
@@ -647,6 +799,47 @@ async function handleApiRequest(
       principal: mcpContext.principal,
       scopes: mcpContext.scopes,
       resource: `${app.config.publicBaseUrl}/mcp`,
+    });
+    return;
+  }
+
+  if (url.pathname === "/v1/core/tooling/apply" && req.method === "POST") {
+    const context = await authenticateRequest(
+      app,
+      req,
+      res,
+      ["catalog:write"],
+      "api",
+      `${app.config.publicBaseUrl}/v1`,
+    );
+    if (!context) {
+      return;
+    }
+    app.auth.requireRoles(context, ["admin", "operator"]);
+    if (!isLoopbackRequest(req) || app.config.environment === "production") {
+      respondJson(res, 403, { error: "Local tool setup is only available from loopback development instances." });
+      return;
+    }
+
+    const body = applyToolConfigInputSchema.parse(
+      await readJsonBody(req, app.config.maxRequestBytes),
+    );
+
+    let result: { path: string; action: string };
+    if (body.tool === "codex") {
+      result = await applyCodexLocalConfig(resolveLocalStdioEntryPath());
+    } else if (body.tool === "gemini") {
+      result = await applyGeminiLocalConfig(resolveLocalStdioEntryPath());
+    } else {
+      result = await applyClaudeLocalConfig(resolveLocalStdioEntryPath());
+    }
+
+    respondJson(res, 200, {
+      ok: true,
+      tool: body.tool,
+      path: result.path,
+      action: result.action,
+      connection: "local_stdio",
     });
     return;
   }

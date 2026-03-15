@@ -138,10 +138,10 @@ That stores the raw token outside the searchable catalogue and keeps only the me
 
 The check makes a real brokered `http.get` call with that token and URL. Success means the token, the target domain, and KeyLore policy all allowed the request.
 
-9. In `Connect your AI tool`, use the tool-specific steps:
-- `Codex`: open or create `~/.codex/config.toml`, paste the generated snippet under `mcp_servers`, save, and restart Codex
-- `Gemini CLI`: open `~/.gemini/settings.json`, merge the generated snippet into `mcpServers`, save, and restart Gemini
-- `Claude CLI`: run the generated `claude mcp add ...` command, confirm with `claude mcp list`, then restart Claude
+9. In `Connect your AI tool`, pick the tool tab you want:
+- `Codex`: copy the snippet or click `Apply to my Codex settings` to merge it into `~/.codex/config.toml`, then restart Codex
+- `Gemini CLI`: copy the snippet or click `Apply to my Gemini settings` to merge it into `~/.gemini/settings.json`, then restart Gemini
+- `Claude CLI`: copy the command or click `Apply to my Claude settings` to register KeyLore, then restart Claude
 
 Use the built-in `First prompt to try` example after restarting the client. If you want remote HTTP MCP instead, open `Remote or advanced connection options` and mint an `/mcp` token there.
 

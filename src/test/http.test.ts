@@ -7,7 +7,10 @@ import {
   randomUUID,
   sign as signWithKey,
 } from "node:crypto";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { authContextFromToken, localOperatorContext } from "../services/auth-context.js";
@@ -157,6 +160,135 @@ test("local quickstart session can be opened server-side without exposing the bo
 
     assert.equal(catalogResponse.status, 200);
   } finally {
+    await server.close();
+    await close();
+  }
+});
+
+test("local tool setup apply merges Codex config without clobbering existing content", async () => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), "keylore-codex-home-"));
+  const previousHome = process.env.HOME;
+  process.env.HOME = homeDir;
+  const codexPath = path.join(homeDir, ".codex", "config.toml");
+  await mkdir(path.dirname(codexPath), { recursive: true });
+  await writeFile(
+    codexPath,
+    'model = "gpt-5.4"\n\n[projects."/tmp/project"]\ntrust_level = "trusted"\n',
+    "utf8",
+  );
+
+  const { app, auth, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8871,
+      publicBaseUrl: "http://127.0.0.1:8871",
+      oauthIssuerUrl: "http://127.0.0.1:8871/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  try {
+    const token = await auth.issueToken({
+      clientId: "admin-client",
+      clientSecret: "admin-secret",
+      grantType: "client_credentials",
+      scope: ["catalog:write"],
+    });
+
+    const response = await fetch("http://127.0.0.1:8871/v1/core/tooling/apply", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token.access_token}`,
+      },
+      body: JSON.stringify({ tool: "codex" }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = (await response.json()) as { action: string; path: string };
+    assert.equal(payload.path, codexPath);
+    assert.match(payload.action, /updated|unchanged/);
+
+    const updated = await readFile(codexPath, "utf8");
+    assert.match(updated, /model = "gpt-5\.4"/);
+    assert.match(updated, /\[projects\."\/tmp\/project"\]/);
+    assert.match(updated, /\[mcp_servers\.keylore_stdio\]/);
+    assert.equal((updated.match(/\[mcp_servers\.keylore_stdio\]/g) || []).length, 1);
+  } finally {
+    process.env.HOME = previousHome;
+    await server.close();
+    await close();
+  }
+});
+
+test("local tool setup apply merges Gemini config without overwriting existing settings", async () => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), "keylore-gemini-home-"));
+  const previousHome = process.env.HOME;
+  process.env.HOME = homeDir;
+  const geminiPath = path.join(homeDir, ".gemini", "settings.json");
+  await mkdir(path.dirname(geminiPath), { recursive: true });
+  await writeFile(
+    geminiPath,
+    JSON.stringify(
+      {
+        general: {
+          sessionRetention: { enabled: true },
+        },
+        mcpServers: {
+          existing_server: {
+            command: "existing",
+            args: [],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const { app, auth, close } = await makeTestApp({
+    configOverrides: {
+      httpPort: 8872,
+      publicBaseUrl: "http://127.0.0.1:8872",
+      oauthIssuerUrl: "http://127.0.0.1:8872/oauth",
+    },
+  });
+  const server = await startHttpServer(app);
+
+  try {
+    const token = await auth.issueToken({
+      clientId: "admin-client",
+      clientSecret: "admin-secret",
+      grantType: "client_credentials",
+      scope: ["catalog:write"],
+    });
+
+    const response = await fetch("http://127.0.0.1:8872/v1/core/tooling/apply", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token.access_token}`,
+      },
+      body: JSON.stringify({ tool: "gemini" }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = (await response.json()) as { path: string };
+    assert.equal(payload.path, geminiPath);
+
+    const updated = JSON.parse(await readFile(geminiPath, "utf8")) as {
+      general: { sessionRetention: { enabled: boolean } };
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+
+    assert.equal(updated.general.sessionRetention.enabled, true);
+    assert.ok(updated.mcpServers.existing_server);
+    assert.ok(updated.mcpServers.keylore_stdio);
+    assert.equal(updated.mcpServers.existing_server.command, "existing");
+    assert.equal(updated.mcpServers.keylore_stdio.command, "node");
+    assert.deepEqual(updated.mcpServers.keylore_stdio.args.slice(-2), ["--transport", "stdio"]);
+  } finally {
+    process.env.HOME = previousHome;
     await server.close();
     await close();
   }

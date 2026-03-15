@@ -11,8 +11,8 @@ The UI is intentionally narrow and stays on top of the frozen REST contract:
 - get template-specific context guidance and inline validation before saving
 - inspect and update MCP-visible context after creation without touching the stored secret
 - test credentials through brokered access from the UI
-- get built-in first-prompt examples for Codex and Gemini after MCP setup
-- generate Codex and Gemini CLI MCP connection snippets
+- get built-in first-prompt examples for Codex, Gemini CLI, and Claude CLI after MCP setup
+- generate tool-specific MCP connection snippets and apply them locally for Codex, Gemini CLI, and Claude CLI
 - mint and verify a remote HTTP MCP token from the UI
 - open an operator session with one-click local quickstart or with `client_credentials` / a pasted bearer token
 - keep the broader operator controls behind an explicit `Advanced` toggle:
@@ -65,9 +65,9 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 14. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
 15. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
 16. Use `Connect your AI tool` to follow the tool-specific setup:
-   - `Codex`: open or create `~/.codex/config.toml`, paste the snippet under `mcp_servers`, save, and restart Codex
-   - `Gemini CLI`: open `~/.gemini/settings.json`, merge the snippet into `mcpServers`, save, and restart Gemini
-   - `Claude CLI`: run the generated `claude mcp add ...` command, confirm with `claude mcp list`, then restart Claude
+   - `Codex`: choose the `Codex` tab, then copy the snippet or click `Apply to my Codex settings` to merge it into `~/.codex/config.toml`
+   - `Gemini CLI`: choose the `Gemini CLI` tab, then copy the snippet or click `Apply to my Gemini settings` to merge it into `~/.gemini/settings.json`
+   - `Claude CLI`: choose the `Claude CLI` tab, then copy the command or click `Apply to my Claude settings` to register KeyLore through Claude's MCP config
 17. Use the built-in `First prompt to try` example after restarting the MCP client.
 18. Open `Remote or advanced connection options` only if you need HTTP MCP.
 19. Ignore the rest unless you need it. The tenant, auth, review, backup, audit, and system panels stay behind `Show advanced controls`.

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { KeyLoreApp } from "../app.js";
 
@@ -149,6 +150,30 @@ textarea {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
+}
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tab-button {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #f7f2e8;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tab-button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(19, 93, 74, 0.24);
 }
 
 .button,
@@ -622,6 +647,40 @@ dialog.modal::backdrop {
   gap: 12px;
 }
 
+.snippet-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.snippet-box {
+  position: relative;
+}
+
+.snippet-box textarea {
+  padding-right: 54px;
+}
+
+.copy-glyph {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 241, 0.92);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.copy-glyph:hover,
+.copy-glyph:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .list-card {
   padding: 16px;
   border-radius: 16px;
@@ -789,6 +848,16 @@ pre {
 }
 `;
 
+function resolveLocalStdioEntryPath(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageRoot = path.resolve(moduleDir, "..", "..");
+  const builtEntry = path.join(packageRoot, "dist", "index.js");
+  if (fs.existsSync(builtEntry)) {
+    return builtEntry;
+  }
+  return path.join(packageRoot, "src", "index.ts");
+}
+
 const adminApp = String.raw`
 const config = window.__KEYLORE_ADMIN_CONFIG__;
 const state = {
@@ -812,6 +881,7 @@ const state = {
   currentCredentialContext: null,
   lastMcpConnection: null,
   mcpToken: '',
+  connectTab: 'codex',
   advancedVisible: false,
   credentialIdManuallyEdited: false,
   credentialModalMode: 'create'
@@ -1016,6 +1086,7 @@ function persistSession() {
     sessionClientId: state.sessionClientId,
     sessionScopes: state.sessionScopes,
     sessionTenantId: state.sessionTenantId,
+    connectTab: state.connectTab,
     advancedVisible: state.advancedVisible
   };
   localStorage.setItem(storageKey, JSON.stringify(payload));
@@ -1035,6 +1106,7 @@ function loadPersistedSession() {
     state.sessionClientId = parsed.sessionClientId || '';
     state.sessionScopes = parsed.sessionScopes || '';
     state.sessionTenantId = parsed.sessionTenantId || '';
+    state.connectTab = parsed.connectTab || 'codex';
     state.advancedVisible = parsed.advancedVisible === true;
   } catch (_error) {
     localStorage.removeItem(storageKey);
@@ -1057,6 +1129,7 @@ function clearSession() {
   state.currentCredentialContext = null;
   state.lastMcpConnection = null;
   state.mcpToken = '';
+  state.connectTab = 'codex';
   state.advancedVisible = false;
   state.credentialIdManuallyEdited = false;
   localStorage.removeItem(storageKey);
@@ -1696,7 +1769,79 @@ function renderConnect() {
   byId('claude-first-prompt').value = firstPromptForClient('Claude');
   byId('connect-result').innerHTML = state.lastMcpConnection
     ? '<pre>' + escapeHtml(prettyJson(state.lastMcpConnection)) + '</pre>'
-    : '<div class="empty-state">For local use, copy a stdio snippet and restart your MCP client. For remote HTTP MCP, run the connection check here first.</div>';
+    : '<div class="empty-state">For local use, choose a tool tab, copy the setup snippet or apply it directly, then restart your MCP client. For remote HTTP MCP, run the connection check here first.</div>';
+  renderConnectTabs();
+}
+
+function renderConnectTabs() {
+  document.querySelectorAll('[data-connect-tab]').forEach(function(button) {
+    const isActive = button.getAttribute('data-connect-tab') === state.connectTab;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-connect-panel]').forEach(function(panel) {
+    const isActive = panel.getAttribute('data-connect-panel') === state.connectTab;
+    panel.hidden = !isActive;
+  });
+}
+
+async function copySnippet(targetId, label) {
+  const node = byId(targetId);
+  if (!(node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement)) {
+    setNotice('error', 'Nothing to copy for ' + label + '.');
+    return;
+  }
+  await navigator.clipboard.writeText(node.value);
+  setNotice('info', label + ' copied to clipboard.');
+}
+
+async function handleCopyAction(event) {
+  const button = event.target instanceof Element ? event.target.closest('[data-copy-target]') : null;
+  if (!button) {
+    return;
+  }
+  const targetId = button.getAttribute('data-copy-target');
+  const label = button.getAttribute('data-copy-label') || 'Snippet';
+  if (!targetId) {
+    return;
+  }
+  try {
+    await copySnippet(targetId, label);
+  } catch (error) {
+    setNotice('error', error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function handleApplyToolSetup(event) {
+  const button = event.target instanceof Element ? event.target.closest('[data-apply-tool]') : null;
+  if (!button) {
+    return;
+  }
+  const tool = button.getAttribute('data-apply-tool');
+  if (!tool) {
+    return;
+  }
+  const result = await withAction('Applied local ' + tool + ' setup.', async function() {
+    return fetchJson('/v1/core/tooling/apply', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ tool: tool })
+    });
+  });
+  setNotice('info', tool.charAt(0).toUpperCase() + tool.slice(1) + ' updated at ' + result.path + '. Restart the tool and try the prompt below.');
+}
+
+function handleConnectTabClick(event) {
+  const button = event.target instanceof Element ? event.target.closest('[data-connect-tab]') : null;
+  if (!button) {
+    return;
+  }
+  state.connectTab = button.getAttribute('data-connect-tab') || 'codex';
+  persistSession();
+  renderConnectTabs();
 }
 
 function renderTenants() {
@@ -2706,6 +2851,9 @@ async function initialize() {
   byId('credential-test-id').addEventListener('change', function() {
     syncCredentialTestDefaults(true);
   });
+  byId('connect-tabs').addEventListener('click', handleConnectTabClick);
+  byId('connect-section').addEventListener('click', handleCopyAction);
+  byId('connect-section').addEventListener('click', handleApplyToolSetup);
   byId('tenant-form').addEventListener('submit', handleCreateTenant);
   byId('auth-client-form').addEventListener('submit', handleCreateClient);
   byId('refresh-dashboard').addEventListener('click', refreshDashboard);
@@ -2778,7 +2926,7 @@ window.addEventListener('DOMContentLoaded', initialize);
 `;
 
 export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
-  const stdioEntryPath = path.resolve(process.cwd(), "dist/index.js");
+  const stdioEntryPath = resolveLocalStdioEntryPath();
   const config = {
     version: app.config.version,
     baseUrl: app.config.publicBaseUrl,
@@ -2828,7 +2976,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
           <div>
             <span class="eyebrow">Core Mode</span>
             <h1>Save a token. Teach the AI when to use it. Keep the secret hidden.</h1>
-            <p class="hero-copy">KeyLore is now centered on one beginner-friendly workflow: save a token, describe it in plain language, test it safely, and connect Codex or Gemini without putting the raw secret into model-visible context.</p>
+            <p class="hero-copy">KeyLore is now centered on one beginner-friendly workflow: save a token, describe it in plain language, test it safely, and connect Codex, Gemini, or Claude without putting the raw secret into model-visible context.</p>
           </div>
           <div class="hero-meta">
             <div class="meta-card">
@@ -2999,8 +3147,13 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                 <p>Follow the tool-specific steps below. Each one tells you where to put the config, what to restart, and what to try first.</p>
               </div>
             </div>
+            <div id="connect-tabs" class="tab-row" role="tablist" aria-label="AI tool setup tabs">
+              <button class="tab-button" type="button" data-connect-tab="codex" role="tab" aria-selected="true">Codex</button>
+              <button class="tab-button" type="button" data-connect-tab="gemini" role="tab" aria-selected="false">Gemini CLI</button>
+              <button class="tab-button" type="button" data-connect-tab="claude" role="tab" aria-selected="false">Claude CLI</button>
+            </div>
             <div class="panel-grid">
-              <div class="span-4 code-stack">
+              <div class="span-12 code-stack" data-connect-panel="codex">
                 <div class="panel">
                   <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex</h2><p>Recommended for local use.</p></div></div>
                   <ol class="panel-footnote">
@@ -3009,12 +3162,25 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <li>Save the file, then restart Codex.</li>
                     <li>Use the first prompt after restart, or run <span class="mono">/mcp</span> inside Codex to confirm KeyLore is available.</li>
                   </ol>
-                  <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="codex-stdio-snippet" data-copy-label="Codex setup snippet" aria-label="Copy Codex setup snippet">⧉</button>
+                      <textarea id="codex-stdio-snippet" style="width:100%; min-height: 130px;"></textarea>
+                    </div>
+                  </div>
                   <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Codex</h2></div></div>
-                  <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="codex-first-prompt" data-copy-label="Codex first prompt" aria-label="Copy Codex first prompt">⧉</button>
+                      <textarea id="codex-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                    </div>
+                  </div>
+                  <div class="panel-actions" style="margin-top:16px;">
+                    <button class="button-secondary" type="button" data-apply-tool="codex">Apply to my Codex settings</button>
+                  </div>
                 </div>
               </div>
-              <div class="span-4 code-stack">
+              <div class="span-12 code-stack" data-connect-panel="gemini" hidden>
                 <div class="panel">
                   <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini CLI</h2><p>Recommended for local use.</p></div></div>
                   <ol class="panel-footnote">
@@ -3023,12 +3189,25 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <li>Save the file, then restart Gemini CLI.</li>
                     <li>Run <span class="mono">gemini mcp list</span> if you want to confirm KeyLore is connected, then use the first prompt below.</li>
                   </ol>
-                  <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="gemini-stdio-snippet" data-copy-label="Gemini setup snippet" aria-label="Copy Gemini setup snippet">⧉</button>
+                      <textarea id="gemini-stdio-snippet" style="width:100%; min-height: 170px;"></textarea>
+                    </div>
+                  </div>
                   <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Gemini</h2></div></div>
-                  <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="gemini-first-prompt" data-copy-label="Gemini first prompt" aria-label="Copy Gemini first prompt">⧉</button>
+                      <textarea id="gemini-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                    </div>
+                  </div>
+                  <div class="panel-actions" style="margin-top:16px;">
+                    <button class="button-secondary" type="button" data-apply-tool="gemini">Apply to my Gemini settings</button>
+                  </div>
                 </div>
               </div>
-              <div class="span-4 code-stack">
+              <div class="span-12 code-stack" data-connect-panel="claude" hidden>
                 <div class="panel">
                   <div class="section-heading"><div><h2 style="font-size:1.4rem;">Claude CLI</h2><p>Recommended for local use.</p></div></div>
                   <ol class="panel-footnote">
@@ -3037,9 +3216,22 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <li>Start or restart Claude CLI.</li>
                     <li>Use the first prompt after restart.</li>
                   </ol>
-                  <textarea id="claude-stdio-snippet" style="width:100%; min-height: 160px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="claude-stdio-snippet" data-copy-label="Claude setup command" aria-label="Copy Claude setup command">⧉</button>
+                      <textarea id="claude-stdio-snippet" style="width:100%; min-height: 160px;"></textarea>
+                    </div>
+                  </div>
                   <div class="section-heading" style="margin-top: 16px;"><div><h2 style="font-size:1.2rem;">First prompt to try in Claude</h2></div></div>
-                  <textarea id="claude-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                  <div class="snippet-stack">
+                    <div class="snippet-box">
+                      <button class="copy-glyph" type="button" data-copy-target="claude-first-prompt" data-copy-label="Claude first prompt" aria-label="Copy Claude first prompt">⧉</button>
+                      <textarea id="claude-first-prompt" style="width:100%; min-height: 130px;"></textarea>
+                    </div>
+                  </div>
+                  <div class="panel-actions" style="margin-top:16px;">
+                    <button class="button-secondary" type="button" data-apply-tool="claude">Apply to my Claude settings</button>
+                  </div>
                 </div>
               </div>
               <div class="span-12">
@@ -3049,21 +3241,33 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                     <div class="span-4 code-stack">
                       <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Codex HTTP</h2></div></div>
-                        <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
+                        <div class="snippet-box">
+                          <button class="copy-glyph" type="button" data-copy-target="codex-http-snippet" data-copy-label="Codex HTTP snippet" aria-label="Copy Codex HTTP snippet">⧉</button>
+                          <textarea id="codex-http-snippet" style="width:100%; min-height: 110px;"></textarea>
+                        </div>
                       </div>
                       <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Gemini HTTP</h2></div></div>
-                        <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
+                        <div class="snippet-box">
+                          <button class="copy-glyph" type="button" data-copy-target="gemini-http-snippet" data-copy-label="Gemini HTTP snippet" aria-label="Copy Gemini HTTP snippet">⧉</button>
+                          <textarea id="gemini-http-snippet" style="width:100%; min-height: 190px;"></textarea>
+                        </div>
                       </div>
                       <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Claude HTTP</h2></div></div>
-                        <textarea id="claude-http-snippet" style="width:100%; min-height: 170px;"></textarea>
+                        <div class="snippet-box">
+                          <button class="copy-glyph" type="button" data-copy-target="claude-http-snippet" data-copy-label="Claude HTTP snippet" aria-label="Copy Claude HTTP snippet">⧉</button>
+                          <textarea id="claude-http-snippet" style="width:100%; min-height: 170px;"></textarea>
+                        </div>
                       </div>
                     </div>
                     <div class="span-4 code-stack">
                       <div class="panel">
                         <div class="section-heading"><div><h2 style="font-size:1.4rem;">Generic HTTP</h2></div></div>
-                        <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
+                        <div class="snippet-box">
+                          <button class="copy-glyph" type="button" data-copy-target="generic-http-snippet" data-copy-label="Generic HTTP snippet" aria-label="Copy generic HTTP snippet">⧉</button>
+                          <textarea id="generic-http-snippet" style="width:100%; min-height: 90px;"></textarea>
+                        </div>
                       </div>
                     </div>
                     <div class="span-4 panel">
@@ -3076,7 +3280,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                       <form id="connect-form" class="form-grid">
                         <div class="field"><label for="connect-client-id">Client ID</label><input id="connect-client-id" type="text" placeholder="keylore-admin-local" /></div>
                         <div class="field"><label for="connect-client-secret">Client Secret</label><input id="connect-client-secret" type="password" placeholder="operator secret" /></div>
-                        <div class="field-wide"><label for="mcp-token-export">Export command</label><textarea id="mcp-token-export" style="width:100%; min-height: 90px;"></textarea></div>
+                        <div class="field-wide"><label for="mcp-token-export">Export command</label><div class="snippet-box"><button class="copy-glyph" type="button" data-copy-target="mcp-token-export" data-copy-label="MCP export command" aria-label="Copy MCP export command">⧉</button><textarea id="mcp-token-export" style="width:100%; min-height: 90px;"></textarea></div></div>
                         <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Checking MCP..." data-idle-label="Mint token and verify HTTP MCP">Mint token and verify HTTP MCP</button></div>
                       </form>
                       <div id="connect-result" style="margin-top: 18px;"></div>

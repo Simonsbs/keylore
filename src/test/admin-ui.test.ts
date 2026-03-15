@@ -42,6 +42,11 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /~\/\.codex\/config\.toml/);
     assert.match(html, /~\/\.gemini\/settings\.json/);
     assert.match(html, /claude mcp list/);
+    assert.match(html, /Apply to my Codex settings/);
+    assert.match(html, /Apply to my Gemini settings/);
+    assert.match(html, /Apply to my Claude settings/);
+    assert.match(html, /data-connect-tab="codex"/);
+    assert.match(html, /data-copy-target="codex-stdio-snippet"/);
     assert.match(html, /GitHub write-capable/);
     assert.match(html, /npm read-only/);
     assert.match(html, /Internal service token/);
