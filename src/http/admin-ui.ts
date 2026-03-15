@@ -1734,7 +1734,7 @@ function openEditCredentialModal(credential) {
   byId('credential-user-context').value = credential.userContext || credential.llmContext || credential.selectionNotes;
   byId('credential-llm-context').value = credential.llmContext || credential.selectionNotes;
   byId('credential-tags').value = credential.tags.join(', ');
-  byId('credential-storage').value = credential.binding.adapter === 'env' ? 'env' : 'local';
+  byId('credential-storage').value = credential.binding?.adapter === 'env' ? 'env' : 'local';
   byId('credential-storage').disabled = true;
   byId('credential-secret-field').hidden = true;
   byId('credential-secret').value = '';
