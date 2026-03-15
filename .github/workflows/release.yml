@@ -88,6 +88,8 @@ jobs:
         run: npm publish --access public --provenance
 
       - name: Generate SPDX SBOM
+        run: mkdir -p dist/release
+      - name: Create SPDX SBOM
         uses: anchore/sbom-action@v0
         with:
           path: .
