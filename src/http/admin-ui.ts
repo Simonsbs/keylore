@@ -292,29 +292,71 @@ textarea {
 
 .notice {
   display: none;
-  margin: 20px 0 0;
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
 }
 
 .notice.is-visible {
-  display: block;
+  display: none;
 }
 
-.notice.is-info {
-  background: rgba(19, 93, 74, 0.08);
-  color: var(--accent);
+.toast-console {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
 }
 
-.notice.is-error {
-  background: rgba(143, 45, 35, 0.09);
-  color: var(--danger);
+.toast {
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 241, 0.96);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(23, 33, 31, 0.18);
+  padding: 14px 16px;
 }
 
-.notice.is-warning {
-  background: rgba(157, 75, 20, 0.1);
-  color: var(--warning);
+.toast.is-info {
+  border-color: rgba(19, 93, 74, 0.16);
+}
+
+.toast.is-error {
+  border-color: rgba(143, 45, 35, 0.2);
+}
+
+.toast.is-warning {
+  border-color: rgba(157, 75, 20, 0.18);
+}
+
+.toast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.toast-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.toast-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toast-copy {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.5;
 }
 
 .dashboard {
@@ -884,7 +926,8 @@ const state = {
   connectTab: 'codex',
   advancedVisible: false,
   credentialIdManuallyEdited: false,
-  credentialModalMode: 'create'
+  credentialModalMode: 'create',
+  toastCounter: 0
 };
 
 const storageKey = 'keylore-admin-session';
@@ -1054,16 +1097,41 @@ function genericHttpSnippet() {
   ].join('\n');
 }
 
+function humanizeErrorMessage(message) {
+  if (message.includes('Missing secret material in local secret store for')) {
+    return 'This token record exists, but its stored secret is missing. Open Edit token and save the token again, or delete it and create it again.';
+  }
+  return message;
+}
+
+function pushToast(kind, message) {
+  const node = byId('toast-console');
+  if (!node) {
+    return;
+  }
+  state.toastCounter += 1;
+  const toast = document.createElement('div');
+  toast.className = 'toast is-' + kind;
+  toast.dataset.toastId = String(state.toastCounter);
+  toast.innerHTML = [
+    '<div class="toast-head">',
+    '<span class="toast-title">' + escapeHtml(kind === 'error' ? 'Error' : kind === 'warning' ? 'Warning' : 'Info') + '</span>',
+    '<button class="toast-close" type="button" data-toast-close="' + escapeHtml(String(state.toastCounter)) + '" aria-label="Close notification">×</button>',
+    '</div>',
+    '<p class="toast-copy">' + escapeHtml(message) + '</p>'
+  ].join('');
+  node.prepend(toast);
+  while (node.childElementCount > 6) {
+    node.lastElementChild?.remove();
+  }
+}
+
 function setNotice(kind, message) {
-  const node = byId('notice');
-  node.className = 'notice is-visible is-' + kind;
-  node.textContent = message;
+  pushToast(kind, humanizeErrorMessage(String(message ?? '')));
 }
 
 function clearNotice() {
-  const node = byId('notice');
-  node.className = 'notice';
-  node.textContent = '';
+  // Intentionally keep previous toasts visible until the user dismisses them.
 }
 
 function setBusy(value) {
@@ -1433,6 +1501,19 @@ function renderCredentials() {
   }
 
   renderCredentialContextManager();
+}
+
+function renderCredentialTestError(message) {
+  const friendly = humanizeErrorMessage(message);
+  byId('credential-test-result').innerHTML = [
+    '<div class="list-card" style="border-color: rgba(143, 45, 35, 0.2); background: rgba(143, 45, 35, 0.06);">',
+    '<h3 style="margin:0 0 8px;">Token check failed</h3>',
+    '<p><strong>Token:</strong> ' + escapeHtml(state.lastCredentialTestContext?.credentialId || 'the selected token') + '</p>',
+    '<p><strong>URL:</strong> <span class="mono">' + escapeHtml(state.lastCredentialTestContext?.targetUrl || 'the selected URL') + '</span></p>',
+    '<p>' + escapeHtml(friendly) + '</p>',
+    '<div class="panel-footnote">If the stored secret is missing, open <strong>Edit token</strong> and save the token again, or delete it and create it again.</div>',
+    '</div>'
+  ].join('');
 }
 
 function visibleCredentials() {
@@ -2353,25 +2434,30 @@ async function handleCredentialTest(event) {
   event.preventDefault();
   const credentialId = byId('credential-test-id').value.trim();
   const targetUrl = byId('credential-test-url').value.trim();
-  const result = await withAction('Token check completed. Review the summary below, then connect your AI tool.', async function() {
-    return fetchJson('/v1/access/request', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        credentialId: credentialId,
-        operation: 'http.get',
-        targetUrl: targetUrl
-      })
-    });
-  });
   state.lastCredentialTestContext = {
     credentialId: credentialId,
     targetUrl: targetUrl
   };
-  state.lastCredentialTest = result;
-  renderCredentials();
+  try {
+    const result = await withAction('Token check completed. Review the summary below, then connect your AI tool.', async function() {
+      return fetchJson('/v1/access/request', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          credentialId: credentialId,
+          operation: 'http.get',
+          targetUrl: targetUrl
+        })
+      });
+    });
+    state.lastCredentialTest = result;
+    renderCredentials();
+  } catch (error) {
+    state.lastCredentialTest = null;
+    renderCredentialTestError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function handleCredentialContextAction(event) {
@@ -2882,6 +2968,12 @@ async function initialize() {
     if (!(event.target instanceof Element)) {
       return;
     }
+    const toastClose = event.target.closest('[data-toast-close]');
+    if (toastClose) {
+      const toastId = toastClose.getAttribute('data-toast-close');
+      document.querySelector('[data-toast-id="' + toastId + '"]')?.remove();
+      return;
+    }
     const closeButton = event.target.closest('[data-dialog-close]');
     if (closeButton) {
       closeDialog(closeButton.getAttribute('data-dialog-close'));
@@ -2991,6 +3083,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         </section>
 
         <div id="notice" class="notice"></div>
+        <div id="toast-console" class="toast-console" aria-live="polite" aria-atomic="false"></div>
 
         <section id="login-panel" class="panel" style="margin-top: 24px;">
           <div class="section-heading">
