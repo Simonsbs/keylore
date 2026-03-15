@@ -26,6 +26,10 @@ const adminStyles = String.raw`
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }

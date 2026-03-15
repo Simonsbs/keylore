@@ -58,9 +58,10 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Token to check/);
     assert.match(html, /URL to call with this token/);
     assert.match(html, /Check this token/);
-    assert.match(html, /First prompt to try in Codex/);
-    assert.match(html, /First prompt to try in Gemini/);
-    assert.match(html, /First prompt to try in Claude/);
+    assert.match(html, /First prompt to try/);
+    assert.doesNotMatch(html, /First prompt to try in Codex/);
+    assert.doesNotMatch(html, /First prompt to try in Gemini/);
+    assert.doesNotMatch(html, /First prompt to try in Claude/);
     assert.match(html, /Edit token/);
     assert.match(html, /Use in test/);
     assert.match(html, /Archive/);
