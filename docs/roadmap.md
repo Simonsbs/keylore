@@ -9,7 +9,7 @@ KeyLore's root goal is credential brokering for LLM coding tools:
 - let the agent discover the context, not the secret
 - let the broker use the secret on the agent's behalf
 
-The active follow-on plan after `v1.0.0-rc5` is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md). That plan makes zero-config local use the default path and treats the broader operator platform as advanced scope.
+The active follow-on plan after `v1.0.0-rc6` is documented in [docs/core-mode-plan.md](/home/simon/keylore/docs/core-mode-plan.md). That plan makes zero-config local use the default path and treats the broader operator platform as advanced scope.
 
 ## v0.3
 
@@ -130,7 +130,7 @@ The active follow-on plan after `v1.0.0-rc5` is documented in [docs/core-mode-pl
 - tighten install, upgrade, rollback, and recovery documentation for the final release path
 - add an explicit release checklist for final promotion
 
-## v1.0-rc5
+## v1.0-rc6
 
 - completed:
 - add one-command sequential release verification via `ops:release-verify`

@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc6] - 2026-03-15
+
+### Changed
+
+- Refined the core token modal UX with inline field help, field-level validation, collapsed AI-visible previews, and clearer error handling during add/edit flows.
+- Improved MCP tool descriptions so agents are explicitly guided to select credentials by service, domain, permitted operations, and context instead of matching token names.
+
 ## [1.0.0-rc5] - 2026-03-15
 
 ### Added

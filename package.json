@@ -1,6 +1,6 @@
 {
   "name": "@simonsbs/keylore",
-  "version": "1.0.0-rc5",
+  "version": "1.0.0-rc6",
   "description": "MCP credential broker and searchable credential catalogue for LLM coding tools.",
   "type": "module",
   "main": "dist/index.js",

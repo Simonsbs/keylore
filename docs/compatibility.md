@@ -1,6 +1,6 @@
 # Compatibility
 
-`v1.0.0-rc1` froze the current public contract. `v1.0.0-rc2` added the operator UI on top of that surface, `v1.0.0-rc3` tightened release verification, `v1.0.0-rc4` standardized the final rehearsal, and `v1.0.0-rc5` simplified the default local runtime without changing the underlying REST, OAuth, or MCP compatibility guarantees.
+`v1.0.0-rc1` froze the current public contract. `v1.0.0-rc2` added the operator UI on top of that surface, `v1.0.0-rc3` tightened release verification, `v1.0.0-rc4` standardized the final rehearsal, `v1.0.0-rc5` simplified the default local runtime, and `v1.0.0-rc6` finishes the current core UX and MCP-guidance pass without changing the underlying REST, OAuth, or MCP compatibility guarantees.
 
 ## Frozen surface
 

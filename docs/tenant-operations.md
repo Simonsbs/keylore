@@ -1,6 +1,6 @@
 # Tenant Operations
 
-`v1.0.0-rc5` treats tenant lifecycle as an operator responsibility with explicit backup and delegated-auth boundaries, now available through both the REST API/CLI and the minimal admin UI, with the local-first runtime separated from the broader advanced deployment path.
+`v1.0.0-rc6` treats tenant lifecycle as an operator responsibility with explicit backup and delegated-auth boundaries, now available through both the REST API/CLI and the minimal admin UI, with the local-first runtime separated from the broader advanced deployment path.
 
 ## Tenant lifecycle
 

@@ -1,6 +1,6 @@
 # Release Checklist
 
-Use this checklist for `v1.0.0-rc5` and the final `v1.0.0` release.
+Use this checklist for `v1.0.0-rc6` and the final `v1.0.0` release.
 
 ## Preflight
 

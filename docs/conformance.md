@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc5` continues the release-candidate gates for KeyLore while keeping the local-first runtime and background HTTP lifecycle aligned with the same compatibility surface.
+`v1.0.0-rc6` continues the release-candidate gates for KeyLore while keeping the local-first runtime and background HTTP lifecycle aligned with the same compatibility surface.
 
 ## Purpose
 
