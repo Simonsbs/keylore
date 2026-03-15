@@ -4,6 +4,8 @@ KeyLore is a credential broker and searchable credential catalogue for MCP clien
 
 The design goal comes directly from the local `KeyLore.md` production spec used to bootstrap this repository: let agents discover and use the right credential metadata without ever putting secret values into model context, prompts, logs, or tool results.
 
+Public site: [keylore.bestdev.co.il](https://keylore.bestdev.co.il/)
+
 ## Status
 
 This repository is now public and open source. The repo already includes:
