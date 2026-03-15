@@ -959,6 +959,15 @@ function clearSession() {
   renderAll();
 }
 
+function handleExpiredSession() {
+  clearSession();
+  if (state.localQuickstartEnabled) {
+    setNotice('warning', 'Your saved session expired. Start working locally to open a fresh session, then try again.');
+    return;
+  }
+  setNotice('warning', 'Your saved session expired. Open a new operator session, then try again.');
+}
+
 function syncSessionFields() {
   byId('base-url').value = state.baseUrl;
   byId('resource').value = state.resource;
@@ -1053,6 +1062,10 @@ async function fetchJson(path, options) {
     return { error: 'Unable to parse server response.' };
   });
   if (!response.ok) {
+    if (response.status === 401 && state.token) {
+      handleExpiredSession();
+      throw new Error('Session expired. Open a fresh session and try again.');
+    }
     throw new Error(payload.error || ('Request failed with status ' + response.status));
   }
   return payload;
