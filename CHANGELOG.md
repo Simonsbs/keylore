@@ -6,6 +6,17 @@ The format is based on Keep a Changelog and this project follows semantic versio
 
 ## [Unreleased]
 
+## [1.0.0-rc5] - 2026-03-15
+
+### Added
+
+- Background HTTP lifecycle commands via `keylore-http start|stop|restart|status|run`.
+
+### Changed
+
+- Default local installs now use a file-backed embedded database instead of requiring Docker and external PostgreSQL.
+- `npm run quickstart` now starts KeyLore in the background via the same packaged lifecycle path.
+
 ## [1.0.0-rc4] - 2026-03-14
 
 ### Added

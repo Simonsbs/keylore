@@ -1,6 +1,6 @@
 # Conformance
 
-`v1.0.0-rc4` continues the three release-candidate gates for KeyLore and standardizes the full rehearsal behind one sequential release-verification command.
+`v1.0.0-rc5` continues the release-candidate gates for KeyLore while keeping the local-first runtime and background HTTP lifecycle aligned with the same compatibility surface.
 
 ## Purpose
 

@@ -62,7 +62,7 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Manual sign-in options/);
     assert.match(html, /Remote or advanced connection options/);
     assert.match(html, /Refresh everything/);
-    assert.match(html, /1\.0\.0-rc4/);
+    assert.match(html, /1\.0\.0-rc5/);
   } finally {
     await server.close();
     await close();

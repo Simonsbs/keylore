@@ -100,7 +100,7 @@ Zero-config local first run.
 - clearly separate local quickstart from production deployment guidance
 
 Status:
-- partially complete in `v1.0.0-rc4` and later local quickstart patches
+- partially complete in `v1.0.0-rc5` and later local quickstart patches
 
 ## Core-2
 
