@@ -30,6 +30,8 @@
       name="twitter:description"
       content="A safer alternative to stuffing API tokens into .env files for AI coding tools."
     />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE06JE93C8"></script>
+    <script defer src="./analytics.js"></script>
     <link rel="stylesheet" href="./styles.css" />
     <script type="application/ld+json">
       {
@@ -86,9 +88,9 @@
               can see and what it can use.
             </p>
             <div class="cta-row">
-              <a class="button button-primary" href="https://www.npmjs.com/package/@simonsbs/keylore">Install from npm</a>
-              <a class="button button-secondary" href="./integrations/">See integrations</a>
-              <a class="button button-secondary" href="https://github.com/Simonsbs/keylore">View on GitHub</a>
+              <a class="button button-primary" href="https://www.npmjs.com/package/@simonsbs/keylore" data-analytics-type="npm" data-analytics-label="hero install from npm">Install from npm</a>
+              <a class="button button-secondary" href="./integrations/" data-analytics-type="integrations" data-analytics-label="hero see integrations">See integrations</a>
+              <a class="button button-secondary" href="https://github.com/Simonsbs/keylore" data-analytics-type="github" data-analytics-label="hero view github">View on GitHub</a>
             </div>
             <ul class="signal-list">
               <li>Default install is local-first: no Docker or external database required</li>
