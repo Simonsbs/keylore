@@ -531,6 +531,58 @@ textarea {
   letter-spacing: 0.08em;
 }
 
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 33, 31, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.info-glyph::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: min(280px, 70vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(23, 33, 31, 0.96);
+  color: #fff8ef;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: 0 14px 30px rgba(23, 33, 31, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 5;
+}
+
+.info-glyph:hover::after,
+.info-glyph:focus-visible::after {
+  opacity: 1;
+}
+
 .field input,
 .field textarea,
 .field select,
@@ -1782,9 +1834,6 @@ function renderCredentialPreview() {
   previewNode.innerHTML = '<pre>' + escapeHtml(prettyJson(preview)) + '</pre>';
   const assessment = validateCredentialFormPayload(payload);
   const messages = [];
-  assessment.errors.forEach(function(message) {
-    messages.push('<div class="error-state">' + escapeHtml(message) + '</div>');
-  });
   assessment.warnings.forEach(function(message) {
     messages.push('<div class="panel-footnote">' + escapeHtml(message) + '</div>');
   });
@@ -3348,25 +3397,21 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
               <div class="modal-body">
                 <div id="credential-modal-feedback" class="modal-feedback" aria-live="assertive"></div>
                 <form id="credential-form" class="form-grid">
-                  <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /><div id="credential-name-error" class="field-error" aria-live="polite"></div></div>
-                  <div class="field"><label for="credential-id">Token key</label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /><div id="credential-id-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label class="field-label" for="credential-name">Name shown in KeyLore <span class="info-glyph" tabindex="0" data-tooltip="The human-friendly name you will recognize later in the saved token list. Keep it short and specific.">i</span></label><input id="credential-name" type="text" required /><div id="credential-name-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label class="field-label" for="credential-id">Token key <span class="info-glyph" tabindex="0" data-tooltip="The unique internal key for this token. KeyLore uses it when testing, selecting, and connecting the token. Change this if KeyLore says the key already exists.">i</span></label><input id="credential-id" type="text" required placeholder="github-read-only-token-local" /><div id="credential-id-error" class="field-error" aria-live="polite"></div></div>
                   <div class="field-wide panel-footnote" style="margin-top:-4px;">This is the unique key for the token. It appears in the saved-token list and is what you change if KeyLore says a token key already exists.</div>
-                  <div class="field"><label for="credential-storage">Where to store the token</label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
-                  <div class="field"><label for="credential-service">Service name</label><input id="credential-service" type="text" required placeholder="github" /><div id="credential-service-error" class="field-error" aria-live="polite"></div></div>
-                  <div class="field"><label for="credential-sensitivity">Risk level</label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
-                  <div class="field"><label for="credential-operations">Allow writes?</label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
-                  <div class="field"><label for="credential-tags">Tags</label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
-                  <div class="field"><label for="credential-domains">Where can it be used?</label><textarea id="credential-domains" placeholder="api.github.com"></textarea><div id="credential-domains-error" class="field-error" aria-live="polite"></div></div>
-                  <div id="credential-secret-field" class="field-wide"><label id="credential-secret-label" for="credential-secret">Paste token</label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea><div id="credential-secret-error" class="field-error" aria-live="polite"></div></div>
-                  <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment variable name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
-                  <div class="field-wide"><label for="credential-user-context">Explain this token for people</label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea><div id="credential-user-context-error" class="field-error" aria-live="polite"></div></div>
-                  <div class="field-wide"><label for="credential-llm-context">Tell the AI when to use this token</label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea><div id="credential-llm-context-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label class="field-label" for="credential-storage">Where to store the token <span class="info-glyph" tabindex="0" data-tooltip="Local encrypted store is the simple default. Environment reference is only for advanced setups where another process already manages the secret.">i</span></label><select id="credential-storage"><option value="local">Local encrypted store</option><option value="env">Environment reference</option></select></div>
+                  <div class="field"><label class="field-label" for="credential-service">Service name <span class="info-glyph" tabindex="0" data-tooltip="The service this token belongs to, such as github, npm, stripe, or internal_api. This helps the AI identify the right token.">i</span></label><input id="credential-service" type="text" required placeholder="github" /><div id="credential-service-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field"><label class="field-label" for="credential-sensitivity">Risk level <span class="info-glyph" tabindex="0" data-tooltip="How damaging misuse would be. Use higher levels for broad access or write-capable tokens.">i</span></label><select id="credential-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
+                  <div class="field"><label class="field-label" for="credential-operations">Allow writes? <span class="info-glyph" tabindex="0" data-tooltip="Choose whether this token should be treated as read-only or allowed to make controlled write requests.">i</span></label><select id="credential-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
+                  <div class="field"><label class="field-label" for="credential-tags">Tags <span class="info-glyph" tabindex="0" data-tooltip="Optional short labels like github, readonly, billing, or internal. These help search and later organization.">i</span></label><input id="credential-tags" type="text" placeholder="github,readonly" /></div>
+                  <div class="field"><label class="field-label" for="credential-domains">Where can it be used? <span class="info-glyph" tabindex="0" data-tooltip="List the domains this token is allowed to reach, such as api.github.com. This keeps the token scoped and helps the AI choose correctly.">i</span></label><textarea id="credential-domains" placeholder="api.github.com"></textarea><div id="credential-domains-error" class="field-error" aria-live="polite"></div></div>
+                  <div id="credential-secret-field" class="field-wide"><label id="credential-secret-label" class="field-label" for="credential-secret">Paste token <span class="info-glyph" tabindex="0" data-tooltip="Paste the raw token value here. KeyLore stores it separately from the searchable metadata so the AI does not see the secret itself.">i</span></label><textarea id="credential-secret" placeholder="Paste the raw token here. KeyLore stores it outside the searchable metadata catalogue."></textarea><div id="credential-secret-error" class="field-error" aria-live="polite"></div></div>
+                  <div id="credential-env-ref-field" class="field-wide" hidden><label class="field-label" for="credential-env-ref">Environment variable name <span class="info-glyph" tabindex="0" data-tooltip="Advanced mode only. Enter the environment variable that already contains the token, for example KEYLORE_SECRET_GITHUB_READONLY.">i</span></label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
+                  <div class="field-wide"><label class="field-label" for="credential-user-context">Explain this token for people <span class="info-glyph" tabindex="0" data-tooltip="Human context: why this token exists, who it is for, and any caveats. Example: Primary read-only GitHub token for routine repository metadata lookups.">i</span></label><textarea id="credential-user-context" placeholder="Example: Primary read-only GitHub token for routine repository metadata lookups."></textarea><div id="credential-user-context-error" class="field-error" aria-live="polite"></div></div>
+                  <div class="field-wide"><label class="field-label" for="credential-llm-context">Tell the AI when to use this token <span class="info-glyph" tabindex="0" data-tooltip="AI context: be explicit about when to use this token and what to avoid. Good example: Use for GitHub repository metadata, issues, and pull requests. Never use it for write actions.">i</span></label><textarea id="credential-llm-context" placeholder="Example: Use this for GitHub repository metadata, issues, and pull requests. Do not use it for write actions."></textarea><div id="credential-llm-context-error" class="field-error" aria-live="polite"></div></div>
                   <div class="field-wide">
-                    <label for="credential-guidance">Writing help</label>
-                    <div id="credential-guidance"></div>
-                  </div>
-                  <div class="field-wide">
-                    <label for="credential-mcp-preview">What the AI will see</label>
+                    <label class="field-label" for="credential-mcp-preview">What the AI will see <span class="info-glyph" tabindex="0" data-tooltip="This preview shows the metadata the AI can see. It never includes the raw secret value or the underlying secret binding details.">i</span></label>
                     <div id="credential-preview-warnings" style="margin-bottom: 12px;"></div>
                     <details class="disclosure">
                       <summary>Show the AI-visible record</summary>

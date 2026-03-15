@@ -35,7 +35,6 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Replace stored token \(optional\)|Paste token/);
     assert.match(html, /Test credential/);
     assert.match(html, /What the AI will see/);
-    assert.match(html, /Writing help/);
     assert.match(html, /Connect your AI tool/);
     assert.match(html, /Codex/);
     assert.match(html, /Gemini CLI/);
@@ -53,8 +52,8 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /Risk level/);
     assert.match(html, /Allow writes\?/);
     assert.match(html, /Explain this token for people/);
-    assert.match(html, /Good LLM context/);
-    assert.match(html, /Good user context/);
+    assert.match(html, /Tell the AI when to use this token/);
+    assert.doesNotMatch(html, /Writing help/);
     assert.match(html, /Token to check/);
     assert.match(html, /URL to call with this token/);
     assert.match(html, /Check this token/);
