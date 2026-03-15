@@ -645,6 +645,21 @@ dialog.modal::backdrop {
   padding: 18px 24px 24px;
 }
 
+.modal-feedback {
+  display: none;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(143, 45, 35, 0.16);
+  background: rgba(143, 45, 35, 0.08);
+  color: var(--danger);
+  line-height: 1.5;
+}
+
+.modal-feedback.is-visible {
+  display: block;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -1153,6 +1168,26 @@ function setNotice(kind, message) {
 
 function clearNotice() {
   // Intentionally keep previous toasts visible until the user dismisses them.
+}
+
+function setCredentialModalFeedback(kind, message) {
+  const node = byId('credential-modal-feedback');
+  if (!node) {
+    return;
+  }
+  const normalized = humanizeErrorMessage(String(message ?? ''));
+  if (!normalized) {
+    node.textContent = '';
+    node.classList.remove('is-visible');
+    return;
+  }
+  node.textContent = normalized;
+  node.classList.add('is-visible');
+  node.dataset.kind = kind;
+}
+
+function clearCredentialModalFeedback() {
+  setCredentialModalFeedback('error', '');
 }
 
 function setBusy(value) {
@@ -1792,6 +1827,7 @@ function renderCredentialContextManager() {
 function resetCredentialFormForCreate() {
   state.credentialModalMode = 'create';
   state.credentialIdManuallyEdited = false;
+  clearCredentialModalFeedback();
   byId('credential-modal-title').textContent = 'Add token';
   byId('credential-modal-copy').textContent = 'Paste the token, add the human and AI context, and save it into KeyLore.';
   byId('credential-submit').dataset.idleLabel = 'Save token';
@@ -1821,6 +1857,7 @@ function openEditCredentialModal(credential) {
   state.credentialModalMode = 'edit';
   state.selectedCredentialId = credential.id;
   state.currentCredentialContext = credential;
+  clearCredentialModalFeedback();
   byId('credential-modal-title').textContent = 'Edit token';
   byId('credential-modal-copy').textContent = 'Update the token metadata and context. Stored secret material stays separate and is not shown here.';
   byId('credential-submit').dataset.idleLabel = 'Save changes';
@@ -2403,70 +2440,76 @@ async function handleCreateCredential(event) {
   const assessment = credentialContextAssessment(payload);
   if (assessment.errors.length) {
     renderCredentialPreview();
+    setCredentialModalFeedback('error', assessment.errors[0]);
     setNotice('error', assessment.errors[0]);
     return;
   }
-  const result = await withAction(
-    state.credentialModalMode === 'edit'
-      ? 'Token updated.'
-      : 'Token created. Next: run Test Credential or connect your AI tool.'
-    ,
-    async function() {
-      if (state.credentialModalMode === 'edit') {
-        const contextResult = await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/context', {
-          method: 'PATCH',
-          headers: {
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            displayName: payload.displayName,
-            service: payload.service,
-            scopeTier: payload.scopeTier,
-            sensitivity: payload.sensitivity,
-            allowedDomains: payload.allowedDomains,
-            permittedOperations: payload.permittedOperations,
-            userContext: payload.userContext,
-            llmContext: payload.llmContext,
-            selectionNotes: payload.llmContext,
-            tags: payload.tags,
-          })
-        });
-        if (payload.secretSource.adapter === 'local' && payload.secretSource.secretValue.trim()) {
-          await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/local-secret', {
-            method: 'POST',
+  clearCredentialModalFeedback();
+  try {
+    const result = await withAction(
+      state.credentialModalMode === 'edit'
+        ? 'Token updated.'
+        : 'Token created. Next: run Test Credential or connect your AI tool.'
+      ,
+      async function() {
+        if (state.credentialModalMode === 'edit') {
+          const contextResult = await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/context', {
+            method: 'PATCH',
             headers: {
               'content-type': 'application/json'
             },
             body: JSON.stringify({
-              secretValue: payload.secretSource.secretValue.trim()
+              displayName: payload.displayName,
+              service: payload.service,
+              scopeTier: payload.scopeTier,
+              sensitivity: payload.sensitivity,
+              allowedDomains: payload.allowedDomains,
+              permittedOperations: payload.permittedOperations,
+              userContext: payload.userContext,
+              llmContext: payload.llmContext,
+              selectionNotes: payload.llmContext,
+              tags: payload.tags,
             })
           });
+          if (payload.secretSource.adapter === 'local' && payload.secretSource.secretValue.trim()) {
+            await fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/local-secret', {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json'
+              },
+              body: JSON.stringify({
+                secretValue: payload.secretSource.secretValue.trim()
+              })
+            });
+          }
+          return contextResult;
         }
-        return contextResult;
-      }
-      try {
-        return await fetchJson('/v1/core/credentials', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('already exists')) {
-          throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+        try {
+          return await fetchJson('/v1/core/credentials', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.includes('already exists')) {
+            throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+          }
+          throw error;
         }
-        throw error;
       }
-    }
-  );
-  state.lastCreatedCredentialId = result.credential.id;
-  state.selectedCredentialId = result.credential.id;
-  state.currentCredentialContext = result.credential;
-  closeDialog('credential-modal');
-  resetCredentialFormForCreate();
-  syncCredentialTestDefaults(true);
+    );
+    state.lastCreatedCredentialId = result.credential.id;
+    state.selectedCredentialId = result.credential.id;
+    state.currentCredentialContext = result.credential;
+    closeDialog('credential-modal');
+    resetCredentialFormForCreate();
+    syncCredentialTestDefaults(true);
+  } catch (error) {
+    setCredentialModalFeedback('error', error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function handleCredentialTest(event) {
@@ -3237,6 +3280,7 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                 <button class="button-secondary" type="button" data-dialog-close="credential-modal">Close</button>
               </div>
               <div class="modal-body">
+                <div id="credential-modal-feedback" class="modal-feedback" aria-live="assertive"></div>
                 <form id="credential-form" class="form-grid">
                   <div class="field-wide"><label for="credential-template">What is this token for?</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
                   <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /></div>
