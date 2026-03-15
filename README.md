@@ -118,7 +118,7 @@ KeyLore now redirects `/` to `/admin` and automatically opens a local operator s
 
 If that local session bootstrap fails for any reason, use `Start working locally` or the manual sign-in form shown on the page.
 
-4. In `Save token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
+4. In `Token management`, click `Add token`, choose the closest template for the token you are adding, such as `GitHub read-only`, `GitHub write-capable`, `npm read-only`, or `Internal service token`, then fill in:
 - `Name shown in KeyLore`
 - `Token key`
 - `Paste token`
@@ -130,7 +130,7 @@ That stores the raw token outside the searchable catalogue and keeps only the me
 
 5. Review `Writing help` and `What the AI will see` in the form to confirm the record is specific, useful, and secret-free. `LLM context` is the primary retrieval hint for agents. `User context` explains the human purpose of the token. `Token key` is the unique identifier for the token; if KeyLore says a token already exists, change that field and save again. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
 
-6. In `Saved tokens`, look under `Your tokens` for the ones you added yourself. `Included examples` are seeded local records and are shown separately so they do not get confused with your own tokens.
+6. In `Saved tokens`, everything is now listed together in one place. Example records are marked as examples, and they can be edited or deleted from the same list.
 
 7. In `Test credential`, choose `Token to check`, set the `URL to call with this token`, and run the check.
 
@@ -140,7 +140,7 @@ The check makes a real brokered `http.get` call with that token and URL. Success
 
 Everything beyond that now sits behind `Show advanced controls` in the UI, so a first-run user can ignore tenants, OAuth client administration, approvals, backups, audit, and system internals entirely.
 
-After creation, use `Inspect or edit context` inside `Save token` if you need to refine the metadata without re-entering or exposing the stored secret. The context editor keeps `User context` and `LLM context` separate while still mirroring `LLM context` into `selectionNotes` for older clients. Saved token cards also support lightweight lifecycle actions such as rename, retag, and archive/restore under `More actions`.
+After creation, use `Edit token` from the saved-token list if you need to refine the metadata without re-entering or exposing the stored secret. Token creation and editing both happen in a popup now, while the main page stays focused on the token list, testing, and MCP connection.
 
 When that local path stops being enough, use [docs/production-handoff.md](/home/simon/keylore/docs/production-handoff.md) to decide when to switch to external secret backends, real OAuth clients, approvals, and tenant-separated self-hosting.
 

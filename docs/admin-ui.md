@@ -38,7 +38,8 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 2. Open `<publicBaseUrl>/`.
 3. KeyLore redirects `/` to `/admin` and automatically opens a local operator session on loopback development installs.
 4. If that local bootstrap fails, use `Start working locally` or the manual sign-in form.
-5. Use `Save token` for the beginner path:
+5. Use `Token management` for the beginner path:
+   - click `Add token`
    - choose a template
    - name the token
    - set the `Token key`
@@ -56,7 +57,7 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 9. Use `Writing help` plus the inline validation messages to improve weak or overly generic `LLM context` before save.
 10. `Token key` is the unique identifier for the token. If the UI says a token already exists, change that field and save again.
 11. Open `Advanced token settings` only if you need to change storage mode, risk level, service name, tags, or write access.
-12. In `Saved tokens`, use `Your tokens` for the records you created yourself. `Included examples` are seeded local records.
+12. In `Saved tokens`, everything is listed together. Example records are marked as examples and can be edited or deleted from the same list.
 13. Use `Test credential` to run a brokered HTTP call such as `https://api.github.com/rate_limit`.
 14. The test is a real `http.get` with the selected token and URL. Success means the token, target domain, and KeyLore policy all allowed the request.
 15. Use `Connect your AI tool` to copy the generated local snippets for Codex and Gemini CLI.
@@ -67,11 +68,11 @@ This UI does not introduce new backend endpoints or change the existing auth mod
 
 ## Context editing
 
-Inside `Save token`, use `Inspect or edit context` to:
+Inside `Token management`, use `Edit token` from any row to:
 
 - inspect the current MCP-visible record for a saved credential
 - update display name, service, sensitivity, domains, tags, operations, `User context`, and `LLM context`
-- apply lightweight lifecycle actions such as rename, retag, archive, and restore from `More actions`
+- archive, restore, or delete the token directly from the row actions
 - keep secret storage and binding details out of the edit path entirely
 
 This flow is intentionally metadata-only. It does not display or mutate the stored secret.

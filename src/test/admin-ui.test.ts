@@ -28,7 +28,8 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     const html = await response.text();
     assert.match(html, /KeyLore Admin/);
     assert.match(html, /Start here/);
-    assert.match(html, /Save token/);
+    assert.match(html, /Token management/);
+    assert.match(html, /Add token/);
     assert.match(html, /Token key/);
     assert.match(html, /Test credential/);
     assert.match(html, /What the AI will see/);
@@ -40,20 +41,16 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /npm read-only/);
     assert.match(html, /Internal service token/);
     assert.match(html, /Advanced token settings/);
-    assert.match(html, /Inspect or edit context/);
-    assert.match(html, /Current MCP-visible record/);
     assert.match(html, /Explain this token for people/);
     assert.match(html, /Good LLM context/);
     assert.match(html, /Good user context/);
-    assert.match(html, /Save context changes/);
     assert.match(html, /Token to check/);
     assert.match(html, /URL to call with this token/);
     assert.match(html, /Check this token/);
     assert.match(html, /First prompt to try in Codex/);
     assert.match(html, /First prompt to try in Gemini/);
-    assert.match(html, /More actions/);
-    assert.match(html, /Rename/);
-    assert.match(html, /Retag/);
+    assert.match(html, /Edit token/);
+    assert.match(html, /Use in test/);
     assert.match(html, /Archive/);
     assert.match(html, /Delete/);
     assert.match(html, /Show advanced controls/);
@@ -64,7 +61,6 @@ test("admin ui is served over HTTP without requiring a bearer token", async () =
     assert.match(html, /open a local session automatically/);
     assert.match(html, /Manual sign-in options/);
     assert.match(html, /Remote or advanced connection options/);
-    assert.match(html, /Refresh everything/);
     assert.match(html, /1\.0\.0-rc5/);
   } finally {
     await server.close();

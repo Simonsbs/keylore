@@ -496,6 +496,75 @@ textarea {
   align-items: center;
 }
 
+.utility-shell {
+  display: none;
+}
+
+.token-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.token-list {
+  display: grid;
+  gap: 12px;
+}
+
+.token-row {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 33, 31, 0.08);
+}
+
+.token-row h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.token-row p {
+  margin: 0;
+}
+
+dialog.modal {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+}
+
+dialog.modal::backdrop {
+  background: rgba(23, 33, 31, 0.38);
+  backdrop-filter: blur(6px);
+}
+
+.modal-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 241, 0.98);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  overflow: auto;
+  max-height: calc(100vh - 32px);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 22px 24px 0;
+}
+
+.modal-body {
+  padding: 18px 24px 24px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -744,7 +813,8 @@ const state = {
   lastMcpConnection: null,
   mcpToken: '',
   advancedVisible: false,
-  credentialIdManuallyEdited: false
+  credentialIdManuallyEdited: false,
+  credentialModalMode: 'create'
 };
 
 const storageKey = 'keylore-admin-session';
@@ -760,6 +830,26 @@ function escapeHtml(value) {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function showDialog(id) {
+  const dialog = byId(id);
+  if (!(dialog instanceof HTMLDialogElement)) {
+    return;
+  }
+  if (!dialog.open) {
+    dialog.showModal();
+  }
+}
+
+function closeDialog(id) {
+  const dialog = byId(id);
+  if (!(dialog instanceof HTMLDialogElement)) {
+    return;
+  }
+  if (dialog.open) {
+    dialog.close();
+  }
 }
 
 function splitList(value) {
@@ -1147,7 +1237,7 @@ function renderCoreJourney() {
   node.innerHTML = [
     '<div class="section-heading"><div><h2 style="font-size:1.4rem;">What to do next</h2><p>Follow the short path. Everything else can wait until later.</p></div></div>',
     '<div class="step-grid">',
-    '<article class="step-card"><span class="' + (state.token ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="' + escapeHtml(state.token ? 'session-section' : 'login-panel') + '">Go there</button></div></article>',
+    '<article class="step-card"><span class="' + (state.token ? 'state-active' : 'state-warning') + '">Step 1</span><h3>Open a session</h3><p>Use local quickstart or manual sign-in so KeyLore can save and test tokens for you.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="' + escapeHtml(state.token ? 'credentials-section' : 'login-panel') + '">Go there</button></div></article>',
     '<article class="step-card"><span class="' + (hasCredential ? 'state-active' : 'state-warning') + '">Step 2</span><h3>Save a token</h3><p>Pick a template, paste the token, and explain when the AI should use it.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open tokens</button></div></article>',
     '<article class="step-card"><span class="' + (hasTest ? 'state-active' : 'state-warning') + '">Step 3</span><h3>Test it safely</h3><p>Run a brokered check to confirm the token works without exposing the secret.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="credentials-section">Open test</button></div></article>',
     '<article class="step-card"><span class="' + (hasConnection ? 'state-active' : 'state-warning') + '">Step 4</span><h3>Connect your AI tool</h3><p>Copy the Codex or Gemini snippet, restart the tool, and try the suggested prompt.</p><div class="panel-actions"><button class="button-secondary" type="button" data-nav-target="connect-section">Open connect</button></div></article>',
@@ -1159,7 +1249,7 @@ function renderCoreJourney() {
 function renderCredentials() {
   byId('credential-list').innerHTML = renderResultState(state.data.credentials, function(payload) {
     if (!payload.credentials.length) {
-      return '<div class="empty-state">No credentials are visible yet. Start with a template, save a token, then use Test Credential as the next step.</div>';
+      return '<div class="empty-state">No tokens are saved yet. Use Add token to create the first one.</div>';
     }
 
     function renderCredentialCard(credential) {
@@ -1167,10 +1257,12 @@ function renderCredentials() {
       const statusActionLabel = credential.status === 'active' ? 'Archive' : 'Restore';
       const isNew = credential.id === state.lastCreatedCredentialId;
       const isSelected = credential.id === state.selectedCredentialId;
+      const ownershipLabel = credential.owner === 'local' ? 'saved token' : 'example';
       return [
-        '<article class="list-card">',
+        '<article class="token-row">',
         '<div class="toolbar"><div><h3>' + escapeHtml(credential.displayName) + '</h3><p class="mono"><strong>Token key:</strong> ' + escapeHtml(credential.id) + '</p></div><div class="panel-actions">' + (isNew ? '<span class="state-active">Just added</span>' : '') + (isSelected ? '<span class="state-ok">Selected</span>' : '') + '<span class="' + (credential.status === 'active' ? 'state-active' : 'state-disabled') + '">' + escapeHtml(credential.status) + '</span></div></div>',
         '<div class="list-meta">',
+        '<span class="pill"><strong>Kind</strong> ' + escapeHtml(ownershipLabel) + '</span>',
         '<span class="pill"><strong>Service</strong> ' + escapeHtml(credential.service) + '</span>',
         '<span class="pill"><strong>Scope</strong> ' + escapeHtml(credential.scopeTier) + '</span>',
         '<span class="pill"><strong>Sensitivity</strong> ' + escapeHtml(credential.sensitivity) + '</span>',
@@ -1178,15 +1270,12 @@ function renderCredentials() {
         '<p class="panel-footnote"><strong>LLM context:</strong> ' + escapeHtml(credential.llmContext || credential.selectionNotes) + '</p>',
         '<p class="panel-footnote"><strong>User context:</strong> ' + escapeHtml(credential.userContext || credential.llmContext || credential.selectionNotes) + '</p>',
         '<p class="muted-copy mono">Domains: ' + escapeHtml(credential.allowedDomains.join(', ')) + '</p>',
-        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit context</button></div>',
-        '<details class="disclosure"><summary>More actions</summary><div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="rename" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Rename</button><button class="button-secondary" type="button" data-credential-context-action="retag" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-tags="' + escapeHtml(credential.tags.join(', ')) + '">Retag</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button>' + (credential.owner === 'local' ? '<button class="button-danger" type="button" data-credential-context-action="delete" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Delete</button>' : '') + '</div></details>',
+        '<div class="panel-actions"><button class="button-secondary" type="button" data-credential-context-action="open" data-credential-context-id="' + escapeHtml(credential.id) + '">Edit token</button><button class="button-secondary" type="button" data-credential-context-action="test" data-credential-context-id="' + escapeHtml(credential.id) + '">Use in test</button><button class="button-secondary" type="button" data-credential-context-action="status" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-status="' + escapeHtml(nextStatus) + '">' + statusActionLabel + '</button><button class="button-danger" type="button" data-credential-context-action="delete" data-credential-context-id="' + escapeHtml(credential.id) + '" data-credential-context-name="' + escapeHtml(credential.displayName) + '">Delete</button></div>',
         '</article>'
       ].join('');
     }
 
-    const ownCredentials = payload.credentials.filter(function(credential) {
-      return credential.owner === 'local';
-    }).sort(function(left, right) {
+    const credentials = payload.credentials.slice().sort(function(left, right) {
       if (left.id === state.lastCreatedCredentialId) {
         return -1;
       }
@@ -1199,22 +1288,12 @@ function renderCredentials() {
       if (right.id === state.selectedCredentialId) {
         return 1;
       }
+      if (left.owner !== right.owner) {
+        return left.owner === 'local' ? -1 : 1;
+      }
       return left.displayName.localeCompare(right.displayName);
     });
-    const starterCredentials = payload.credentials.filter(function(credential) {
-      return credential.owner !== 'local';
-    }).sort(function(left, right) {
-      return left.displayName.localeCompare(right.displayName);
-    });
-
-    return [
-      ownCredentials.length
-        ? '<div class="stack-tight"><div><h3 style="margin:0 0 8px;">Your tokens</h3><p class="panel-footnote" style="margin-top:0;">These are the tokens you added yourself.</p></div>' + ownCredentials.map(renderCredentialCard).join('') + '</div>'
-        : '<div class="empty-state">You have not added a token yet. When you save one, it will appear here with a clear token key.</div>',
-      starterCredentials.length
-        ? '<div class="stack-tight" style="margin-top:16px;"><div><h3 style="margin:0 0 8px;">Included examples</h3><p class="panel-footnote" style="margin-top:0;">These example entries ship with the local setup. They are not the tokens you just added.</p></div>' + starterCredentials.map(renderCredentialCard).join('') + '</div>'
-        : ''
-    ].join('');
+    return '<div class="token-list">' + credentials.map(renderCredentialCard).join('') + '</div>';
   });
 
   if (!state.data.credentials) {
@@ -1222,24 +1301,10 @@ function renderCredentials() {
   } else if (!state.data.credentials.ok) {
     byId('credential-test-id').innerHTML = '<option value="">Credentials unavailable</option>';
   } else {
-    const ownCredentials = state.data.credentials.data.credentials.filter(function(credential) {
-      return credential.owner === 'local';
-    });
-    const starterCredentials = state.data.credentials.data.credentials.filter(function(credential) {
-      return credential.owner !== 'local';
-    });
-    byId('credential-test-id').innerHTML = [
-      ownCredentials.length
-        ? '<optgroup label="Your tokens">' + ownCredentials.map(function(credential) {
-            return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
-          }).join('') + '</optgroup>'
-        : '',
-      starterCredentials.length
-        ? '<optgroup label="Included examples">' + starterCredentials.map(function(credential) {
-            return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ')') + '</option>';
-          }).join('') + '</optgroup>'
-        : ''
-    ].join('');
+    byId('credential-test-id').innerHTML = state.data.credentials.data.credentials.map(function(credential) {
+      const label = credential.owner === 'local' ? 'saved' : 'example';
+      return '<option value="' + escapeHtml(credential.id) + '">' + escapeHtml(credential.displayName + ' (' + credential.id + ', ' + label + ')') + '</option>';
+    }).join('');
   }
 
   if (state.lastCredentialTest) {
@@ -1517,6 +1582,63 @@ function renderCredentialContextManager() {
     serializeCredentialContextForm(),
     selected.id,
   );
+}
+
+function resetCredentialFormForCreate() {
+  state.credentialModalMode = 'create';
+  state.credentialIdManuallyEdited = false;
+  byId('credential-modal-title').textContent = 'Add token';
+  byId('credential-modal-copy').textContent = 'Paste the token, add the human and AI context, and save it into KeyLore.';
+  byId('credential-submit').dataset.idleLabel = 'Save token';
+  byId('credential-submit').textContent = 'Save token';
+  byId('credential-template').disabled = false;
+  byId('credential-form').reset();
+  byId('credential-template').value = 'github-readonly';
+  byId('credential-storage').value = 'local';
+  byId('credential-id').readOnly = false;
+  byId('credential-secret-field').hidden = false;
+  byId('credential-secret').value = '';
+  byId('credential-secret').disabled = false;
+  byId('credential-storage').disabled = false;
+  applyCredentialTemplate();
+  syncCredentialSourceFields();
+  renderCredentialPreview();
+}
+
+function openCreateCredentialModal() {
+  resetCredentialFormForCreate();
+  showDialog('credential-modal');
+}
+
+function openEditCredentialModal(credential) {
+  state.credentialModalMode = 'edit';
+  state.selectedCredentialId = credential.id;
+  state.currentCredentialContext = credential;
+  byId('credential-modal-title').textContent = 'Edit token';
+  byId('credential-modal-copy').textContent = 'Update the token metadata and context. Stored secret material stays separate and is not shown here.';
+  byId('credential-submit').dataset.idleLabel = 'Save changes';
+  byId('credential-submit').textContent = 'Save changes';
+  byId('credential-template').disabled = true;
+  byId('credential-name').value = credential.displayName;
+  byId('credential-id').value = credential.id;
+  byId('credential-id').readOnly = true;
+  byId('credential-service').value = credential.service;
+  byId('credential-sensitivity').value = credential.sensitivity;
+  byId('credential-operations').value = credential.permittedOperations.includes('http.post')
+    ? 'http.get,http.post'
+    : 'http.get';
+  byId('credential-domains').value = credential.allowedDomains.join(', ');
+  byId('credential-user-context').value = credential.userContext || credential.llmContext || credential.selectionNotes;
+  byId('credential-llm-context').value = credential.llmContext || credential.selectionNotes;
+  byId('credential-tags').value = credential.tags.join(', ');
+  byId('credential-storage').value = credential.binding.adapter === 'env' ? 'env' : 'local';
+  byId('credential-storage').disabled = true;
+  byId('credential-secret-field').hidden = true;
+  byId('credential-secret').value = '';
+  byId('credential-secret').disabled = true;
+  byId('credential-env-ref-field').hidden = true;
+  renderCredentialPreview();
+  showDialog('credential-modal');
 }
 
 async function openCredentialContext(credentialId) {
@@ -2001,33 +2123,54 @@ async function handleCreateCredential(event) {
     setNotice('error', assessment.errors[0]);
     return;
   }
-  const result = await withAction('Credential created. Next: run Test Credential or inspect the saved context.', async function() {
-    try {
-      return await fetchJson('/v1/core/credentials', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('already exists')) {
-        throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+  const result = await withAction(
+    state.credentialModalMode === 'edit'
+      ? 'Token updated.'
+      : 'Token created. Next: run Test Credential or connect your AI tool.'
+    ,
+    async function() {
+      if (state.credentialModalMode === 'edit') {
+        return fetchJson('/v1/core/credentials/' + encodeURIComponent(payload.credentialId) + '/context', {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            displayName: payload.displayName,
+            service: payload.service,
+            scopeTier: payload.scopeTier,
+            sensitivity: payload.sensitivity,
+            allowedDomains: payload.allowedDomains,
+            permittedOperations: payload.permittedOperations,
+            userContext: payload.userContext,
+            llmContext: payload.llmContext,
+            selectionNotes: payload.llmContext,
+            tags: payload.tags,
+          })
+        });
       }
-      throw error;
+      try {
+        return await fetchJson('/v1/core/credentials', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('already exists')) {
+          throw new Error('Token key "' + payload.credentialId + '" is already in use. Change the Token key field and save again.');
+        }
+        throw error;
+      }
     }
-  });
+  );
   state.lastCreatedCredentialId = result.credential.id;
   state.selectedCredentialId = result.credential.id;
   state.currentCredentialContext = result.credential;
-  state.credentialIdManuallyEdited = false;
-  byId('credential-form').reset();
-  byId('credential-template').value = 'github-readonly';
-  byId('credential-storage').value = 'local';
-  applyCredentialTemplate();
-  syncCredentialSourceFields();
-  renderCredentialPreview();
+  closeDialog('credential-modal');
+  resetCredentialFormForCreate();
   syncCredentialTestDefaults(true);
 }
 
@@ -2072,8 +2215,18 @@ async function handleCredentialContextAction(event) {
       setBusy(true);
       clearNotice();
       await openCredentialContext(credentialId);
-      setNotice('info', 'Loaded the current MCP-visible context. Secret storage remains separate.');
+      openEditCredentialModal(state.currentCredentialContext);
+      setNotice('info', 'Loaded the token for editing. Secret storage remains separate.');
       setBusy(false);
+      return;
+    }
+
+    if (action === 'test') {
+      state.selectedCredentialId = credentialId;
+      byId('credential-test-id').value = credentialId;
+      syncCredentialTestDefaults(true);
+      openSection('credentials-section');
+      setNotice('info', 'Selected token loaded into Test credential.');
       return;
     }
 
@@ -2157,6 +2310,7 @@ async function handleCredentialContextAction(event) {
         state.lastCredentialTest = null;
         state.lastCredentialTestContext = null;
       }
+      closeDialog('credential-modal');
       renderCredentialContextManager();
       return;
     }
@@ -2504,9 +2658,9 @@ async function initialize() {
   if (localQuickstartButton) {
     localQuickstartButton.addEventListener('click', handleLocalQuickstartLogin);
   }
+  byId('open-credential-modal').addEventListener('click', openCreateCredentialModal);
   byId('credential-form').addEventListener('submit', handleCreateCredential);
   byId('credential-test-form').addEventListener('submit', handleCredentialTest);
-  byId('credential-context-form').addEventListener('submit', handleCredentialContextSave);
   byId('connect-form').addEventListener('submit', handleMcpConnectionCheck);
   byId('credential-template').addEventListener('change', applyCredentialTemplate);
   byId('credential-name').addEventListener('input', function() {
@@ -2538,17 +2692,6 @@ async function initialize() {
   byId('backup-inspect').addEventListener('click', handleBackupInspect);
   byId('backup-restore').addEventListener('click', handleBackupRestore);
   byId('backup-download').addEventListener('click', downloadBackup);
-  byId('credential-context-form').addEventListener('input', function() {
-    if (!state.selectedCredentialId) {
-      return;
-    }
-    renderContextPreview(
-      'credential-context-preview',
-      'credential-context-preview-warnings',
-      serializeCredentialContextForm(),
-      state.selectedCredentialId,
-    );
-  });
   byId('advanced-toggle').addEventListener('click', function() {
     state.advancedVisible = !state.advancedVisible;
     persistSession();
@@ -2559,6 +2702,11 @@ async function initialize() {
   });
   document.body.addEventListener('click', function(event) {
     if (!(event.target instanceof Element)) {
+      return;
+    }
+    const closeButton = event.target.closest('[data-dialog-close]');
+    if (closeButton) {
+      closeDialog(closeButton.getAttribute('data-dialog-close'));
       return;
     }
     const button = event.target.closest('[data-nav-target]');
@@ -2716,42 +2864,66 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
         </section>
 
         <div id="dashboard" class="dashboard" hidden>
-          <section id="session-section" class="panel">
-            <div class="section-heading">
-              <div>
-                <h2>You&apos;re connected</h2>
-                <p>The only things you need next are save token, test token, and connect your AI tool.</p>
-              </div>
-              <div class="toolbar">
-                <button class="button-secondary" id="refresh-dashboard" type="button" data-busy-label="Refreshing..." data-idle-label="Refresh everything">Refresh everything</button>
-                <button class="button-danger" id="logout" type="button">Clear session</button>
-              </div>
-            </div>
-            <div class="session-line">
-              <span id="session-status" class="state-warning">Not connected</span>
-              <span class="pill"><strong>Current path</strong> Core onboarding</span>
-            </div>
-            <details class="disclosure">
-              <summary>Session details</summary>
-              <div class="list-meta">
-                <span class="pill"><strong>Client</strong> <span id="session-client-id">anonymous token</span></span>
-                <span class="pill"><strong>Tenant</strong> <span id="session-tenant">global operator</span></span>
-                <span class="pill"><strong>Scopes</strong> <span id="session-scopes">not loaded</span></span>
-              </div>
-            </details>
-            <div id="core-journey" style="margin-top: 18px;"></div>
-            <div id="advanced-summary" class="advanced-summary"></div>
-          </section>
-
+          <div class="utility-shell" aria-hidden="true">
+            <button class="button-secondary" id="refresh-dashboard" type="button" data-busy-label="Refreshing..." data-idle-label="Refresh everything">Refresh everything</button>
+            <button class="button-danger" id="logout" type="button">Clear session</button>
+            <span id="session-status" class="state-warning">Not connected</span>
+            <span id="session-client-id">anonymous token</span>
+            <span id="session-tenant">global operator</span>
+            <span id="session-scopes">not loaded</span>
+          </div>
           <section id="credentials-section" class="panel">
             <div class="section-heading">
               <div>
-                <h2>Save a token</h2>
-                <p>Start with the basics. Paste the token, say when the AI should use it, and let KeyLore keep the raw secret out of the catalogue.</p>
+                <h2>Token management</h2>
+                <p>All saved tokens live here. Add a token, edit it in a popup, test it, or remove it.</p>
               </div>
             </div>
+            <div id="core-journey" style="margin-bottom: 18px;"></div>
+            <div id="advanced-summary" class="advanced-summary" style="margin-bottom: 18px;"></div>
             <div class="panel-grid">
-              <div class="span-7 panel">
+              <div class="span-7 code-stack">
+                <div class="panel">
+                  <div class="token-toolbar">
+                    <div>
+                      <h2 style="font-size:1.4rem;">Saved tokens</h2>
+                      <p>All tokens are listed together here, including examples. Edit or delete any row directly.</p>
+                    </div>
+                    <button class="button" id="open-credential-modal" type="button">Add token</button>
+                  </div>
+                  <div id="credential-list"></div>
+                </div>
+              </div>
+              <div class="span-5 code-stack">
+                <div class="panel">
+                  <div class="section-heading">
+                    <div>
+                      <h2 style="font-size:1.4rem;">Test credential</h2>
+                      <p>Run a real safe check. KeyLore will make an <code>http.get</code> call with the selected token and URL, without exposing the raw secret.</p>
+                    </div>
+                  </div>
+                  <form id="credential-test-form" class="form-grid">
+                    <div class="field"><label for="credential-test-id">Token to check</label><select id="credential-test-id"></select></div>
+                    <div class="field-wide"><label for="credential-test-url">URL to call with this token</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
+                    <div class="panel-footnote field-wide" style="margin-top:-4px;">Success means the token, the target domain, and KeyLore policy all allowed the request.</div>
+                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Check this token">Check this token</button></div>
+                  </form>
+                  <div id="credential-test-result" style="margin-top: 18px;"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <dialog id="credential-modal" class="modal">
+            <div class="modal-card">
+              <div class="modal-header">
+                <div>
+                  <h2 id="credential-modal-title" style="margin:0;">Add token</h2>
+                  <p id="credential-modal-copy" class="panel-footnote" style="margin-top:8px;">Paste the token, add the human and AI context, and save it into KeyLore.</p>
+                </div>
+                <button class="button-secondary" type="button" data-dialog-close="credential-modal">Close</button>
+              </div>
+              <div class="modal-body">
                 <form id="credential-form" class="form-grid">
                   <div class="field-wide"><label for="credential-template">What is this token for?</label><select id="credential-template"><option value="github-readonly">GitHub read-only</option><option value="github-write">GitHub write-capable</option><option value="npm-readonly">npm read-only</option><option value="internal-service">Internal service token</option><option value="generic-bearer">Generic bearer API</option></select></div>
                   <div class="field"><label for="credential-name">Name shown in KeyLore</label><input id="credential-name" type="text" required /></div>
@@ -2781,68 +2953,11 @@ export function renderAdminPage(app: Pick<KeyLoreApp, "config">): string {
                       <div id="credential-env-ref-field" class="field-wide" hidden><label for="credential-env-ref">Environment variable name</label><input id="credential-env-ref" type="text" placeholder="KEYLORE_SECRET_GITHUB_READONLY" /></div>
                     </div>
                   </details>
-                  <div class="form-actions field-wide"><button class="button" type="submit" data-busy-label="Saving token..." data-idle-label="Save token">Save token</button></div>
+                  <div class="form-actions field-wide"><button class="button" id="credential-submit" type="submit" data-busy-label="Saving token..." data-idle-label="Save token">Save token</button></div>
                 </form>
               </div>
-              <div class="span-5 code-stack">
-                <div class="panel">
-                  <div class="section-heading">
-                    <div>
-                      <h2 style="font-size:1.4rem;">Saved tokens</h2>
-                      <p>Use these after you save something. Each token now shows both its human context and the AI-facing context used for selection.</p>
-                    </div>
-                  </div>
-                  <div id="credential-list"></div>
-                </div>
-                <div class="panel">
-                  <div class="section-heading">
-                    <div>
-                      <h2 style="font-size:1.4rem;">Test credential</h2>
-                      <p>Run a real safe check. KeyLore will make an <code>http.get</code> call with the selected token and URL, without exposing the raw secret.</p>
-                    </div>
-                  </div>
-                  <form id="credential-test-form" class="form-grid">
-                    <div class="field"><label for="credential-test-id">Token to check</label><select id="credential-test-id"></select></div>
-                    <div class="field-wide"><label for="credential-test-url">URL to call with this token</label><input id="credential-test-url" type="url" placeholder="https://api.github.com/rate_limit" required /></div>
-                    <div class="panel-footnote field-wide" style="margin-top:-4px;">Success means the token, the target domain, and KeyLore policy all allowed the request.</div>
-                    <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Testing credential..." data-idle-label="Check this token">Check this token</button></div>
-                  </form>
-                  <div id="credential-test-result" style="margin-top: 18px;"></div>
-                </div>
-                <details class="panel disclosure">
-                  <summary>Inspect or edit context</summary>
-                  <div class="panel-footnote">This is metadata only. Secret storage and raw token values stay separate and are not shown here. LLM context drives selection; user context explains human purpose.</div>
-                  <div class="panel-grid" style="margin-top: 16px;">
-                    <div class="span-6 panel">
-                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Current MCP-visible record</h2></div></div>
-                      <div id="credential-context-current"></div>
-                    </div>
-                    <div class="span-6 panel">
-                      <div class="section-heading"><div><h2 style="font-size:1.2rem;">Context editor</h2></div></div>
-                      <form id="credential-context-form" class="form-grid" hidden>
-                        <div class="field"><label for="credential-context-id">Credential ID</label><input id="credential-context-id" type="text" readonly /></div>
-                        <div class="field"><label for="credential-context-display-name">Display Name</label><input id="credential-context-display-name" type="text" required /></div>
-                        <div class="field"><label for="credential-context-service">Service</label><input id="credential-context-service" type="text" required /></div>
-                        <div class="field"><label for="credential-context-sensitivity">Risk level</label><select id="credential-context-sensitivity"><option value="moderate">moderate</option><option value="high">high</option><option value="critical">critical</option></select></div>
-                        <div class="field"><label for="credential-context-status">Lifecycle</label><select id="credential-context-status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
-                        <div class="field"><label for="credential-context-operations">Allow writes?</label><select id="credential-context-operations"><option value="http.get">No, read only</option><option value="http.get,http.post">Yes, allow controlled writes</option></select></div>
-                        <div class="field-wide"><label for="credential-context-domains">Where can it be used?</label><textarea id="credential-context-domains"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-user-context">Explain this token for people</label><textarea id="credential-context-user-context"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-llm-context">Tell the AI when to use this token</label><textarea id="credential-context-llm-context"></textarea></div>
-                        <div class="field-wide"><label for="credential-context-tags">Tags</label><input id="credential-context-tags" type="text" /></div>
-                        <div class="field-wide">
-                          <label for="credential-context-preview">Updated MCP-visible preview</label>
-                          <div id="credential-context-preview-warnings" style="margin-bottom: 12px;"></div>
-                          <div id="credential-context-preview"></div>
-                        </div>
-                        <div class="form-actions field-wide"><button class="button-secondary" type="submit" data-busy-label="Saving context..." data-idle-label="Save context changes">Save context changes</button></div>
-                      </form>
-                    </div>
-                  </div>
-                </details>
-              </div>
             </div>
-          </section>
+          </dialog>
 
           <section id="connect-section" class="panel">
             <div class="section-heading">
