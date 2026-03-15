@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore Security | MCP Risks, Threat Model, and .env Alternatives</title>
+    <meta
+      name="description"
+      content="Learn why .env files are the wrong default for AI agents, what MCP risks matter, and how KeyLore creates a safer credential boundary."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/security/" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Security</p>
+              <h1>Secure AI agent credential handling</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="../docs/">Docs</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / Security</p>
+        <p class="lede">
+          KeyLore separates raw secret material from AI-facing metadata and brokers
+          access on request, so models and prompts never need to contain token values.
+        </p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section page-card-grid compact-grid">
+          <article class="feature-card">
+            <p class="panel-label">Principle 1</p>
+            <h3>Separate secrets from metadata</h3>
+            <p>Raw secrets live in a protected store. Searchable metadata is what the agent sees and reasons over.</p>
+          </article>
+          <article class="feature-card">
+            <p class="panel-label">Principle 2</p>
+            <h3>Broker access instead of returning tokens</h3>
+            <p>KeyLore performs the live authenticated call or governs the operation instead of handing the agent the token value.</p>
+          </article>
+          <article class="feature-card">
+            <p class="panel-label">Principle 3</p>
+            <h3>Reduce blast radius</h3>
+            <p>Keeping secrets out of prompts, shell env, and casual process inspection makes leaks and misuse easier to contain.</p>
+          </article>
+        </section>
+
+        <section class="section section-contrast">
+          <div class="section-heading">
+            <p class="eyebrow">Why not .env?</p>
+            <h2>Because <code>.env</code> solves distribution, not control.</h2>
+          </div>
+          <p class="lede">
+            Environment variables are process-wide. Any tool, shell, or agent can read
+            and echo them, leaking through logs, stack traces, prompts, and copied
+            configs. That is a weak default for agentic systems.
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

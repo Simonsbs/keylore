@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore Docs | Install, Architecture, and MCP Setup</title>
+    <meta
+      name="description"
+      content="KeyLore documentation hub: local-first install, architecture, first-run setup, MCP integration guidance, and links into the full GitHub docs."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/docs/" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Docs hub</p>
+              <h1>KeyLore Documentation</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / Docs</p>
+        <p class="lede">
+          Start with the shortest route to a working KeyLore install, then move into
+          architecture, operations, and the deeper GitHub-hosted reference docs.
+        </p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section page-card-grid compact-grid">
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore#readme">
+            <p class="panel-label">Getting started</p>
+            <h3>README and install path</h3>
+            <p>Local-first install, service lifecycle, and the first route through the UI.</p>
+          </a>
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/admin-ui.md">
+            <p class="panel-label">Product use</p>
+            <h3>Admin UI guide</h3>
+            <p>How token storage, context authoring, token testing, and MCP connection work.</p>
+          </a>
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/deployment.md">
+            <p class="panel-label">Deployment</p>
+            <h3>Advanced deployment notes</h3>
+            <p>When to stay in local mode and when to move to external stores and stronger controls.</p>
+          </a>
+          <a class="feature-card" href="https://github.com/Simonsbs/keylore/blob/main/docs/api.md">
+            <p class="panel-label">Reference</p>
+            <h3>API and MCP reference</h3>
+            <p>HTTP endpoints, MCP tool behavior, and the system’s model-visible contract.</p>
+          </a>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Recommended first run</p>
+            <h2>The shortest route to success.</h2>
+          </div>
+          <div class="timeline three-up">
+            <article class="timeline-step">
+              <span class="step-index">1</span>
+              <h3>Install and start</h3>
+              <p><code>npm install -g @simonsbs/keylore</code> then <code>keylore-http start</code>.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">2</span>
+              <h3>Add one token</h3>
+              <p>Store the secret, then write human context and LLM context so the agent can choose correctly.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">3</span>
+              <h3>Test and connect MCP</h3>
+              <p>Use the built-in token test, then connect Codex, Gemini CLI, Claude CLI, or another MCP client.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

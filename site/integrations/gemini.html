@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gemini CLI MCP Setup with KeyLore | Secure Token Brokering</title>
+    <meta
+      name="description"
+      content="Configure Gemini CLI to use KeyLore as an MCP credential broker so Gemini can request access safely without receiving raw token values."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/gemini.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Integration recipe</p>
+              <h1>Gemini CLI + KeyLore</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Integrations</a> / Gemini CLI</p>
+      </header>
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Why this setup matters</p>
+            <h2>Use Gemini through KeyLore, not through exported shell secrets.</h2>
+          </div>
+          <p class="lede">
+            Use KeyLore with the Gemini CLI to resolve credentials through the broker.
+            Gemini gets access to the action it needs, while the model only sees
+            metadata and never sees the raw token value.
+          </p>
+          <div class="install-shell">
+            <pre><code>{
+  "mcpServers": {
+    "keylore_stdio": {
+      "command": "keylore-stdio",
+      "args": []
+    }
+  }
+}</code></pre>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

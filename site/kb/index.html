@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore Knowledge Base | MCP Setup Questions and Troubleshooting</title>
+    <meta
+      name="description"
+      content="Common KeyLore questions: how it keeps raw tokens hidden, how to migrate from .env, and how to use it with MCP clients like Codex and Gemini CLI."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/kb/" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How does KeyLore prevent agents from seeing raw tokens?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Raw secrets are stored separately from searchable metadata. Agents search metadata and request brokered operations. KeyLore executes the live action without returning the token value."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I run KeyLore locally first and harden it later?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The default install is local-first for speed. Later, teams can move to stronger deployment controls, external secret stores, and broader governance if they need them."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I migrate from .env files?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Move the token into KeyLore, write human and LLM context, connect your MCP client to KeyLore, then remove and rotate the old environment-based secret so the shell path is no longer trusted."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Knowledge base</p>
+              <h1>KeyLore questions and troubleshooting</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="../docs/">Docs</a>
+            <a href="../integrations/">Integrations</a>
+            <a href="../security/">Security</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / Knowledge Base</p>
+        <p class="lede">How-to guides and migration tips for moving AI tools off <code>.env</code>.</p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section faq-shell">
+          <div class="section-heading">
+            <p class="eyebrow">Top questions</p>
+            <h2>Common answers for setup and migration.</h2>
+          </div>
+          <div class="faq-list">
+            <details>
+              <summary>How does KeyLore stop the agent from seeing the raw token?</summary>
+              <p>
+                The agent searches metadata and requests access through MCP. KeyLore
+                keeps the secret in a separate store and brokers the live action without
+                returning the raw token value.
+              </p>
+            </details>
+            <details>
+              <summary>Can I start local-first and harden later?</summary>
+              <p>
+                Yes. The default install is designed for fast local adoption. Later you
+                can move to stronger deployment controls, external secret stores, and
+                wider team governance.
+              </p>
+            </details>
+            <details>
+              <summary>How do I migrate from <code>.env</code> files?</summary>
+              <p>
+                Install and start KeyLore, move the token into KeyLore, add minimal
+                metadata, connect the MCP client, verify brokered access works, then
+                remove and rotate the old environment-based secret so the shell path is
+                no longer trusted.
+              </p>
+            </details>
+            <details>
+              <summary>What should the agent search for?</summary>
+              <p>
+                Service, domain, permitted operation, tags, and usage context. The
+                agent should prefer the best context match, not just the most familiar
+                token name.
+              </p>
+            </details>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

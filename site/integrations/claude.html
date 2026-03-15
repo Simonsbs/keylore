@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude CLI MCP Setup with KeyLore | Secure Credential Brokering</title>
+    <meta
+      name="description"
+      content="Connect Claude CLI to KeyLore through MCP so Claude can search credential metadata and use brokered access without raw token exposure."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/claude.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Integration recipe</p>
+              <h1>Claude CLI + KeyLore</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Integrations</a> / Claude CLI</p>
+      </header>
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Why this setup matters</p>
+            <h2>Claude can use the credential safely without seeing it.</h2>
+          </div>
+          <p class="lede">
+            Configure Claude CLI to obtain brokered credentials from KeyLore. Claude
+            prompts stay free of raw secrets while the client still gets the access it
+            needs for the live task.
+          </p>
+          <div class="install-shell">
+            <pre><code>claude mcp add keylore -- keylore-stdio</code></pre>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

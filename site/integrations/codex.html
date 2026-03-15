@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex MCP Setup with KeyLore | Secure AI Agent Credentials</title>
+    <meta
+      name="description"
+      content="Set up Codex with KeyLore so Codex can search credential metadata and use brokered access without receiving raw token values."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/codex.html" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Integration recipe</p>
+              <h1>Codex + KeyLore</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="./">Integrations</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / <a href="./">Integrations</a> / Codex</p>
+      </header>
+      <main class="section-stack">
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Why this setup matters</p>
+            <h2>Codex should ask KeyLore for access, not read your token directly.</h2>
+          </div>
+          <p class="lede">
+            Point Codex at KeyLore instead of handing Codex a raw token. Codex searches
+            metadata, requests brokered access, and never receives the secret value.
+          </p>
+          <div class="install-shell">
+            <pre><code># ~/.codex/config.toml
+[mcp_servers.keylore]
+command = "keylore-stdio"</code></pre>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

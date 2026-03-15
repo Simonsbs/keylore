@@ -209,7 +209,9 @@ pre {
 .comparison-card,
 .importance-card,
 .install-shell,
-.faq-list details {
+.faq-list details,
+.feature-card,
+.subpage-hero {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
@@ -378,6 +380,54 @@ pre {
   line-height: 1.65;
 }
 
+.subpage-hero {
+  padding: 24px;
+  margin-top: 10px;
+  background:
+    radial-gradient(circle at top left, rgba(15, 93, 77, 0.08), transparent 28%),
+    linear-gradient(145deg, rgba(255, 252, 247, 0.94), rgba(247, 237, 216, 0.88));
+}
+
+.breadcrumb {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.section-stack {
+  display: grid;
+  gap: 0;
+}
+
+.page-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.feature-card {
+  display: block;
+  padding: 22px;
+}
+
+.feature-card h3 {
+  margin: 0 0 10px;
+}
+
+.feature-card p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.three-up {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .site-footer {
   display: flex;
   justify-content: space-between;
@@ -399,7 +449,10 @@ pre {
   .problem-grid,
   .timeline,
   .importance-grid,
-  .install-band {
+  .install-band,
+  .page-card-grid,
+  .compact-grid,
+  .three-up {
     grid-template-columns: 1fr;
   }
 

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KeyLore Integrations | Codex, Gemini CLI, Claude CLI, and MCP Clients</title>
+    <meta
+      name="description"
+      content="Connect KeyLore to Codex, Gemini CLI, Claude CLI, and generic MCP clients. Use metadata-driven credential selection instead of raw tokens in .env files."
+    />
+    <link rel="canonical" href="https://keylore.bestdev.co.il/integrations/" />
+    <meta name="robots" content="index,follow" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="subpage-hero">
+        <nav class="topbar">
+          <div class="brand-block">
+            <span class="brand-mark">KL</span>
+            <div>
+              <p class="eyebrow">Integrations</p>
+              <h1>KeyLore MCP client setup</h1>
+            </div>
+          </div>
+          <div class="nav-links">
+            <a href="../">Home</a>
+            <a href="../docs/">Docs</a>
+            <a href="../security/">Security</a>
+            <a href="../kb/">Knowledge Base</a>
+          </div>
+        </nav>
+        <p class="breadcrumb"><a href="../">Home</a> / Integrations</p>
+        <p class="lede">
+          Keep tokens out of model context while your tools keep working. KeyLore
+          brokers credentials for popular AI CLIs and MCP clients, so the agent sees
+          metadata and the broker handles the real secret.
+        </p>
+      </header>
+
+      <main class="section-stack">
+        <section class="section page-card-grid compact-grid">
+          <a class="feature-card" href="./codex.html">
+            <p class="panel-label">Codex</p>
+            <h3>Codex MCP setup</h3>
+            <p>Connect KeyLore through Codex config and keep credentials outside the agent process.</p>
+          </a>
+          <a class="feature-card" href="./gemini.html">
+            <p class="panel-label">Gemini CLI</p>
+            <h3>Gemini MCP setup</h3>
+            <p>Use KeyLore as the credential boundary instead of exporting tokens into the shell.</p>
+          </a>
+          <a class="feature-card" href="./claude.html">
+            <p class="panel-label">Claude CLI</p>
+            <h3>Claude MCP setup</h3>
+            <p>Register KeyLore once and let Claude request brokered access through MCP.</p>
+          </a>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <p class="eyebrow">Universal pattern</p>
+            <h2>The same four-step model across clients.</h2>
+          </div>
+          <div class="timeline">
+            <article class="timeline-step">
+              <span class="step-index">1</span>
+              <h3>Store the token in KeyLore</h3>
+              <p>Do not hand the client a raw secret through env vars if KeyLore is meant to be the security boundary.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">2</span>
+              <h3>Add context</h3>
+              <p>Use human context and LLM context so the client can select the token by service, domain, and operation.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">3</span>
+              <h3>Connect the MCP client</h3>
+              <p>Register KeyLore as an MCP server using the client’s normal config mechanism.</p>
+            </article>
+            <article class="timeline-step">
+              <span class="step-index">4</span>
+              <h3>Use KeyLore only</h3>
+              <p>Prompt the agent to search KeyLore and request brokered access instead of inspecting your filesystem or shell.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
