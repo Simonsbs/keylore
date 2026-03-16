@@ -21,8 +21,8 @@ jobs:
     env:
       CI: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -34,4 +34,4 @@ jobs:
       - run: npm run test:hardening
       - run: npm run build
       - name: Validate Helm chart
-        run: docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 sh ./scripts/helm-validate.sh
+        run: docker run --rm --entrypoint sh -v "$PWD:/workspace" -w /workspace alpine/helm:3.17.1 ./scripts/helm-validate.sh

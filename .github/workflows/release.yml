@@ -28,9 +28,9 @@ jobs:
     env:
       CI: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -52,7 +52,7 @@ jobs:
           git archive --format=tar.gz --output "dist/release/keylore-${GITHUB_REF_NAME#v}.tar.gz" --prefix=keylore/ HEAD
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: startsWith(github.ref, 'refs/tags/')
@@ -64,7 +64,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -73,7 +73,7 @@ jobs:
 
       - name: Build and push image
         id: build-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
@@ -91,7 +91,7 @@ jobs:
       - name: Generate SPDX SBOM
         run: mkdir -p dist/release
       - name: Create SPDX SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@v0.23.1
         with:
           path: .
           format: spdx-json
@@ -99,7 +99,7 @@ jobs:
 
       - name: Install Cosign
         if: startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4
 
       - name: Sign image with keyless cosign
         if: startsWith(github.ref, 'refs/tags/')
